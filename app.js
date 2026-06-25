@@ -823,3 +823,301 @@ function getFallbackAgentName(conversationName) {
   const lastFour = shortId.slice(-4);
   return `Agent #${lastFour}`;
 }
+
+// ==========================================================================
+// Tabbed Navigation Setup
+// ==========================================================================
+function setupTabNavigation() {
+  const tabs = document.querySelectorAll(".tab-btn");
+  tabs.forEach(tab => {
+    tab.addEventListener("click", () => {
+      tabs.forEach(t => t.classList.remove("active"));
+      tab.classList.add("active");
+      
+      const target = tab.dataset.target;
+      if (target === "overviewCharts") {
+        document.getElementById("overviewCharts").style.display = "grid";
+        document.getElementById("trendCharts").style.display = "none";
+        renderOverviewCharts();
+      } else {
+        document.getElementById("overviewCharts").style.display = "none";
+        document.getElementById("trendCharts").style.display = "grid";
+        renderTrendCharts();
+      }
+    });
+  });
+}
+
+// ==========================================================================
+// Trend Charts Rendering
+// ==========================================================================
+function renderTrendCharts() {
+  const data = [...state.filteredCalls].sort((a, b) => new Date(a.create_time) - new Date(b.create_time));
+
+  const textColor = getThemeColor('--text-primary') || '#f3f4f6';
+  const mutedColor = getThemeColor('--text-muted') || '#6b7280';
+  const gridColor = getThemeColor('--border-color') || 'rgba(255, 255, 255, 0.08)';
+
+  // 1. Traffic by Hour (Bar)
+  const hourCounts = Array(24).fill(0);
+  data.forEach(c => {
+    if (c.create_time) {
+      const hour = new Date(c.create_time).getHours();
+      if (hour >= 0 && hour < 24) hourCounts[hour]++;
+    }
+  });
+
+  const hourLabels = [
+    "12 AM", "1 AM", "2 AM", "3 AM", "4 AM", "5 AM", "6 AM", "7 AM", "8 AM", "9 AM", "10 AM", "11 AM",
+    "12 PM", "1 PM", "2 PM", "3 PM", "4 PM", "5 PM", "6 PM", "7 PM", "8 PM", "9 PM", "10 PM", "11 PM"
+  ];
+
+  if (state.charts.callsHour) state.charts.callsHour.destroy();
+  state.charts.callsHour = new Chart(document.getElementById("chartCallsByHour").getContext("2d"), {
+    type: "bar",
+    data: {
+      labels: hourLabels,
+      datasets: [{
+        label: "Number of Calls",
+        data: hourCounts,
+        backgroundColor: "rgba(59, 130, 246, 0.8)",
+        borderColor: "#3b82f6",
+        borderWidth: 1.5,
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { color: mutedColor, font: { family: "Inter", size: 10 } }
+        },
+        y: {
+          grid: { color: gridColor },
+          ticks: { color: mutedColor, stepSize: 1, font: { family: "Inter" } }
+        }
+      },
+      plugins: {
+        legend: { display: false }
+      }
+    }
+  });
+
+  // 2. Calls over Time (By Day)
+  let dateLabels = [];
+  let dateCounts = [];
+  const uniqueDates = [...new Set(data.map(c => new Date(c.create_time).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})))];
+
+  if (uniqueDates.length <= 1) {
+    const targetDate = data.length > 0 ? new Date(data[0].create_time) : new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(targetDate);
+      d.setDate(targetDate.getDate() - i);
+      const dateStr = d.toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
+      dateLabels.push(dateStr);
+
+      const count = data.filter(c => {
+        const callDate = new Date(c.create_time).toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
+        return callDate === dateStr;
+      }).length;
+      dateCounts.push(count);
+    }
+  } else {
+    dateLabels = uniqueDates;
+    dateCounts = dateLabels.map(dateStr => {
+      return data.filter(c => new Date(c.create_time).toLocaleDateString(undefined, {month: 'short', day: 'numeric'}) === dateStr).length;
+    });
+  }
+
+  if (state.charts.callsDay) state.charts.callsDay.destroy();
+  state.charts.callsDay = new Chart(document.getElementById("chartCallsByDay").getContext("2d"), {
+    type: "line",
+    data: {
+      labels: dateLabels,
+      datasets: [{
+        label: "Calls",
+        data: dateCounts,
+        borderColor: "#10b981",
+        backgroundColor: "rgba(16, 185, 129, 0.1)",
+        borderWidth: 3,
+        fill: true,
+        tension: 0.35,
+        pointBackgroundColor: "#10b981",
+        pointRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { color: textColor, font: { family: "Inter", weight: '500' } }
+        },
+        y: {
+          grid: { color: gridColor },
+          ticks: { color: mutedColor, stepSize: 1, font: { family: "Inter" } }
+        }
+      },
+      plugins: {
+        legend: { display: false }
+      }
+    }
+  });
+
+  // 3. Avg Sentiment Trend
+  const timeLabels = data.map(c => new Date(c.create_time).toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  }));
+
+  const sentimentValues = data.map(c => {
+    const s = c.sentiment ? c.sentiment.toLowerCase() : 'neutral';
+    if (s === 'positive') return 1;
+    if (s === 'negative') return -1;
+    return 0;
+  });
+
+  if (state.charts.sentimentTrend) state.charts.sentimentTrend.destroy();
+  state.charts.sentimentTrend = new Chart(document.getElementById("chartSentimentTrend").getContext("2d"), {
+    type: "line",
+    data: {
+      labels: timeLabels,
+      datasets: [{
+        label: "Sentiment Value",
+        data: sentimentValues,
+        borderColor: "#3b82f6",
+        backgroundColor: "rgba(59, 130, 246, 0.05)",
+        borderWidth: 3,
+        tension: 0.3,
+        pointBackgroundColor: function(context) {
+          const val = context.raw;
+          if (val > 0) return "#10b981";
+          if (val < 0) return "#f43f5e";
+          return "#9ca3af";
+        },
+        pointRadius: 5,
+        pointHoverRadius: 7
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { color: mutedColor, font: { family: "Inter", size: 9 } }
+        },
+        y: {
+          grid: { color: gridColor },
+          min: -1.2,
+          max: 1.2,
+          ticks: {
+            stepSize: 1,
+            color: textColor,
+            font: { family: "Inter", weight: 'bold' },
+            callback: function(value) {
+              if (value === 1) return "Positive";
+              if (value === 0) return "Neutral";
+              if (value === -1) return "Negative";
+              return "";
+            }
+          }
+        }
+      },
+      plugins: {
+        legend: { display: false }
+      }
+    }
+  });
+
+  // 4. Resolution Rate Trend
+  let runningResolved = 0;
+  const resolutionRates = data.map((c, idx) => {
+    if (c.resolution_status === 'resolved') {
+      runningResolved++;
+    }
+    return (runningResolved / (idx + 1)) * 100;
+  });
+
+  if (state.charts.resolutionTrend) state.charts.resolutionTrend.destroy();
+  state.charts.resolutionTrend = new Chart(document.getElementById("chartResolutionTrend").getContext("2d"), {
+    type: "line",
+    data: {
+      labels: timeLabels,
+      datasets: [{
+        label: "Cumulative Resolution Rate (%)",
+        data: resolutionRates,
+        borderColor: "#8b5cf6",
+        backgroundColor: "rgba(139, 92, 246, 0.1)",
+        borderWidth: 3,
+        fill: true,
+        tension: 0.25,
+        pointBackgroundColor: "#8b5cf6",
+        pointRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { color: mutedColor, font: { family: "Inter", size: 9 } }
+        },
+        y: {
+          grid: { color: gridColor },
+          min: 0,
+          max: 100,
+          ticks: { color: mutedColor, font: { family: "Inter" } }
+        }
+      },
+      plugins: {
+        legend: { display: false }
+      }
+    }
+  });
+
+  // 5. Average Silence Trend
+  const silencePercentages = data.map(c => Number(c.silence_percentage) * 100);
+
+  if (state.charts.silenceTrend) state.charts.silenceTrend.destroy();
+  state.charts.silenceTrend = new Chart(document.getElementById("chartSilenceTrend").getContext("2d"), {
+    type: "line",
+    data: {
+      labels: timeLabels,
+      datasets: [{
+        label: "Silence Percentage (%)",
+        data: silencePercentages,
+        borderColor: "#f43f5e",
+        backgroundColor: "rgba(244, 63, 94, 0.05)",
+        borderWidth: 2.5,
+        tension: 0.35,
+        pointBackgroundColor: "#f43f5e",
+        pointRadius: 3
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { color: mutedColor, font: { family: "Inter", size: 9 } }
+        },
+        y: {
+          grid: { color: gridColor },
+          min: 0,
+          max: 100,
+          ticks: { color: mutedColor, font: { family: "Inter" } }
+        }
+      },
+      plugins: {
+        legend: { display: false }
+      }
+    }
+  });
+}
