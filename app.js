@@ -15,7 +15,12 @@ let state = {
     sentiment: null,
     categoryRisk: null,
     agentScore: null,
-    silencePerformance: null
+    silencePerformance: null,
+    callsHour: null,
+    callsDay: null,
+    sentimentTrend: null,
+    resolutionTrend: null,
+    silenceTrend: null
   },
   activeTheme: 'dark'
 };
@@ -23,6 +28,7 @@ let state = {
 // Initialize Application
 document.addEventListener("DOMContentLoaded", () => {
   initTheme();
+  setupTabNavigation();
   setupEventListeners();
   fetchCallData();
 });
@@ -45,7 +51,12 @@ function toggleTheme() {
   
   // Re-render charts to adjust text/border colors based on theme
   if (state.allCalls.length > 0) {
-    renderCharts();
+    const isTrendsActive = document.querySelector(".tab-btn[data-target='trendCharts']").classList.contains("active");
+    if (isTrendsActive) {
+      renderTrendCharts();
+    } else {
+      renderOverviewCharts();
+    }
   }
 }
 
@@ -228,7 +239,14 @@ function resetFilters() {
 // ==========================================================================
 function updateDashboardUI() {
   updateKPIs();
-  renderCharts();
+  
+  const isTrendsActive = document.querySelector(".tab-btn[data-target='trendCharts']").classList.contains("active");
+  if (isTrendsActive) {
+    renderTrendCharts();
+  } else {
+    renderOverviewCharts();
+  }
+  
   renderTable();
 }
 
@@ -265,7 +283,7 @@ function getThemeColor(variableName) {
   return getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
 }
 
-function renderCharts() {
+function renderOverviewCharts() {
   const data = state.filteredCalls;
 
   // Chart Text/Grid Colors based on active theme
