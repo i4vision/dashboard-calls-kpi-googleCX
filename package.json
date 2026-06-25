@@ -1,0 +1,14 @@
+{
+  "name": "dashboard-calls-kpi-googlecx",
+  "version": "1.0.0",
+  "description": "Call analytics dashboard connected to Supabase",
+  "main": "app.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}

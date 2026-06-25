@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.git/
+Dockerfile
+docker-compose.yml
+.dockerignore
+.gitignore
+sample_record.json
+all_records.json

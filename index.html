@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CallIntelligence AI - Call Analysis KPI Dashboard</title>
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="./style.css">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+  <!-- App Header -->
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-logo">
+        <i class="fa-solid fa-brain-circuit"></i>
+      </div>
+      <div class="brand-name">CallIntelligence AI</div>
+    </div>
+    
+    <div class="header-controls">
+      <div class="sync-status">
+        <div class="sync-dot"></div>
+        <span>Live Supabase Connected</span>
+      </div>
+      <button id="themeToggle" class="btn-icon" title="Toggle Theme" aria-label="Toggle Theme">
+        <i class="fa-solid fa-moon"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Dashboard Container -->
+  <main class="dashboard-container">
+    
+    <!-- Dynamic Filters Strip -->
+    <section class="filter-strip" aria-label="Dashboard Filters">
+      <div class="filter-group search-group">
+        <label for="searchBar" class="filter-label">Search</label>
+        <div style="position: relative; width: 100%;">
+          <input type="text" id="searchBar" class="filter-control" placeholder="Search transcripts, issues, categories, next actions...">
+        </div>
+      </div>
+      
+      <div class="filter-group">
+        <label for="filterSentiment" class="filter-label">Sentiment</label>
+        <select id="filterSentiment" class="filter-control">
+          <option value="all">All Sentiments</option>
+          <option value="positive">Positive</option>
+          <option value="neutral">Neutral</option>
+          <option value="negative">Negative</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="filterRisk" class="filter-label">Risk Level</label>
+        <select id="filterRisk" class="filter-control">
+          <option value="all">All Risks</option>
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="filterResolution" class="filter-label">Resolution</label>
+        <select id="filterResolution" class="filter-control">
+          <option value="all">All Statuses</option>
+          <option value="resolved">Resolved</option>
+          <option value="unresolved">Unresolved</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="filterCategory" class="filter-label">Category</label>
+        <select id="filterCategory" class="filter-control">
+          <option value="all">All Categories</option>
+          <!-- Dynamic insertion of categories -->
+        </select>
+      </div>
+
+      <div class="filter-actions">
+        <button id="resetFilters" class="btn-secondary" title="Clear all filters">
+          <i class="fa-solid fa-rotate-left"></i> Reset
+        </button>
+      </div>
+    </section>
+
+    <!-- KPI Summary Grid -->
+    <section class="kpi-grid" aria-label="KPI Metrics">
+      <!-- KPI 1: Total Calls -->
+      <div class="kpi-card">
+        <div class="kpi-details">
+          <span class="kpi-title">Total Calls</span>
+          <span id="kpiTotalCalls" class="kpi-value">-</span>
+          <span class="kpi-change up"><i class="fa-solid fa-arrow-trend-up"></i> Real-time sync</span>
+        </div>
+        <div class="kpi-icon-wrapper">
+          <i class="fa-solid fa-phone-volume"></i>
+        </div>
+      </div>
+
+       <!-- KPI 2: Average Score -->
+      <div class="kpi-card">
+        <div class="kpi-details">
+          <span class="kpi-title">Avg Agent Score</span>
+          <span id="kpiAvgScore" class="kpi-value">-</span>
+          <span class="kpi-change" style="color: var(--text-secondary);"><i class="fa-solid fa-star" style="color: var(--color-warning); margin-right: 0.25rem;"></i> Scale 0 to 10</span>
+        </div>
+        <div class="kpi-icon-wrapper">
+          <i class="fa-solid fa-award"></i>
+        </div>
+      </div>
+
+      <!-- KPI 3: Resolution Rate -->
+      <div class="kpi-card">
+        <div class="kpi-details">
+          <span class="kpi-title">Resolution Rate</span>
+          <span id="kpiResolutionRate" class="kpi-value">-</span>
+          <span class="kpi-change up" id="kpiResolutionSubtext">Resolved calls</span>
+        </div>
+        <div class="kpi-icon-wrapper">
+          <i class="fa-solid fa-circle-check"></i>
+        </div>
+      </div>
+
+      <!-- KPI 4: Avg Silence -->
+      <div class="kpi-card">
+        <div class="kpi-details">
+          <span class="kpi-title">Avg Silence %</span>
+          <span id="kpiSilencePercentage" class="kpi-value">-</span>
+          <span class="kpi-change down" id="kpiSilenceSubtext">Dead-air ratio</span>
+        </div>
+        <div class="kpi-icon-wrapper">
+          <i class="fa-solid fa-volume-xmark"></i>
+        </div>
+      </div>
+    </section>
+
+    <!-- Charts Visualization Grid -->
+    <section class="charts-grid" aria-label="Visualizations">
+      <!-- Chart 1: Sentiment Analysis -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <h2 class="chart-title"><i class="fa-solid fa-face-smile"></i> Sentiment Breakdown</h2>
+        </div>
+        <div class="chart-body">
+          <canvas id="chartSentiment"></canvas>
+        </div>
+      </div>
+
+      <!-- Chart 2: Category & Risk Profile -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <h2 class="chart-title"><i class="fa-solid fa-triangle-exclamation"></i> Category & Risk Matrix</h2>
+        </div>
+        <div class="chart-body" style="min-height: 380px;">
+          <canvas id="chartCategoryRisk"></canvas>
+        </div>
+      </div>
+
+      <!-- Chart 3: Agent Performance Leaderboard -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <h2 class="chart-title"><i class="fa-solid fa-ranking-star"></i> Agent Performance Leaderboard</h2>
+        </div>
+        <div class="chart-body">
+          <canvas id="chartAgentScore"></canvas>
+        </div>
+      </div>
+
+      <!-- Chart 4: Silence & Score Correlation -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <h2 class="chart-title"><i class="fa-solid fa-chart-simple"></i> Average Agent Score by Category</h2>
+        </div>
+        <div class="chart-body">
+          <canvas id="chartSilencePerformance"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- Call Explorer Table -->
+    <section class="explorer-card" aria-label="Call Records">
+      <div class="explorer-header">
+        <h2 class="chart-title"><i class="fa-solid fa-list"></i> Call Records Explorer</h2>
+        <span id="tableRecordCount" style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">Showing 0 calls</span>
+      </div>
+      
+      <div class="table-wrapper">
+        <table class="call-table">
+          <thead>
+            <tr>
+              <th>ID & Name</th>
+              <th>Category</th>
+              <th>Sentiment</th>
+              <th>Risk Level</th>
+              <th>Resolution</th>
+              <th>Agent Score</th>
+              <th>Created At</th>
+            </tr>
+          </thead>
+          <tbody id="callTableBody">
+            <!-- Dynamic call rows -->
+          </tbody>
+        </table>
+        
+        <!-- Loading Spinner -->
+        <div id="tableLoader" class="loader-container">
+          <div class="spinner"></div>
+          <span style="font-weight: 500; font-size: 0.95rem; color: var(--text-secondary);">Loading call records from Supabase...</span>
+        </div>
+
+        <!-- Empty State UI -->
+        <div id="tableEmptyState" class="empty-state" style="display: none;">
+          <i class="fa-solid fa-circle-exclamation"></i>
+          <h3>No matching records found</h3>
+          <p>Try adjusting your search query or removing filters.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Transcript / Details Drawer Panel -->
+  <div id="drawerBackdrop" class="drawer-backdrop" aria-hidden="true"></div>
+  <aside id="callDrawer" class="drawer" aria-label="Call Detail Drawer" aria-hidden="true">
+    <div class="drawer-header">
+      <div class="drawer-title-group">
+        <h2 class="drawer-title">Call Analytics Detail</h2>
+        <span id="drawerConversationName" class="drawer-subtitle">projects/729307029133/...</span>
+      </div>
+      <button id="drawerClose" class="drawer-close" title="Close details panel" aria-label="Close details panel">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    
+    <div class="drawer-body">
+      <!-- Badges Row -->
+      <div class="drawer-meta-badges">
+        <span id="drawerSentiment" class="badge">Neutral</span>
+        <span id="drawerRisk" class="badge">Low Risk</span>
+        <span id="drawerResolution" class="badge">Unresolved</span>
+        <span id="drawerCategory" class="badge" style="background: var(--bg-tertiary); color: var(--text-primary); border-color: var(--border-color)">Language Support</span>
+      </div>
+
+      <!-- Quick Stats Grid -->
+      <div class="drawer-section">
+        <h3 class="drawer-section-title">Performance & Silence Metrics</h3>
+        <div class="details-grid">
+          <div class="details-item">
+            <span class="details-item-label">Agent Score</span>
+            <span id="drawerScore" class="details-item-value">2 / 5</span>
+          </div>
+          <div class="details-item">
+            <span class="details-item-label">Silence Ratio</span>
+            <span id="drawerSilence" class="details-item-value">27s (43%)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Summary & Issues -->
+      <div class="drawer-section">
+        <h3 class="drawer-section-title">Executive Summary</h3>
+        <div class="details-item" style="background: none; border: none; padding: 0;">
+          <span class="details-item-label" style="margin-bottom: 0.25rem;">Call Summary</span>
+          <p id="drawerSummary" style="font-size: 0.95rem; line-height: 1.6; color: var(--text-secondary);">-</p>
+        </div>
+        <div class="details-item" style="background: none; border: none; padding: 0; margin-top: 0.75rem;">
+          <span class="details-item-label" style="margin-bottom: 0.25rem;">Customer Issue Identified</span>
+          <p id="drawerCustomerIssue" style="font-size: 0.95rem; line-height: 1.6; color: var(--text-secondary);">-</p>
+        </div>
+      </div>
+
+      <!-- Key Bullet Points -->
+      <div class="drawer-section">
+        <h3 class="drawer-section-title">Key Points Analyzed</h3>
+        <ul id="drawerKeyPoints" class="key-points-list">
+          <!-- Bullet points -->
+        </ul>
+      </div>
+
+      <!-- Action items -->
+      <div class="drawer-section">
+        <h3 class="drawer-section-title">Recommended Next Action</h3>
+        <div id="drawerNextAction" class="next-action-box">
+          <!-- Next action instruction -->
+        </div>
+      </div>
+
+      <!-- Entities tagged -->
+      <div class="drawer-section">
+        <h3 class="drawer-section-title">Extracted Entities</h3>
+        <div id="drawerEntities" class="tags-cloud">
+          <!-- Tags cloud -->
+        </div>
+      </div>
+
+      <!-- Transcript Chat -->
+      <div class="drawer-section">
+        <h3 class="drawer-section-title">Interactive Transcript</h3>
+        <div id="drawerTranscript" class="transcript-chat">
+          <!-- Dialog structured chat bubbles -->
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Script logic -->
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
