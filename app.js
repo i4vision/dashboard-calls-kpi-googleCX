@@ -1604,6 +1604,20 @@ function setupGCSEventListeners() {
   document.getElementById("audioSidebarClose").addEventListener("click", closeSidebar);
   document.getElementById("audioSidebarBackdrop").addEventListener("click", closeSidebar);
 
+  // Close audio player listener
+  const btnCloseAudioPlayer = document.getElementById("btnCloseAudioPlayer");
+  if (btnCloseAudioPlayer) {
+    btnCloseAudioPlayer.addEventListener("click", () => {
+      const audio = document.getElementById("gcsAudioElement");
+      if (audio) {
+        audio.pause();
+        audio.src = "";
+      }
+      document.getElementById("gcsAudioPlayerSection").style.display = "none";
+      renderGCSFileList();
+    });
+  }
+
   // Search and status filter inputs
   document.getElementById("gcsSearchInput").addEventListener("input", filterGCSFiles);
   document.getElementById("gcsFilterStatus").addEventListener("change", filterGCSFiles);

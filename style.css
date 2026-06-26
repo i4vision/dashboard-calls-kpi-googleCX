@@ -1377,3 +1377,25 @@ select.gcs-input {
   background-size: 0.8em;
   padding-right: 1.5rem !important;
 }
+
+.gcs-player-close-btn {
+  position: absolute;
+  top: 0.85rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.15rem;
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+  z-index: 12;
+}
+
+.gcs-player-close-btn:hover {
+  color: var(--color-negative);
+  transform: scale(1.15);
+}
