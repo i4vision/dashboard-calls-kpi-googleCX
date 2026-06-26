@@ -131,8 +131,8 @@ async function fetchCallData() {
     state.allCalls = data;
     state.filteredCalls = [...data];
     
-    // Extract unique categories
-    state.categories = [...new Set(data.map(item => item.category).filter(Boolean))].sort();
+    // Extract unique parent categories
+    state.categories = [...new Set(data.map(item => getParentCategory(item.category)))].sort();
     
     populateCategoryDropdown();
     updateDashboardUI();
@@ -215,7 +215,7 @@ function applyFilters() {
     const resolutionMatch = resolutionFilter === "all" || call.resolution_status === resolutionFilter;
 
     // Category Filter
-    const categoryMatch = categoryFilter === "all" || call.category === categoryFilter;
+    const categoryMatch = categoryFilter === "all" || getParentCategory(call.category) === categoryFilter;
 
     return searchMatch && sentimentMatch && riskMatch && resolutionMatch && categoryMatch;
   });
@@ -337,19 +337,19 @@ function renderOverviewCharts() {
   // ---------------------------------------------------------
   // 2. Category & Risk Matrix (Stacked Bar)
   // ---------------------------------------------------------
-  const cats = [...new Set(data.map(c => c.category).filter(Boolean))];
+  const cats = [...new Set(data.map(c => getParentCategory(c.category)))].sort();
   const lowRiskData = [];
   const medRiskData = [];
   const highRiskData = [];
 
   cats.forEach(cat => {
-    const catCalls = data.filter(c => c.category === cat);
+    const catCalls = data.filter(c => getParentCategory(c.category) === cat);
     lowRiskData.push(catCalls.filter(c => c.risk_level === "low").length);
     medRiskData.push(catCalls.filter(c => c.risk_level === "medium").length);
     highRiskData.push(catCalls.filter(c => c.risk_level === "high").length);
   });
 
-  const catLabelsFormatted = cats.map(formatString);
+  const catLabelsFormatted = cats;
 
   if (state.charts.categoryRisk) state.charts.categoryRisk.destroy();
   state.charts.categoryRisk = new Chart(document.getElementById("chartCategoryRisk").getContext("2d"), {
@@ -460,25 +460,24 @@ function renderOverviewCharts() {
   // ---------------------------------------------------------
   const categoryScores = {};
   data.forEach(c => {
-    if (c.category) {
-      if (!categoryScores[c.category]) {
-        categoryScores[c.category] = { total: 0, count: 0 };
-      }
-      const score = Number(c.agent_score);
-      if (!isNaN(score)) {
-        categoryScores[c.category].total += score;
-        categoryScores[c.category].count++;
-      }
+    const parentCat = getParentCategory(c.category);
+    if (!categoryScores[parentCat]) {
+      categoryScores[parentCat] = { total: 0, count: 0 };
+    }
+    const score = Number(c.agent_score);
+    if (!isNaN(score)) {
+      categoryScores[parentCat].total += score;
+      categoryScores[parentCat].count++;
     }
   });
 
-  const categoriesList = Object.keys(categoryScores);
+  const categoriesList = Object.keys(categoryScores).sort();
   const avgScores = categoriesList.map(cat => {
     const item = categoryScores[cat];
     return item.count > 0 ? (item.total / item.count) : 0;
   });
 
-  const formattedCats = categoriesList.map(formatString);
+  const formattedCats = categoriesList;
 
   if (state.charts.silencePerformance) state.charts.silencePerformance.destroy();
   state.charts.silencePerformance = new Chart(document.getElementById("chartSilencePerformance").getContext("2d"), {
@@ -623,7 +622,9 @@ function openDrawer(call) {
   resolution.textContent = call.resolution_status;
 
   const category = document.getElementById("drawerCategory");
-  category.textContent = formatString(call.category);
+  const parentCat = getParentCategory(call.category);
+  const rawCat = call.category ? formatString(call.category) : "General";
+  category.textContent = `${parentCat} (${rawCat})`;
 
   // Performance stats
   const drawerScoreNum = Number(call.agent_score);
@@ -850,30 +851,27 @@ function formatConvName(name) {
   return parts[parts.length - 1] || name;
 }
 
-// Extract Agent Name from Entities (falling back to Hashed Deterministic Names if not found)
+// Extract Agent Name from Entities or Transcript (falling back to Hashed Deterministic Names if not found)
 function getAgentName(call) {
   if (!call) return "Unknown Agent";
   
-  // 1. Try to extract from call.entities & call.entity_types
-  if (call.entities && call.entity_types) {
-    const entityList = call.entities.split(",").map(e => e.trim());
-    const typeList = call.entity_types.split(",").map(t => t.trim());
-    
-    // Ignore common words misclassified as PERSON
-    const ignoreList = ["someone", "employer", "doctor", "general", "name", "client", "customer", "agent", "representative", "person"];
-    
-    for (let i = 0; i < entityList.length; i++) {
-      const type = typeList[i] || "";
-      const name = entityList[i] || "";
-      if (type.toUpperCase() === "PERSON" && name) {
-        if (!ignoreList.includes(name.toLowerCase())) {
-          return formatString(name); // Return the first proper PERSON entity
-        }
-      }
-    }
+  // Combine transcript and entities for search (case-insensitive)
+  const text = ((call.transcript || "") + " " + (call.entities || "")).toLowerCase();
+  
+  if (text.includes("marcelo")) {
+    return "Marcelo";
+  }
+  if (text.includes("andrea")) {
+    return "Andrea";
+  }
+  if (text.includes("geordi") || text.includes("yordy") || text.includes("jordy")) {
+    return "Yordy";
+  }
+  if (text.includes("carol") || text.includes("cruise")) {
+    return "Carol";
   }
   
-  // 2. Fallback: Hashed deterministic name based on conversation ID
+  // Fallback: Hashed deterministic name based on conversation ID
   return getFallbackAgentName(call.conversation_name);
 }
 
@@ -882,6 +880,48 @@ function getFallbackAgentName(conversationName) {
   const shortId = formatConvName(conversationName);
   const lastFour = shortId.slice(-4);
   return `Agent #${lastFour}`;
+}
+
+// Map unique AI-generated categories into 6 clean, high-level parent categories
+function getParentCategory(rawCategory) {
+  if (!rawCategory) return "General Inquiry";
+  const cat = rawCategory.toLowerCase();
+  
+  if (cat.includes("technical") || cat.includes("it support") || cat.includes("license") || 
+      cat.includes("lock") || cat.includes("wifi") || cat.includes("internet") || 
+      cat.includes("app") || cat.includes("activation") || cat.includes("access") || 
+      cat.includes("security") || cat.includes("door")) {
+    return "Technical & IT Support";
+  }
+  
+  if (cat.includes("billing") || cat.includes("payment") || cat.includes("pricing") || 
+      cat.includes("charge") || cat.includes("credit") || cat.includes("dispute") || 
+      cat.includes("invoice") || cat.includes("cost")) {
+    return "Billing & Payments";
+  }
+
+  if (cat.includes("maintenance") || cat.includes("plumbing") || cat.includes("property") || 
+      cat.includes("inspection") || cat.includes("certification") || cat.includes("vehicle") || 
+      cat.includes("cleaning") || cat.includes("trash") || cat.includes("noise") || 
+      cat.includes("outage") || cat.includes("abandoned")) {
+    return "Maintenance & Property";
+  }
+
+  if (cat.includes("scheduling") || cat.includes("appointment") || cat.includes("logistics") || 
+      cat.includes("shipment") || cat.includes("order") || cat.includes("status") || 
+      cat.includes("delivery") || cat.includes("flight")) {
+    return "Scheduling & Logistics";
+  }
+  
+  if (cat.includes("booking") || cat.includes("reservation") || cat.includes("refund") || 
+      cat.includes("check-in") || cat.includes("cancellation") || cat.includes("dissatisfaction") || 
+      cat.includes("complaint") || cat.includes("retention") || cat.includes("greeting") || 
+      cat.includes("inquiry") || cat.includes("customer service") || cat.includes("customer support") || 
+      cat.includes("communication") || cat.includes("engagement") || cat.includes("handling")) {
+    return "Customer Service & Booking";
+  }
+
+  return "General Inquiry";
 }
 
 // ==========================================================================
