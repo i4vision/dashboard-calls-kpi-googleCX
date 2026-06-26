@@ -258,6 +258,7 @@ function updateKPIs() {
     document.getElementById("kpiAvgScore").textContent = "N/A";
     document.getElementById("kpiResolutionRate").textContent = "N/A";
     document.getElementById("kpiSilencePercentage").textContent = "N/A";
+    document.getElementById("kpiTotalCost").textContent = "N/A";
     return;
   }
 
@@ -276,6 +277,14 @@ function updateKPIs() {
   const silencePercentages = state.filteredCalls.map(c => Number(c.silence_percentage)).filter(p => !isNaN(p));
   const avgSilence = (silencePercentages.reduce((acc, curr) => acc + curr, 0) / silencePercentages.length) * 100;
   document.getElementById("kpiSilencePercentage").textContent = `${avgSilence.toFixed(1)}%`;
+
+  // 4. Total and Average Processing Cost
+  const validCosts = state.filteredCalls.map(c => Number(c.total_cost_usd)).filter(p => !isNaN(p));
+  const totalCostVal = validCosts.reduce((acc, curr) => acc + curr, 0);
+  const avgCostVal = validCosts.length > 0 ? (totalCostVal / validCosts.length) : 0;
+
+  document.getElementById("kpiTotalCost").textContent = `$${totalCostVal.toFixed(3)}`;
+  document.getElementById("kpiAvgCostSubtext").innerHTML = `<i class="fa-solid fa-coins"></i> Avg: $${avgCostVal.toFixed(4)}/call`;
 }
 
 // Helper: Get Theme CSS Variable
@@ -558,6 +567,12 @@ function renderTable() {
       ? `<span class="badge" style="background: rgba(139, 92, 246, 0.12); color: var(--accent-secondary); border-color: rgba(139, 92, 246, 0.25); font-family: var(--font-mono); font-weight: bold; font-size: 0.85rem;">${scoreNum.toFixed(1)} / 10</span>`
       : `<span style="color: var(--text-muted); font-size: 0.85rem;">-</span>`;
 
+    // Total Cost
+    const totalCost = Number(call.total_cost_usd);
+    const costHtml = !isNaN(totalCost)
+      ? `<span class="badge" style="background: rgba(16, 185, 129, 0.08); color: var(--color-positive); border-color: rgba(16, 185, 129, 0.2); font-family: var(--font-mono); font-weight: 500; font-size: 0.8rem;">$${totalCost.toFixed(4)}</span>`
+      : `<span style="color: var(--text-muted); font-size: 0.85rem;">-</span>`;
+
     // Created date
     const dateFormatted = call.create_time ? new Date(call.create_time).toLocaleDateString(undefined, {
       month: 'short',
@@ -573,6 +588,7 @@ function renderTable() {
       <td>${riskHtml}</td>
       <td>${resHtml}</td>
       <td>${scoreHtml}</td>
+      <td>${costHtml}</td>
       <td style="color: var(--text-secondary); font-size: 0.85rem;">${dateFormatted}</td>
     `;
     
@@ -615,6 +631,50 @@ function openDrawer(call) {
   const silenceSecs = call.silence_seconds || "0s";
   const silencePercentage = (Number(call.silence_percentage) * 100).toFixed(1);
   document.getElementById("drawerSilence").textContent = `${silenceSecs} (${silencePercentage}%)`;
+
+  // Cost & Usage stats
+  const totalCost = Number(call.total_cost_usd);
+  document.getElementById("drawerTotalCost").textContent = !isNaN(totalCost) ? `$${totalCost.toFixed(5)}` : "N/A";
+  document.getElementById("drawerTotalCostSum").textContent = !isNaN(totalCost) ? `$${totalCost.toFixed(5)}` : "N/A";
+
+  const durationSec = Number(call.audio_duration_seconds);
+  const durationMin = Number(call.audio_duration_minutes);
+  if (!isNaN(durationSec)) {
+    document.getElementById("drawerAudioDuration").textContent = `${durationSec.toFixed(1)}s (${durationMin.toFixed(2)}m)`;
+  } else {
+    document.getElementById("drawerAudioDuration").textContent = "N/A";
+  }
+
+  document.getElementById("drawerOpenAIModel").textContent = call.openai_model || "N/A";
+
+  const inputTokens = call.openai_input_tokens;
+  const outputTokens = call.openai_output_tokens;
+  const totalTokens = call.openai_total_tokens;
+  if (totalTokens !== undefined && totalTokens !== null) {
+    document.getElementById("drawerOpenAITokens").textContent = `${totalTokens} (In: ${inputTokens || 0} / Out: ${outputTokens || 0})`;
+  } else {
+    document.getElementById("drawerOpenAITokens").textContent = "N/A";
+  }
+
+  const isEstimated = call.cost_is_estimated !== false; // default to true
+  const calcAt = call.cost_calculated_at ? new Date(call.cost_calculated_at).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  }) : "N/A";
+  document.getElementById("drawerBillingStatus").textContent = `${isEstimated ? 'Estimated' : 'Final'} (${calcAt})`;
+
+  // Itemized costs
+  const sttCost = Number(call.stt_cost_usd);
+  const cxCost = Number(call.cx_insights_cost_usd);
+  const aiCost = Number(call.openai_cost_usd);
+  const storageCost = Number(call.storage_cost_usd);
+
+  document.getElementById("drawerSTTCost").textContent = !isNaN(sttCost) ? `$${sttCost.toFixed(5)}` : "$0.00000";
+  document.getElementById("drawerCXInsightsCost").textContent = !isNaN(cxCost) ? `$${cxCost.toFixed(5)}` : "$0.00000";
+  document.getElementById("drawerOpenAICost").textContent = !isNaN(aiCost) ? `$${aiCost.toFixed(5)}` : "$0.00000";
+  document.getElementById("drawerStorageCost").textContent = !isNaN(storageCost) ? `$${storageCost.toFixed(5)}` : "$0.00000";
 
   // Summary & Issue
   document.getElementById("drawerSummary").textContent = call.summary || "No summary provided.";

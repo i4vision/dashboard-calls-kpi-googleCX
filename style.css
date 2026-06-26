@@ -725,6 +725,52 @@ h1, h2, h3, h4, h5, h6 {
   margin-bottom: 0.5rem;
 }
 
+/* Cost Breakdown Styling */
+.cost-breakdown-box {
+  margin-top: 1rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+}
+
+.cost-breakdown-title {
+  font-weight: 700;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.cost-breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.cost-breakdown-value {
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+
+.cost-breakdown-total {
+  border-top: 1px dashed var(--border-color);
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  display: flex;
+  justify-content: space-between;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.cost-breakdown-total-value {
+  color: var(--accent-secondary);
+  font-family: var(--font-mono);
+}
+
 /* Next Action box */
 .next-action-box {
   background: var(--color-warning-glow);

@@ -138,6 +138,18 @@
           <i class="fa-solid fa-volume-xmark"></i>
         </div>
       </div>
+
+      <!-- KPI 5: Total Cost -->
+      <div class="kpi-card">
+        <div class="kpi-details">
+          <span class="kpi-title">Total Cost</span>
+          <span id="kpiTotalCost" class="kpi-value">-</span>
+          <span class="kpi-change up" id="kpiAvgCostSubtext"><i class="fa-solid fa-coins"></i> Avg cost/call</span>
+        </div>
+        <div class="kpi-icon-wrapper">
+          <i class="fa-solid fa-file-invoice-dollar"></i>
+        </div>
+      </div>
     </section>
 
     <!-- Tab Navigation for Charts -->
@@ -259,6 +271,7 @@
               <th>Risk Level</th>
               <th>Resolution</th>
               <th>Agent Score</th>
+              <th>Cost</th>
               <th>Created At</th>
             </tr>
           </thead>
@@ -317,6 +330,60 @@
           <div class="details-item">
             <span class="details-item-label">Silence Ratio</span>
             <span id="drawerSilence" class="details-item-value">27s (43%)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cost & Usage Metrics -->
+      <div class="drawer-section">
+        <h3 class="drawer-section-title">Cost & Usage Metrics</h3>
+        <div class="details-grid">
+          <div class="details-item">
+            <span class="details-item-label">Total Cost (USD)</span>
+            <span id="drawerTotalCost" class="details-item-value">-</span>
+          </div>
+          <div class="details-item">
+            <span class="details-item-label">Audio Duration</span>
+            <span id="drawerAudioDuration" class="details-item-value">-</span>
+          </div>
+          <div class="details-item" style="grid-column: span 2;">
+            <span class="details-item-label">OpenAI LLM Model</span>
+            <span id="drawerOpenAIModel" class="details-item-value" style="font-size: 0.8rem; word-break: break-all;">-</span>
+          </div>
+          <div class="details-item">
+            <span class="details-item-label">LLM Token Usage</span>
+            <span id="drawerOpenAITokens" class="details-item-value">-</span>
+          </div>
+          <div class="details-item">
+            <span class="details-item-label">Billing Status</span>
+            <span id="drawerBillingStatus" class="details-item-value" style="font-size: 0.8rem;">-</span>
+          </div>
+        </div>
+        
+        <!-- Cost Breakdown Box -->
+        <div class="cost-breakdown-box">
+          <div class="cost-breakdown-title">
+            <i class="fa-solid fa-calculator"></i> Cost Breakdown (USD)
+          </div>
+          <div class="cost-breakdown-row">
+            <span>Speech-to-Text (STT):</span>
+            <span id="drawerSTTCost" class="cost-breakdown-value">-</span>
+          </div>
+          <div class="cost-breakdown-row">
+            <span>CX Insights Analysis:</span>
+            <span id="drawerCXInsightsCost" class="cost-breakdown-value">-</span>
+          </div>
+          <div class="cost-breakdown-row">
+            <span>OpenAI API (LLM):</span>
+            <span id="drawerOpenAICost" class="cost-breakdown-value">-</span>
+          </div>
+          <div class="cost-breakdown-row">
+            <span>Storage Cost:</span>
+            <span id="drawerStorageCost" class="cost-breakdown-value">-</span>
+          </div>
+          <div class="cost-breakdown-total">
+            <span>Total Processing Cost:</span>
+            <span id="drawerTotalCostSum" class="cost-breakdown-total-value">-</span>
           </div>
         </div>
       </div>
