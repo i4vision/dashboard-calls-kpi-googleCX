@@ -1311,6 +1311,18 @@ async function syncGCSSettingsWithSupabase() {
       } else {
         localStorage.removeItem("gcs_manual_token_flag");
       }
+
+      if (settings.gcs_min_call_length) {
+        localStorage.setItem("gcs_min_call_length", settings.gcs_min_call_length);
+      } else {
+        localStorage.removeItem("gcs_min_call_length");
+      }
+
+      if (settings.gcs_max_call_length) {
+        localStorage.setItem("gcs_max_call_length", settings.gcs_max_call_length);
+      } else {
+        localStorage.removeItem("gcs_max_call_length");
+      }
     } else {
       state.supabaseSettingsEnabled = false;
     }
@@ -1531,6 +1543,14 @@ function setupGCSEventListeners() {
     document.getElementById("audioSidebarBackdrop").classList.add("active");
     document.getElementById("audioSidebar").setAttribute("aria-hidden", "false");
     document.body.classList.add("audio-sidebar-open");
+    
+    // Populate parameters values
+    const minVal = localStorage.getItem("gcs_min_call_length") || "";
+    const maxVal = localStorage.getItem("gcs_max_call_length") || "";
+    const minInput = document.getElementById("paramMinCallLength");
+    const maxInput = document.getElementById("paramMaxCallLength");
+    if (minInput) minInput.value = minVal;
+    if (maxInput) maxInput.value = maxVal;
   });
 
   const closeSidebar = () => {
@@ -1543,12 +1563,43 @@ function setupGCSEventListeners() {
   document.getElementById("audioSidebarClose").addEventListener("click", closeSidebar);
   document.getElementById("audioSidebarBackdrop").addEventListener("click", closeSidebar);
 
-  // Search input
-  document.getElementById("gcsSearchInput").addEventListener("input", (e) => {
-    const query = e.target.value.toLowerCase().trim();
-    state.filteredGcsFiles = state.gcsFiles.filter(f => f.name.toLowerCase().includes(query));
-    renderGCSFileList();
-  });
+  // Search and status filter inputs
+  document.getElementById("gcsSearchInput").addEventListener("input", filterGCSFiles);
+  document.getElementById("gcsFilterStatus").addEventListener("change", filterGCSFiles);
+
+  // Save parameters listener
+  const btnSaveParams = document.getElementById("btnSaveParameters");
+  if (btnSaveParams) {
+    btnSaveParams.addEventListener("click", async () => {
+      const minVal = document.getElementById("paramMinCallLength").value.trim();
+      const maxVal = document.getElementById("paramMaxCallLength").value.trim();
+      
+      localStorage.setItem("gcs_min_call_length", minVal);
+      localStorage.setItem("gcs_max_call_length", maxVal);
+      
+      // Save parameters in Supabase settings
+      if (minVal) {
+        await saveSettingToSupabase("gcs_min_call_length", minVal);
+      } else {
+        await deleteSettingFromSupabase("gcs_min_call_length");
+      }
+      
+      if (maxVal) {
+        await saveSettingToSupabase("gcs_max_call_length", maxVal);
+      } else {
+        await deleteSettingFromSupabase("gcs_max_call_length");
+      }
+      
+      // Show success alert
+      const statusLabel = document.getElementById("paramSaveStatus");
+      if (statusLabel) {
+        statusLabel.style.display = "block";
+        setTimeout(() => {
+          statusLabel.style.display = "none";
+        }, 3000);
+      }
+    });
+  }
 
   // Audio elements events (sync CSS visualizer and active card icon)
   const audio = document.getElementById("gcsAudioElement");
@@ -1895,7 +1946,7 @@ async function loadGCSFiles(token) {
     });
     
     state.filteredGcsFiles = [...state.gcsFiles];
-    renderGCSFileList();
+    filterGCSFiles();
     
   } catch (error) {
     console.error("GCS list error:", error);
@@ -1907,6 +1958,34 @@ async function loadGCSFiles(token) {
       </div>
     `;
   }
+}
+
+function filterGCSFiles() {
+  const query = document.getElementById("gcsSearchInput").value.toLowerCase().trim();
+  const status = document.getElementById("gcsFilterStatus").value;
+  
+  state.filteredGcsFiles = state.gcsFiles.filter(file => {
+    // 1. Search text match
+    const displayName = file.name.substring(GCS_PREFIX.length);
+    const matchesSearch = displayName.toLowerCase().includes(query);
+    if (!matchesSearch) return false;
+    
+    // 2. Status match
+    if (status === "all") return true;
+    
+    const audioPrefix = displayName.replace(".mp3", "");
+    const sessionId = state.gcsTranscriptsMap[audioPrefix];
+    
+    let fileStatus = "pending";
+    if (sessionId) {
+      const matchedCall = state.allCalls.find(c => formatConvName(c.conversation_name) === sessionId);
+      fileStatus = matchedCall ? "analyzed" : "transcribed";
+    }
+    
+    return fileStatus === status;
+  });
+  
+  renderGCSFileList();
 }
 
 function viewCallAnalytics(call) {
