@@ -1273,7 +1273,7 @@ function checkGoogleAuth() {
 
 async function syncGCSSettingsWithSupabase() {
   try {
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/dashboard_settings`, {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/dashboard_settings?id=eq.1`, {
       headers: {
         "apikey": SUPABASE_ANON_KEY,
         "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
@@ -1281,12 +1281,23 @@ async function syncGCSSettingsWithSupabase() {
     });
     if (response.ok) {
       const data = await response.json();
-      const settings = {};
-      data.forEach(item => {
-        settings[item.key] = item.value;
-      });
-      
       state.supabaseSettingsEnabled = true;
+      
+      if (data.length === 0) {
+        // Create initial settings row
+        await fetch(`${SUPABASE_URL}/rest/v1/dashboard_settings`, {
+          method: "POST",
+          headers: {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ id: 1 })
+        });
+        return;
+      }
+      
+      const settings = data[0];
       
       if (settings.gcs_service_account) {
         localStorage.setItem("gcs_service_account", settings.gcs_service_account);
@@ -1312,14 +1323,14 @@ async function syncGCSSettingsWithSupabase() {
         localStorage.removeItem("gcs_manual_token_flag");
       }
 
-      if (settings.gcs_min_call_length) {
-        localStorage.setItem("gcs_min_call_length", settings.gcs_min_call_length);
+      if (settings.min_call_length !== null && settings.min_call_length !== undefined) {
+        localStorage.setItem("gcs_min_call_length", String(settings.min_call_length));
       } else {
         localStorage.removeItem("gcs_min_call_length");
       }
 
-      if (settings.gcs_max_call_length) {
-        localStorage.setItem("gcs_max_call_length", settings.gcs_max_call_length);
+      if (settings.max_call_length !== null && settings.max_call_length !== undefined) {
+        localStorage.setItem("gcs_max_call_length", String(settings.max_call_length));
       } else {
         localStorage.removeItem("gcs_max_call_length");
       }
@@ -1334,15 +1345,30 @@ async function syncGCSSettingsWithSupabase() {
 
 async function saveSettingToSupabase(key, value) {
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/dashboard_settings`, {
-      method: "POST",
+    const colMap = {
+      gcs_service_account: "gcs_service_account",
+      gcs_access_token: "gcs_access_token",
+      gcs_token_expiry: "gcs_token_expiry",
+      gcs_manual_token_flag: "gcs_manual_token_flag",
+      gcs_min_call_length: "min_call_length",
+      gcs_max_call_length: "max_call_length"
+    };
+    const colName = colMap[key] || key;
+    
+    let valToSend = value;
+    if ((colName === "min_call_length" || colName === "max_call_length") && value !== null) {
+      const num = Number(value);
+      valToSend = isNaN(num) || value === "" ? null : num;
+    }
+
+    await fetch(`${SUPABASE_URL}/rest/v1/dashboard_settings?id=eq.1`, {
+      method: "PATCH",
       headers: {
         "apikey": SUPABASE_ANON_KEY,
         "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-        "Content-Type": "application/json",
-        "Prefer": "resolution=merge-duplicates"
+        "Content-Type": "application/json"
       },
-      body: JSON.stringify({ key, value })
+      body: JSON.stringify({ [colName]: valToSend })
     });
   } catch (err) {
     console.warn(`Could not save setting ${key} to Supabase:`, err);
@@ -1351,12 +1377,24 @@ async function saveSettingToSupabase(key, value) {
 
 async function deleteSettingFromSupabase(key) {
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/dashboard_settings?key=eq.${key}`, {
-      method: "DELETE",
+    const colMap = {
+      gcs_service_account: "gcs_service_account",
+      gcs_access_token: "gcs_access_token",
+      gcs_token_expiry: "gcs_token_expiry",
+      gcs_manual_token_flag: "gcs_manual_token_flag",
+      gcs_min_call_length: "min_call_length",
+      gcs_max_call_length: "max_call_length"
+    };
+    const colName = colMap[key] || key;
+    
+    await fetch(`${SUPABASE_URL}/rest/v1/dashboard_settings?id=eq.1`, {
+      method: "PATCH",
       headers: {
         "apikey": SUPABASE_ANON_KEY,
-        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
-      }
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ [colName]: null })
     });
   } catch (err) {
     console.warn(`Could not delete setting ${key} from Supabase:`, err);
@@ -1721,13 +1759,23 @@ async function renderGCSAuth() {
         <div id="saErrorMsg" style="color: var(--color-negative); font-size: 0.72rem; margin-top: 0.5rem; display: none; line-height: 1.3;"></div>
         
         ${!state.supabaseSettingsEnabled ? `
-        <div class="gcs-help-box" style="border-left-color: var(--color-warning); background: rgba(230, 92, 0, 0.03); margin-top: 0.75rem; font-size: 0.7rem;">
+        <div class="gcs-help-box" style="border-left-color: var(--color-warning); background: rgba(230, 92, 0, 0.03); margin-top: 0.75rem; font-size: 0.68rem;">
           <i class="fa-solid fa-triangle-exclamation" style="color: var(--color-warning); margin-right: 0.25rem;"></i>
-          <strong>Multi-PC Persistence (Optional):</strong> To stay connected across all computers, run this SQL in your Supabase SQL Editor:
-          <pre style="background: rgba(0, 0, 0, 0.2); padding: 0.4rem; border-radius: 3px; font-size: 0.65rem; margin: 0.35rem 0 0; overflow-x: auto; color: #fff; font-family: monospace;">CREATE TABLE IF NOT EXISTS dashboard_settings (
-  key text PRIMARY KEY,
-  value text NOT NULL
-);</pre>
+          <strong>Multi-PC Persistence (Optional):</strong> To stay connected persistently, run this SQL in your Supabase SQL Editor:
+          <pre style="background: rgba(0, 0, 0, 0.2); padding: 0.4rem; border-radius: 3px; font-size: 0.62rem; margin: 0.35rem 0 0; overflow-x: auto; color: #fff; font-family: monospace;">DROP TABLE IF EXISTS dashboard_settings;
+
+CREATE TABLE dashboard_settings (
+  id integer PRIMARY KEY DEFAULT 1,
+  gcs_service_account text,
+  gcs_access_token text,
+  gcs_token_expiry text,
+  gcs_manual_token_flag text,
+  min_call_length numeric,
+  max_call_length numeric,
+  CONSTRAINT single_row CHECK (id = 1)
+);
+
+INSERT INTO dashboard_settings (id) VALUES (1);</pre>
         </div>
         ` : ''}
       </div>
