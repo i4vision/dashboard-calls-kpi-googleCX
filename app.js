@@ -25,7 +25,8 @@ let state = {
   activeTheme: 'dark',
   gcsFiles: [],
   filteredGcsFiles: [],
-  supabaseSettingsEnabled: true
+  supabaseSettingsEnabled: true,
+  gcsTranscriptsMap: {}
 };
 
 // Initialize Application
@@ -1839,28 +1840,57 @@ async function loadGCSFiles(token) {
   listContainer.innerHTML = `
     <div style="text-align: center; color: var(--text-secondary); padding: 2rem;">
       <i class="fa-solid fa-spinner fa-spin" style="font-size: 1.5rem; margin-bottom: 0.5rem; color: var(--accent-primary);"></i>
-      <div>Listing GCS objects...</div>
+      <div>Listing GCS recordings & transcripts...</div>
     </div>
   `;
 
   try {
-    const response = await fetch(`https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o?prefix=${encodeURIComponent(GCS_PREFIX)}`, {
-      headers: {
-        "Authorization": `Bearer ${token}`
-      }
-    });
+    const [audioResp, transcriptsResp, cxTranscriptsResp] = await Promise.all([
+      fetch(`https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o?prefix=${encodeURIComponent(GCS_PREFIX)}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      }),
+      fetch(`https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o?prefix=transcripts/`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      }),
+      fetch(`https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o?prefix=cx-transcripts/`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      })
+    ]);
 
-    if (!response.ok) {
-      if (response.status === 401) {
+    if (!audioResp.ok) {
+      if (audioResp.status === 401) {
         logoutGoogle();
         throw new Error("Session expired. Please reconnect.");
       }
-      throw new Error(`Google API returned status ${response.status}`);
+      throw new Error(`Google API returned status ${audioResp.status}`);
     }
 
-    const data = await response.json();
+    const audioData = await audioResp.json();
     
-    state.gcsFiles = (data.items || []).filter(item => {
+    // Parse transcript mappings
+    const transItems = [];
+    if (transcriptsResp.ok) {
+      const d = await transcriptsResp.json();
+      if (d.items) transItems.push(...d.items);
+    }
+    if (cxTranscriptsResp.ok) {
+      const d = await cxTranscriptsResp.json();
+      if (d.items) transItems.push(...d.items);
+    }
+
+    state.gcsTranscriptsMap = {};
+    transItems.forEach(item => {
+      if (!item.name || !item.name.endsWith(".json")) return;
+      const basename = item.name.split("/").pop();
+      if (basename.includes("_transcript_")) {
+        const parts = basename.split("_transcript_");
+        const audioPrefix = parts[0];
+        const sessionId = parts[1].replace(".json", "");
+        state.gcsTranscriptsMap[audioPrefix] = sessionId;
+      }
+    });
+    
+    state.gcsFiles = (audioData.items || []).filter(item => {
       return item.name && item.name.toLowerCase().endsWith(".mp3") && item.name !== GCS_PREFIX;
     });
     
@@ -1877,6 +1907,17 @@ async function loadGCSFiles(token) {
       </div>
     `;
   }
+}
+
+function viewCallAnalytics(call) {
+  // Close recordings sidebar
+  document.getElementById("audioSidebar").classList.remove("active");
+  document.getElementById("audioSidebarBackdrop").classList.remove("active");
+  document.getElementById("audioSidebar").setAttribute("aria-hidden", "true");
+  document.body.classList.remove("audio-sidebar-open");
+  
+  // Open Call details drawer
+  openDrawer(call);
 }
 
 function renderGCSFileList() {
@@ -1931,12 +1972,38 @@ function renderGCSFileList() {
       }
     }
 
+    // Resolve analysis status
+    const audioPrefix = displayName.replace(".mp3", "");
+    const sessionId = state.gcsTranscriptsMap[audioPrefix];
+    
+    let statusBadge = "";
+    let matchedCall = null;
+    
+    if (sessionId) {
+      matchedCall = state.allCalls.find(c => {
+        const callSessionId = formatConvName(c.conversation_name);
+        return callSessionId === sessionId;
+      });
+      
+      if (matchedCall) {
+        statusBadge = `<span class="gcs-status-badge badge-analyzed"><i class="fa-solid fa-circle-check"></i> Analyzed</span>`;
+      } else {
+        statusBadge = `<span class="gcs-status-badge badge-transcribed"><i class="fa-solid fa-file-invoice"></i> Transcribed</span>`;
+      }
+    } else {
+      statusBadge = `<span class="gcs-status-badge badge-pending"><i class="fa-solid fa-circle-notch"></i> Pending</span>`;
+    }
+
     item.innerHTML = `
-      <div class="gcs-file-info">
-        <span class="gcs-file-name" title="${displayName}">${displayName}</span>
-        <span class="gcs-file-meta">${sizeStr} &bull; ${updatedDate}</span>
+      <div class="gcs-file-info" style="flex: 1; min-width: 0;">
+        <span class="gcs-file-name" title="${displayName}" style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${displayName}</span>
+        <span class="gcs-file-meta" style="display: block; margin-top: 0.15rem;">${sizeStr} &bull; ${updatedDate}</span>
+        <div class="gcs-file-status-row" style="margin-top: 0.4rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+          ${statusBadge}
+          ${matchedCall ? `<button class="gcs-view-details-btn" title="Open Call Analytics Details"><i class="fa-solid fa-chart-simple"></i> Analytics</button>` : ''}
+        </div>
       </div>
-      <div class="gcs-file-play">
+      <div class="gcs-file-play" style="flex-shrink: 0; margin-left: 0.5rem;">
         <i class="${playIconClass}"></i>
       </div>
     `;
@@ -1946,6 +2013,17 @@ function renderGCSFileList() {
     }
 
     item.addEventListener("click", () => playGCSAudio(file));
+    
+    if (matchedCall) {
+      const viewDetailsBtn = item.querySelector(".gcs-view-details-btn");
+      if (viewDetailsBtn) {
+        viewDetailsBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          viewCallAnalytics(matchedCall);
+        });
+      }
+    }
+
     container.appendChild(item);
   });
 }

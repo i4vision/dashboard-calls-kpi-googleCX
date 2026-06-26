@@ -1299,3 +1299,57 @@ body.audio-sidebar-open {
   color: var(--text-muted) !important;
   opacity: 0.7;
 }
+
+/* GCS Status Badges */
+.gcs-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
+.badge-analyzed {
+  background: rgba(16, 185, 129, 0.08) !important;
+  color: var(--color-positive) !important;
+  border: 1px solid rgba(16, 185, 129, 0.2) !important;
+}
+
+.badge-transcribed {
+  background: rgba(99, 102, 241, 0.08) !important;
+  color: var(--accent-primary) !important;
+  border: 1px solid rgba(99, 102, 241, 0.2) !important;
+}
+
+.badge-pending {
+  background: rgba(245, 158, 11, 0.08) !important;
+  color: #f59e0b !important;
+  border: 1px solid rgba(245, 158, 11, 0.2) !important;
+}
+
+.gcs-view-details-btn {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.15rem 0.45rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  border-radius: 3px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  transition: all 0.2s ease;
+  line-height: 1;
+}
+
+.gcs-view-details-btn:hover {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
