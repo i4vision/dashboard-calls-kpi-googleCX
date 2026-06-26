@@ -144,6 +144,9 @@ async function fetchCallData() {
     
     populateCategoryDropdown();
     updateDashboardUI();
+    if (state.gcsFiles && state.gcsFiles.length > 0) {
+      filterGCSFiles();
+    }
     
   } catch (error) {
     console.error("Error fetching call analytics data:", error);
@@ -2008,6 +2011,43 @@ async function loadGCSFiles(token) {
   }
 }
 
+function findMatchedCallForGCSFile(file) {
+  const displayName = file.name.substring(GCS_PREFIX.length);
+  
+  // 1. Try matching using audio_file_name in Supabase (robust case-insensitive substring checks)
+  let matchedCall = state.allCalls.find(c => {
+    if (!c.audio_file_name) return false;
+    const cleanDBName = c.audio_file_name.trim().toLowerCase();
+    const cleanDisplay = displayName.trim().toLowerCase();
+    const cleanFile = file.name.trim().toLowerCase();
+    return cleanDBName === cleanDisplay || 
+           cleanDBName === cleanFile ||
+           cleanDBName.includes(cleanDisplay) ||
+           cleanDisplay.includes(cleanDBName);
+  });
+  
+  if (matchedCall) {
+    return { matchedCall, status: "analyzed" };
+  }
+  
+  // 2. Fallback to GCS transcript JSON name mappings
+  const audioPrefix = displayName.replace(".mp3", "");
+  const sessionId = state.gcsTranscriptsMap[audioPrefix];
+  if (sessionId) {
+    matchedCall = state.allCalls.find(c => {
+      const callSessionId = formatConvName(c.conversation_name).toLowerCase();
+      return callSessionId === sessionId.toLowerCase() || 
+             c.conversation_name.toLowerCase().includes(sessionId.toLowerCase());
+    });
+    return {
+      matchedCall,
+      status: matchedCall ? "analyzed" : "transcribed"
+    };
+  }
+  
+  return { matchedCall: null, status: "pending" };
+}
+
 function filterGCSFiles() {
   const query = document.getElementById("gcsSearchInput").value.toLowerCase().trim();
   const status = document.getElementById("gcsFilterStatus").value;
@@ -2021,15 +2061,7 @@ function filterGCSFiles() {
     // 2. Status match
     if (status === "all") return true;
     
-    const audioPrefix = displayName.replace(".mp3", "");
-    const sessionId = state.gcsTranscriptsMap[audioPrefix];
-    
-    let fileStatus = "pending";
-    if (sessionId) {
-      const matchedCall = state.allCalls.find(c => formatConvName(c.conversation_name) === sessionId);
-      fileStatus = matchedCall ? "analyzed" : "transcribed";
-    }
-    
+    const { status: fileStatus } = findMatchedCallForGCSFile(file);
     return fileStatus === status;
   });
   
@@ -2099,24 +2131,14 @@ function renderGCSFileList() {
       }
     }
 
-    // Resolve analysis status
-    const audioPrefix = displayName.replace(".mp3", "");
-    const sessionId = state.gcsTranscriptsMap[audioPrefix];
+    // Resolve analysis status & matched call
+    const { matchedCall, status: fileStatus } = findMatchedCallForGCSFile(file);
     
     let statusBadge = "";
-    let matchedCall = null;
-    
-    if (sessionId) {
-      matchedCall = state.allCalls.find(c => {
-        const callSessionId = formatConvName(c.conversation_name);
-        return callSessionId === sessionId;
-      });
-      
-      if (matchedCall) {
-        statusBadge = `<span class="gcs-status-badge badge-analyzed"><i class="fa-solid fa-circle-check"></i> Analyzed</span>`;
-      } else {
-        statusBadge = `<span class="gcs-status-badge badge-transcribed"><i class="fa-solid fa-file-invoice"></i> Transcribed</span>`;
-      }
+    if (fileStatus === "analyzed") {
+      statusBadge = `<span class="gcs-status-badge badge-analyzed"><i class="fa-solid fa-circle-check"></i> Analyzed</span>`;
+    } else if (fileStatus === "transcribed") {
+      statusBadge = `<span class="gcs-status-badge badge-transcribed"><i class="fa-solid fa-file-invoice"></i> Transcribed</span>`;
     } else {
       statusBadge = `<span class="gcs-status-badge badge-pending"><i class="fa-solid fa-circle-notch"></i> Pending</span>`;
     }
@@ -2135,12 +2157,34 @@ function renderGCSFileList() {
       </div>
     `;
 
+    if (matchedCall) {
+      item.classList.add("analyzed-call");
+      item.title = "Click to view analytics in dashboard, or click play icon to play recording";
+    } else {
+      item.title = "This call has not been analyzed yet (click play icon to play recording)";
+    }
+
     if (isActiveClass) {
       item.classList.add("active");
     }
 
-    item.addEventListener("click", () => playGCSAudio(file));
-    
+    // Bind card click (only if analyzed; non-analyzed cards do nothing on card body click)
+    if (matchedCall) {
+      item.addEventListener("click", () => {
+        viewCallAnalytics(matchedCall);
+      });
+    }
+
+    // Bind play button click (stops propagation to prevent card-level viewCallAnalytics click)
+    const playBtn = item.querySelector(".gcs-file-play");
+    if (playBtn) {
+      playBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        playGCSAudio(file);
+      });
+      playBtn.title = isPlaying ? "Pause recording" : "Play recording";
+    }
+
     if (matchedCall) {
       const viewDetailsBtn = item.querySelector(".gcs-view-details-btn");
       if (viewDetailsBtn) {

@@ -1156,8 +1156,12 @@ textarea.gcs-input {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  cursor: pointer;
+  cursor: default;
   transition: var(--transition);
+}
+
+.gcs-file-item.analyzed-call {
+  cursor: pointer;
 }
 
 .gcs-file-item:hover {
@@ -1194,11 +1198,22 @@ textarea.gcs-input {
   font-size: 1.25rem;
   color: var(--accent-primary);
   transition: var(--transition);
+  cursor: pointer;
 }
 
 .gcs-file-item:hover .gcs-file-play {
   color: var(--accent-secondary);
   transform: scale(1.1);
+}
+
+.gcs-file-play:hover {
+  color: var(--accent-primary) !important;
+  transform: scale(1.25) !important;
+}
+
+.gcs-file-item.analyzed-call:hover {
+  border-color: var(--color-positive);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
 }
 
 /* Audio Player Section */
