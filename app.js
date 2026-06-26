@@ -22,7 +22,9 @@ let state = {
     resolutionTrend: null,
     silenceTrend: null
   },
-  activeTheme: 'dark'
+  activeTheme: 'dark',
+  gcsFiles: [],
+  filteredGcsFiles: []
 };
 
 // Initialize Application
@@ -30,7 +32,10 @@ document.addEventListener("DOMContentLoaded", () => {
   initTheme();
   setupTabNavigation();
   setupEventListeners();
+  checkGoogleAuth();
+  setupGCSEventListeners();
   fetchCallData();
+  renderGCSAuth();
 });
 
 // ==========================================================================
@@ -1227,5 +1232,279 @@ function renderTrendCharts() {
         legend: { display: false }
       }
     }
+  });
+}
+
+// ==========================================================================
+// Google Cloud Storage Audio Recordings Explorer
+// ==========================================================================
+
+const GCS_CLIENT_ID = "729307029133-87bfsmpllr8idqqsng557mt9fl316un4.apps.googleusercontent.com";
+const GCS_BUCKET = "business-call-analytics";
+const GCS_PREFIX = "audio/";
+
+// check for oauth access token in URL hash (implicit flow redirect)
+function checkGoogleAuth() {
+  const hash = window.location.hash;
+  if (hash && hash.includes("access_token=")) {
+    // Parse key-value pairs from URL hash
+    const hashData = {};
+    hash.substring(1).split("&").forEach(part => {
+      const kv = part.split("=");
+      if (kv.length === 2) hashData[kv[0]] = decodeURIComponent(kv[1]);
+    });
+    
+    const token = hashData["access_token"];
+    const expiresSec = Number(hashData["expires_in"] || 3600);
+    
+    if (token) {
+      const expiryTime = Date.now() + expiresSec * 1000;
+      localStorage.setItem("gcs_access_token", token);
+      localStorage.setItem("gcs_token_expiry", expiryTime);
+      
+      // Clean URL hash so it looks nice
+      window.history.replaceState(null, null, window.location.pathname);
+    }
+  }
+}
+
+function getGoogleAccessToken() {
+  const token = localStorage.getItem("gcs_access_token");
+  const expiry = localStorage.getItem("gcs_token_expiry");
+  
+  if (token && expiry && Date.now() < Number(expiry)) {
+    return token;
+  }
+  
+  // Clean up if expired
+  localStorage.removeItem("gcs_access_token");
+  localStorage.removeItem("gcs_token_expiry");
+  return null;
+}
+
+function loginGoogle() {
+  const redirectUri = window.location.origin + window.location.pathname;
+  const scope = "https://www.googleapis.com/auth/devstorage.read_only";
+  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GCS_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${encodeURIComponent(scope)}`;
+  window.location.href = url;
+}
+
+function logoutGoogle() {
+  localStorage.removeItem("gcs_access_token");
+  localStorage.removeItem("gcs_token_expiry");
+  state.gcsFiles = [];
+  state.filteredGcsFiles = [];
+  
+  // stop audio
+  const audio = document.getElementById("gcsAudioElement");
+  if (audio) {
+    audio.pause();
+    audio.src = "";
+  }
+  document.getElementById("gcsAudioPlayerSection").style.display = "none";
+  
+  renderGCSAuth();
+}
+
+function setupGCSEventListeners() {
+  // Toggle Sidebar
+  document.getElementById("btnOpenAudioSidebar").addEventListener("click", () => {
+    document.getElementById("audioSidebar").classList.add("active");
+    document.getElementById("audioSidebarBackdrop").classList.add("active");
+    document.getElementById("audioSidebar").setAttribute("aria-hidden", "false");
+  });
+
+  const closeSidebar = () => {
+    document.getElementById("audioSidebar").classList.remove("active");
+    document.getElementById("audioSidebarBackdrop").classList.remove("active");
+    document.getElementById("audioSidebar").setAttribute("aria-hidden", "true");
+  };
+
+  document.getElementById("audioSidebarClose").addEventListener("click", closeSidebar);
+  document.getElementById("audioSidebarBackdrop").addEventListener("click", closeSidebar);
+
+  // Search input
+  document.getElementById("gcsSearchInput").addEventListener("input", (e) => {
+    const query = e.target.value.toLowerCase().trim();
+    state.filteredGcsFiles = state.gcsFiles.filter(f => f.name.toLowerCase().includes(query));
+    renderGCSFileList();
+  });
+
+  // Audio elements events (sync CSS visualizer)
+  const audio = document.getElementById("gcsAudioElement");
+  const visualizer = document.getElementById("waveVisualizer");
+
+  audio.addEventListener("play", () => {
+    visualizer.classList.add("playing");
+  });
+
+  audio.addEventListener("pause", () => {
+    visualizer.classList.remove("playing");
+  });
+
+  audio.addEventListener("ended", () => {
+    visualizer.classList.remove("playing");
+  });
+}
+
+function renderGCSAuth() {
+  const token = getGoogleAccessToken();
+  const authCard = document.getElementById("gcsAuthCard");
+  const explorerSection = document.getElementById("gcsExplorer");
+  
+  if (token) {
+    authCard.innerHTML = `
+      <div style="font-weight: 700; font-size: 0.95rem; color: var(--color-positive); margin-bottom: 0.5rem;">
+        <i class="fa-solid fa-circle-check"></i> Connected to Google Storage
+      </div>
+      <div class="gcs-auth-text">
+        Accessing recordings bucket: <strong>${GCS_BUCKET}/${GCS_PREFIX}</strong>.
+      </div>
+      <button id="btnDisconnectGCS" class="btn-secondary" style="font-size: 0.75rem; padding: 0.35rem 0.75rem;">
+        <i class="fa-solid fa-right-from-bracket"></i> Disconnect
+      </button>
+    `;
+    document.getElementById("btnDisconnectGCS").addEventListener("click", logoutGoogle);
+    
+    explorerSection.style.display = "flex";
+    loadGCSFiles(token);
+  } else {
+    authCard.innerHTML = `
+      <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-primary); margin-bottom: 0.5rem;">
+        <i class="fa-solid fa-circle-xmark" style="color: var(--text-muted);"></i> Disconnected
+      </div>
+      <div class="gcs-auth-text">
+        Connect your Google Cloud account to explore and play MP3 call recordings stored in the storage bucket.
+      </div>
+      <button id="btnConnectGCS" class="btn-primary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.75rem;">
+        <i class="fa-brands fa-google"></i> Connect Google Storage
+      </button>
+    `;
+    document.getElementById("btnConnectGCS").addEventListener("click", loginGoogle);
+    
+    explorerSection.style.display = "none";
+  }
+}
+
+async function loadGCSFiles(token) {
+  const listContainer = document.getElementById("gcsFileList");
+  listContainer.innerHTML = `
+    <div style="text-align: center; color: var(--text-secondary); padding: 2rem;">
+      <i class="fa-solid fa-spinner fa-spin" style="font-size: 1.5rem; margin-bottom: 0.5rem; color: var(--accent-primary);"></i>
+      <div>Listing GCS objects...</div>
+    </div>
+  `;
+
+  try {
+    const response = await fetch(`https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o?prefix=${encodeURIComponent(GCS_PREFIX)}`, {
+      headers: {
+        "Authorization": `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        logoutGoogle();
+        throw new Error("Session expired. Please reconnect.");
+      }
+      throw new Error(`Google API returned status ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    state.gcsFiles = (data.items || []).filter(item => {
+      return item.name && item.name.toLowerCase().endsWith(".mp3") && item.name !== GCS_PREFIX;
+    });
+    
+    state.filteredGcsFiles = [...state.gcsFiles];
+    renderGCSFileList();
+    
+  } catch (error) {
+    console.error("GCS list error:", error);
+    listContainer.innerHTML = `
+      <div style="text-align: center; color: var(--color-negative); padding: 1.5rem; border: 1px dashed rgba(244, 63, 94, 0.2); border-radius: var(--radius-md);">
+        <i class="fa-solid fa-triangle-exclamation" style="font-size: 1.5rem; margin-bottom: 0.5rem;"></i>
+        <div style="font-weight: bold; font-size: 0.85rem; margin-bottom: 0.25rem;">Failed to Load Files</div>
+        <div style="font-size: 0.75rem; opacity: 0.8;">${error.message}</div>
+      </div>
+    `;
+  }
+}
+
+function renderGCSFileList() {
+  const container = document.getElementById("gcsFileList");
+  container.innerHTML = "";
+
+  if (state.filteredGcsFiles.length === 0) {
+    container.innerHTML = `
+      <div style="text-align: center; color: var(--text-muted); padding: 2rem; font-size: 0.85rem;">
+        No recordings found matching search.
+      </div>
+    `;
+    return;
+  }
+
+  state.filteredGcsFiles.forEach(file => {
+    const item = document.createElement("div");
+    item.className = "gcs-file-item";
+    item.dataset.name = file.name;
+
+    const displayName = file.name.substring(GCS_PREFIX.length);
+    
+    const sizeBytes = Number(file.size);
+    let sizeStr = "-";
+    if (!isNaN(sizeBytes)) {
+      if (sizeBytes < 1024 * 1024) {
+        sizeStr = `${(sizeBytes / 1024).toFixed(1)} KB`;
+      } else {
+        sizeStr = `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+      }
+    }
+
+    const updatedDate = file.updated ? new Date(file.updated).toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }) : "-";
+
+    item.innerHTML = `
+      <div class="gcs-file-info">
+        <span class="gcs-file-name" title="${displayName}">${displayName}</span>
+        <span class="gcs-file-meta">${sizeStr} &bull; ${updatedDate}</span>
+      </div>
+      <div class="gcs-file-play">
+        <i class="fa-solid fa-play"></i>
+      </div>
+    `;
+
+    item.addEventListener("click", () => playGCSAudio(file));
+    container.appendChild(item);
+  });
+}
+
+function playGCSAudio(file) {
+  const token = getGoogleAccessToken();
+  if (!token) {
+    logoutGoogle();
+    return;
+  }
+
+  document.querySelectorAll(".gcs-file-item").forEach(el => el.classList.remove("active"));
+  const activeEl = document.querySelector(`.gcs-file-item[data-name="${CSS.escape(file.name)}"]`);
+  if (activeEl) activeEl.classList.add("active");
+
+  const displayName = file.name.substring(GCS_PREFIX.length);
+  document.getElementById("currentPlayerTitle").textContent = displayName;
+  
+  document.getElementById("gcsAudioPlayerSection").style.display = "block";
+
+  const mediaUrl = `https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o/${encodeURIComponent(file.name)}?alt=media&access_token=${token}`;
+  
+  const audio = document.getElementById("gcsAudioElement");
+  audio.src = mediaUrl;
+  audio.load();
+  audio.play().catch(err => {
+    console.error("Audio playback error:", err);
   });
 }

@@ -27,6 +27,9 @@
         <div class="sync-dot"></div>
         <span>Live Supabase Connected</span>
       </div>
+      <button id="btnOpenAudioSidebar" class="btn-secondary" style="height: 38px; display: flex; align-items: center; gap: 0.5rem; padding: 0 1rem; font-size: 0.85rem;" title="Open Call Recordings">
+        <i class="fa-solid fa-folder-open"></i> Recordings
+      </button>
       <button id="themeToggle" class="btn-icon" title="Toggle Theme" aria-label="Toggle Theme">
         <i class="fa-solid fa-moon"></i>
       </button>
@@ -432,6 +435,58 @@
           <!-- Dialog structured chat bubbles -->
         </div>
       </div>
+    </div>
+  </aside>
+
+  <!-- Call Recordings Sidebar (Left Drawer) -->
+  <div id="audioSidebarBackdrop" class="drawer-backdrop" aria-hidden="true"></div>
+  <aside id="audioSidebar" class="drawer drawer-left" aria-label="Call Recordings Sidebar" aria-hidden="true">
+    <div class="drawer-header">
+      <div class="drawer-title-group">
+        <h2 class="drawer-title">GCS Call Recordings</h2>
+        <span class="drawer-subtitle">business-call-analytics/audio</span>
+      </div>
+      <button id="audioSidebarClose" class="drawer-close" title="Close recordings panel" aria-label="Close recordings panel">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    
+    <div class="drawer-body" style="padding-bottom: 8rem;">
+      <!-- Google Auth Status Card -->
+      <div id="gcsAuthCard" class="gcs-auth-card">
+        <!-- Will be populated dynamically by JS -->
+      </div>
+      
+      <!-- Recordings Explorer (Visible only when authenticated) -->
+      <div id="gcsExplorer" style="display: none; flex-direction: column; gap: 1rem;">
+        <div class="search-box-wrapper" style="margin-bottom: 0.5rem; position: relative;">
+          <i class="fa-solid fa-magnifying-glass search-icon" style="position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
+          <input type="text" id="gcsSearchInput" placeholder="Search files..." class="search-bar-input" style="width: 100%; padding-left: 2.25rem;">
+        </div>
+        
+        <div id="gcsFileList" class="gcs-file-list">
+          <!-- List of audio files -->
+        </div>
+      </div>
+    </div>
+    
+    <!-- Audio Player Footer (Visible when file is playing) -->
+    <div id="gcsAudioPlayerSection" class="gcs-player-section" style="display: none; position: absolute; bottom: 0; left: 0; width: 100%; z-index: 10;">
+      <div class="player-title" id="currentPlayerTitle">File Name.mp3</div>
+      
+      <!-- CSS Wave Visualizer -->
+      <div class="wave-visualizer" id="waveVisualizer">
+        <span class="bar"></span>
+        <span class="bar"></span>
+        <span class="bar"></span>
+        <span class="bar"></span>
+        <span class="bar"></span>
+        <span class="bar"></span>
+        <span class="bar"></span>
+        <span class="bar"></span>
+      </div>
+      
+      <audio id="gcsAudioElement" controls style="width: 100%; margin-top: 0.5rem;"></audio>
     </div>
   </aside>
 
