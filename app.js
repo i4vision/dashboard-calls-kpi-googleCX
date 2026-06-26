@@ -24,17 +24,19 @@ let state = {
   },
   activeTheme: 'dark',
   gcsFiles: [],
-  filteredGcsFiles: []
+  filteredGcsFiles: [],
+  supabaseSettingsEnabled: true
 };
 
 // Initialize Application
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   initTheme();
   setupTabNavigation();
   setupEventListeners();
   checkGoogleAuth();
   setupGCSEventListeners();
   fetchCallData();
+  await syncGCSSettingsWithSupabase();
   renderGCSAuth();
 });
 
@@ -1268,6 +1270,86 @@ function checkGoogleAuth() {
   }
 }
 
+async function syncGCSSettingsWithSupabase() {
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/dashboard_settings`, {
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+    if (response.ok) {
+      const data = await response.json();
+      const settings = {};
+      data.forEach(item => {
+        settings[item.key] = item.value;
+      });
+      
+      state.supabaseSettingsEnabled = true;
+      
+      if (settings.gcs_service_account) {
+        localStorage.setItem("gcs_service_account", settings.gcs_service_account);
+      } else {
+        localStorage.removeItem("gcs_service_account");
+      }
+      
+      if (settings.gcs_access_token) {
+        localStorage.setItem("gcs_access_token", settings.gcs_access_token);
+      } else {
+        localStorage.removeItem("gcs_access_token");
+      }
+      
+      if (settings.gcs_token_expiry) {
+        localStorage.setItem("gcs_token_expiry", settings.gcs_token_expiry);
+      } else {
+        localStorage.removeItem("gcs_token_expiry");
+      }
+      
+      if (settings.gcs_manual_token_flag) {
+        localStorage.setItem("gcs_manual_token_flag", settings.gcs_manual_token_flag);
+      } else {
+        localStorage.removeItem("gcs_manual_token_flag");
+      }
+    } else {
+      state.supabaseSettingsEnabled = false;
+    }
+  } catch (err) {
+    console.warn("Supabase settings sync failed (table might not exist):", err);
+    state.supabaseSettingsEnabled = false;
+  }
+}
+
+async function saveSettingToSupabase(key, value) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/dashboard_settings`, {
+      method: "POST",
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+        "Content-Type": "application/json",
+        "Prefer": "resolution=merge-duplicates"
+      },
+      body: JSON.stringify({ key, value })
+    });
+  } catch (err) {
+    console.warn(`Could not save setting ${key} to Supabase:`, err);
+  }
+}
+
+async function deleteSettingFromSupabase(key) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/dashboard_settings?key=eq.${key}`, {
+      method: "DELETE",
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+  } catch (err) {
+    console.warn(`Could not delete setting ${key} from Supabase:`, err);
+  }
+}
+
 async function getGoogleAccessToken() {
   const token = localStorage.getItem("gcs_access_token");
   const expiry = localStorage.getItem("gcs_token_expiry");
@@ -1291,11 +1373,17 @@ async function getGoogleAccessToken() {
       const newExpiry = Date.now() + (data.expires_in || 3600) * 1000;
       localStorage.setItem("gcs_access_token", data.access_token);
       localStorage.setItem("gcs_token_expiry", newExpiry);
+      
+      // Save refreshed credentials to database
+      await saveSettingToSupabase("gcs_access_token", data.access_token);
+      await saveSettingToSupabase("gcs_token_expiry", String(newExpiry));
+      
       return data.access_token;
     } catch (err) {
       console.error("Auto-refreshing access token using Service Account failed:", err);
       // Remove service account so we don't loop fail
       localStorage.removeItem("gcs_service_account");
+      await deleteSettingFromSupabase("gcs_service_account");
       return null;
     }
   }
@@ -1409,11 +1497,18 @@ function loginGoogle() {
   window.location.href = url;
 }
 
-function logoutGoogle() {
+async function logoutGoogle() {
   localStorage.removeItem("gcs_access_token");
   localStorage.removeItem("gcs_token_expiry");
   localStorage.removeItem("gcs_service_account");
   localStorage.removeItem("gcs_manual_token_flag");
+  
+  // Delete settings from Supabase
+  await deleteSettingFromSupabase("gcs_access_token");
+  await deleteSettingFromSupabase("gcs_token_expiry");
+  await deleteSettingFromSupabase("gcs_service_account");
+  await deleteSettingFromSupabase("gcs_manual_token_flag");
+  
   state.gcsFiles = [];
   state.filteredGcsFiles = [];
   
@@ -1434,12 +1529,14 @@ function setupGCSEventListeners() {
     document.getElementById("audioSidebar").classList.add("active");
     document.getElementById("audioSidebarBackdrop").classList.add("active");
     document.getElementById("audioSidebar").setAttribute("aria-hidden", "false");
+    document.body.classList.add("audio-sidebar-open");
   });
 
   const closeSidebar = () => {
     document.getElementById("audioSidebar").classList.remove("active");
     document.getElementById("audioSidebarBackdrop").classList.remove("active");
     document.getElementById("audioSidebar").setAttribute("aria-hidden", "true");
+    document.body.classList.remove("audio-sidebar-open");
   };
 
   document.getElementById("audioSidebarClose").addEventListener("click", closeSidebar);
@@ -1452,20 +1549,26 @@ function setupGCSEventListeners() {
     renderGCSFileList();
   });
 
-  // Audio elements events (sync CSS visualizer)
+  // Audio elements events (sync CSS visualizer and active card icon)
   const audio = document.getElementById("gcsAudioElement");
   const visualizer = document.getElementById("waveVisualizer");
 
   audio.addEventListener("play", () => {
     visualizer.classList.add("playing");
+    const activeIcon = document.querySelector(".gcs-file-item.active .gcs-file-play i");
+    if (activeIcon) activeIcon.className = "fa-solid fa-pause";
   });
 
   audio.addEventListener("pause", () => {
     visualizer.classList.remove("playing");
+    const activeIcon = document.querySelector(".gcs-file-item.active .gcs-file-play i");
+    if (activeIcon) activeIcon.className = "fa-solid fa-play";
   });
 
   audio.addEventListener("ended", () => {
     visualizer.classList.remove("playing");
+    const activeIcon = document.querySelector(".gcs-file-item.active .gcs-file-play i");
+    if (activeIcon) activeIcon.className = "fa-solid fa-play";
   });
 }
 
@@ -1543,7 +1646,7 @@ async function renderGCSAuth() {
       <!-- Service Account Tab Content -->
       <div id="tabContentSA" class="gcs-tab-content">
         <div class="gcs-auth-text" style="font-size: 0.78rem; margin-bottom: 0.75rem;">
-          Upload or paste a Google Cloud Service Account private key JSON. Stored <strong>only inside your browser's local storage</strong>.
+          Upload or paste a Google Cloud Service Account private key JSON. Stored <strong>only inside your browser's local storage</strong> (and your private Supabase database if configured).
         </div>
         
         <div class="gcs-input-group">
@@ -1564,6 +1667,17 @@ async function renderGCSAuth() {
         </button>
         
         <div id="saErrorMsg" style="color: var(--color-negative); font-size: 0.72rem; margin-top: 0.5rem; display: none; line-height: 1.3;"></div>
+        
+        ${!state.supabaseSettingsEnabled ? `
+        <div class="gcs-help-box" style="border-left-color: var(--color-warning); background: rgba(230, 92, 0, 0.03); margin-top: 0.75rem; font-size: 0.7rem;">
+          <i class="fa-solid fa-triangle-exclamation" style="color: var(--color-warning); margin-right: 0.25rem;"></i>
+          <strong>Multi-PC Persistence (Optional):</strong> To stay connected across all computers, run this SQL in your Supabase SQL Editor:
+          <pre style="background: rgba(0, 0, 0, 0.2); padding: 0.4rem; border-radius: 3px; font-size: 0.65rem; margin: 0.35rem 0 0; overflow-x: auto; color: #fff; font-family: monospace;">CREATE TABLE IF NOT EXISTS dashboard_settings (
+  key text PRIMARY KEY,
+  value text NOT NULL
+);</pre>
+        </div>
+        ` : ''}
       </div>
 
       <!-- Manual Token Tab Content -->
@@ -1657,9 +1771,13 @@ async function renderGCSAuth() {
           return;
         }
         
-        // Save SA JSON
+        // Save SA JSON locally
         localStorage.setItem("gcs_service_account", JSON.stringify(saJson));
         localStorage.removeItem("gcs_manual_token_flag");
+        
+        // Save to Supabase
+        await saveSettingToSupabase("gcs_service_account", JSON.stringify(saJson));
+        await deleteSettingFromSupabase("gcs_manual_token_flag");
         
         // Show loading spinner
         const btn = document.getElementById("btnConnectSA");
@@ -1687,7 +1805,7 @@ async function renderGCSAuth() {
     const manualTokenInput = document.getElementById("gcsManualTokenInput");
     const manualTokenErrorMsg = document.getElementById("manualTokenErrorMsg");
     
-    document.getElementById("btnConnectManualToken").addEventListener("click", () => {
+    document.getElementById("btnConnectManualToken").addEventListener("click", async () => {
       manualTokenErrorMsg.style.display = "none";
       const tokenVal = manualTokenInput.value.trim();
       if (!tokenVal) {
@@ -1702,6 +1820,12 @@ async function renderGCSAuth() {
       localStorage.setItem("gcs_token_expiry", expiry);
       localStorage.setItem("gcs_manual_token_flag", "true");
       localStorage.removeItem("gcs_service_account");
+      
+      // Save to Supabase
+      await saveSettingToSupabase("gcs_access_token", tokenVal);
+      await saveSettingToSupabase("gcs_token_expiry", String(expiry));
+      await saveSettingToSupabase("gcs_manual_token_flag", "true");
+      await deleteSettingFromSupabase("gcs_service_account");
       
       renderGCSAuth();
     });
@@ -1768,6 +1892,8 @@ function renderGCSFileList() {
     return;
   }
 
+  const audio = document.getElementById("gcsAudioElement");
+
   state.filteredGcsFiles.forEach(file => {
     const item = document.createElement("div");
     item.className = "gcs-file-item";
@@ -1792,15 +1918,32 @@ function renderGCSFileList() {
       minute: '2-digit'
     }) : "-";
 
+    const isCurrentFile = audio.src && audio.src.includes(encodeURIComponent(file.name));
+    const isPlaying = isCurrentFile && !audio.paused;
+    
+    let playIconClass = "fa-solid fa-play";
+    let isActiveClass = "";
+    if (isCurrentFile) {
+      isActiveClass = "active";
+      playIconClass = isPlaying ? "fa-solid fa-pause" : "fa-solid fa-play";
+      if (audio.networkState === HTMLMediaElement.NETWORK_LOADING && audio.paused) {
+        playIconClass = "fa-solid fa-spinner fa-spin";
+      }
+    }
+
     item.innerHTML = `
       <div class="gcs-file-info">
         <span class="gcs-file-name" title="${displayName}">${displayName}</span>
         <span class="gcs-file-meta">${sizeStr} &bull; ${updatedDate}</span>
       </div>
       <div class="gcs-file-play">
-        <i class="fa-solid fa-play"></i>
+        <i class="${playIconClass}"></i>
       </div>
     `;
+
+    if (isActiveClass) {
+      item.classList.add("active");
+    }
 
     item.addEventListener("click", () => playGCSAudio(file));
     container.appendChild(item);
@@ -1808,15 +1951,37 @@ function renderGCSFileList() {
 }
 
 async function playGCSAudio(file) {
+  const audio = document.getElementById("gcsAudioElement");
+  const isCurrentFile = audio.src && audio.src.includes(encodeURIComponent(file.name));
+  
+  if (isCurrentFile) {
+    if (audio.paused) {
+      audio.play().catch(err => console.error("Audio playback error:", err));
+    } else {
+      audio.pause();
+    }
+    return;
+  }
+
+  // Set active class and play icon to spinner during loading
+  document.querySelectorAll(".gcs-file-item").forEach(el => {
+    el.classList.remove("active");
+    const icon = el.querySelector(".gcs-file-play i");
+    if (icon) icon.className = "fa-solid fa-play";
+  });
+
+  const activeEl = document.querySelector(`.gcs-file-item[data-name="${CSS.escape(file.name)}"]`);
+  if (activeEl) {
+    activeEl.classList.add("active");
+    const icon = activeEl.querySelector(".gcs-file-play i");
+    if (icon) icon.className = "fa-solid fa-spinner fa-spin";
+  }
+
   const token = await getGoogleAccessToken();
   if (!token) {
     logoutGoogle();
     return;
   }
-
-  document.querySelectorAll(".gcs-file-item").forEach(el => el.classList.remove("active"));
-  const activeEl = document.querySelector(`.gcs-file-item[data-name="${CSS.escape(file.name)}"]`);
-  if (activeEl) activeEl.classList.add("active");
 
   const displayName = file.name.substring(GCS_PREFIX.length);
   document.getElementById("currentPlayerTitle").textContent = displayName;
@@ -1825,10 +1990,14 @@ async function playGCSAudio(file) {
 
   const mediaUrl = `https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o/${encodeURIComponent(file.name)}?alt=media&access_token=${token}`;
   
-  const audio = document.getElementById("gcsAudioElement");
   audio.src = mediaUrl;
   audio.load();
-  audio.play().catch(err => {
+  audio.play().then(() => {
+    const icon = activeEl ? activeEl.querySelector(".gcs-file-play i") : null;
+    if (icon) icon.className = "fa-solid fa-pause";
+  }).catch(err => {
     console.error("Audio playback error:", err);
+    const icon = activeEl ? activeEl.querySelector(".gcs-file-play i") : null;
+    if (icon) icon.className = "fa-solid fa-play";
   });
 }
