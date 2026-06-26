@@ -1268,18 +1268,138 @@ function checkGoogleAuth() {
   }
 }
 
-function getGoogleAccessToken() {
+async function getGoogleAccessToken() {
   const token = localStorage.getItem("gcs_access_token");
   const expiry = localStorage.getItem("gcs_token_expiry");
   
-  if (token && expiry && Date.now() < Number(expiry)) {
+  // 30 seconds buffer
+  if (token && expiry && Date.now() < Number(expiry) - 30000) {
     return token;
   }
   
-  // Clean up if expired
+  // Clean up if expired or missing
   localStorage.removeItem("gcs_access_token");
   localStorage.removeItem("gcs_token_expiry");
+  
+  // Check if we have a service account JSON stored
+  const saJsonStr = localStorage.getItem("gcs_service_account");
+  if (saJsonStr) {
+    try {
+      const saJson = JSON.parse(saJsonStr);
+      const data = await getAccessTokenFromServiceAccount(saJson);
+      
+      const newExpiry = Date.now() + (data.expires_in || 3600) * 1000;
+      localStorage.setItem("gcs_access_token", data.access_token);
+      localStorage.setItem("gcs_token_expiry", newExpiry);
+      return data.access_token;
+    } catch (err) {
+      console.error("Auto-refreshing access token using Service Account failed:", err);
+      // Remove service account so we don't loop fail
+      localStorage.removeItem("gcs_service_account");
+      return null;
+    }
+  }
+  
   return null;
+}
+
+async function getAccessTokenFromServiceAccount(saJson) {
+  const header = { alg: "RS256", typ: "JWT" };
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    iss: saJson.client_email,
+    scope: "https://www.googleapis.com/auth/devstorage.read_only",
+    aud: saJson.token_uri || "https://oauth2.googleapis.com/token",
+    exp: now + 3600,
+    iat: now
+  };
+  
+  const base64url = (source) => {
+    let base64;
+    if (typeof source === "string") {
+      base64 = btoa(unescape(encodeURIComponent(source)));
+    } else {
+      base64 = btoa(unescape(encodeURIComponent(JSON.stringify(source))));
+    }
+    return base64.replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+  };
+  
+  const stringToSign = `${base64url(header)}.${base64url(payload)}`;
+  const privateKeyPem = saJson.private_key;
+  const pemHeader = "-----BEGIN PRIVATE KEY-----";
+  const pemFooter = "-----END PRIVATE KEY-----";
+  
+  const startIdx = privateKeyPem.indexOf(pemHeader);
+  const endIdx = privateKeyPem.indexOf(pemFooter);
+  
+  if (startIdx === -1 || endIdx === -1) {
+    throw new Error("Invalid private key format in Service Account JSON.");
+  }
+  
+  const pemContents = privateKeyPem.substring(startIdx + pemHeader.length, endIdx);
+  const cleanPem = pemContents.replace(/\s+/g, "");
+  
+  const binaryDerString = atob(cleanPem);
+  const binaryDer = new Uint8Array(binaryDerString.length);
+  for (let i = 0; i < binaryDerString.length; i++) {
+    binaryDer[i] = binaryDerString.charCodeAt(i);
+  }
+  
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    binaryDer.buffer,
+    {
+      name: "RSASSA-PKCS1-v1_5",
+      hash: { name: "SHA-256" }
+    },
+    false,
+    ["sign"]
+  );
+  
+  const encoder = new TextEncoder();
+  const dataToSign = encoder.encode(stringToSign);
+  
+  const signatureBuffer = await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5",
+    key,
+    dataToSign
+  );
+  
+  const signatureArray = new Uint8Array(signatureBuffer);
+  let binary = "";
+  const len = signatureArray.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(signatureArray[i]);
+  }
+  const signatureEncoded = btoa(binary)
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+    
+  const assertion = `${stringToSign}.${signatureEncoded}`;
+  
+  const response = await fetch(saJson.token_uri || "https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion: assertion
+    })
+  });
+  
+  if (!response.ok) {
+    const errorBody = await response.text();
+    let parsedErr;
+    try {
+      parsedErr = JSON.parse(errorBody);
+    } catch(e) {}
+    const detail = parsedErr && parsedErr.error_description ? parsedErr.error_description : errorBody;
+    throw new Error(`Google token exchange failed: ${detail}`);
+  }
+  
+  return await response.json();
 }
 
 function loginGoogle() {
@@ -1292,6 +1412,8 @@ function loginGoogle() {
 function logoutGoogle() {
   localStorage.removeItem("gcs_access_token");
   localStorage.removeItem("gcs_token_expiry");
+  localStorage.removeItem("gcs_service_account");
+  localStorage.removeItem("gcs_manual_token_flag");
   state.gcsFiles = [];
   state.filteredGcsFiles = [];
   
@@ -1347,20 +1469,34 @@ function setupGCSEventListeners() {
   });
 }
 
-function renderGCSAuth() {
-  const token = getGoogleAccessToken();
+async function renderGCSAuth() {
+  const token = await getGoogleAccessToken();
   const authCard = document.getElementById("gcsAuthCard");
   const explorerSection = document.getElementById("gcsExplorer");
   
   if (token) {
+    const saJsonStr = localStorage.getItem("gcs_service_account");
+    let connType = "Google OAuth";
+    if (saJsonStr) {
+      try {
+        const sa = JSON.parse(saJsonStr);
+        connType = `Service Account (${sa.client_email})`;
+      } catch (e) {
+        connType = "Service Account";
+      }
+    } else if (localStorage.getItem("gcs_manual_token_flag")) {
+      connType = "Manual Access Token";
+    }
+    
     authCard.innerHTML = `
       <div style="font-weight: 700; font-size: 0.95rem; color: var(--color-positive); margin-bottom: 0.5rem;">
-        <i class="fa-solid fa-circle-check"></i> Connected to Google Storage
+        <i class="fa-solid fa-circle-check"></i> Connected
       </div>
-      <div class="gcs-auth-text">
-        Accessing recordings bucket: <strong>${GCS_BUCKET}/${GCS_PREFIX}</strong>.
+      <div class="gcs-auth-text" style="font-size: 0.78rem; margin-bottom: 0.75rem;">
+        Method: <strong>${connType}</strong><br>
+        Bucket: <strong>${GCS_BUCKET}/${GCS_PREFIX}</strong>
       </div>
-      <button id="btnDisconnectGCS" class="btn-secondary" style="font-size: 0.75rem; padding: 0.35rem 0.75rem;">
+      <button id="btnDisconnectGCS" class="btn-secondary" style="font-size: 0.75rem; padding: 0.35rem 0.75rem; width: 100%;">
         <i class="fa-solid fa-right-from-bracket"></i> Disconnect
       </button>
     `;
@@ -1370,17 +1506,205 @@ function renderGCSAuth() {
     loadGCSFiles(token);
   } else {
     authCard.innerHTML = `
-      <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-primary); margin-bottom: 0.5rem;">
-        <i class="fa-solid fa-circle-xmark" style="color: var(--text-muted);"></i> Disconnected
+      <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-primary); margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: space-between;">
+        <span><i class="fa-solid fa-circle-xmark" style="color: var(--text-muted); margin-right: 0.35rem;"></i> Disconnected</span>
       </div>
-      <div class="gcs-auth-text">
-        Connect your Google Cloud account to explore and play MP3 call recordings stored in the storage bucket.
+
+      <div class="gcs-tabs">
+        <button class="gcs-tab-btn active" data-tab="oauth">
+          <i class="fa-brands fa-google"></i> Google Login
+        </button>
+        <button class="gcs-tab-btn" data-tab="sa">
+          <i class="fa-solid fa-key"></i> Service Account
+        </button>
+        <button class="gcs-tab-btn" data-tab="token">
+          <i class="fa-solid fa-ticket"></i> Access Token
+        </button>
       </div>
-      <button id="btnConnectGCS" class="btn-primary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.75rem;">
-        <i class="fa-brands fa-google"></i> Connect Google Storage
-      </button>
+
+      <!-- OAuth Tab Content -->
+      <div id="tabContentOAuth" class="gcs-tab-content active">
+        <div class="gcs-auth-text" style="font-size: 0.78rem;">
+          Authenticate using Google's standard login. Note: Google OAuth requires accessing this dashboard via <code>localhost</code> or a secure domain. Raw IP addresses (e.g. 10.115.14.92) are blocked.
+        </div>
+        <button id="btnConnectGCS" class="btn-primary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.65rem; font-size: 0.8rem;">
+          <i class="fa-brands fa-google"></i> Connect Google Storage
+        </button>
+        <div class="gcs-help-box">
+          <strong>How to use OAuth on a remote server:</strong>
+          <div style="margin-top: 0.25rem;">
+            Run SSH port-forwarding on your machine:<br>
+            <code>ssh -L 42913:localhost:42913 user@10.115.14.92</code><br>
+            Then open <a class="gcs-help-link" href="http://localhost:42913" target="_blank">http://localhost:42913</a>.
+          </div>
+        </div>
+      </div>
+
+      <!-- Service Account Tab Content -->
+      <div id="tabContentSA" class="gcs-tab-content">
+        <div class="gcs-auth-text" style="font-size: 0.78rem; margin-bottom: 0.75rem;">
+          Upload or paste a Google Cloud Service Account private key JSON. Stored <strong>only inside your browser's local storage</strong>.
+        </div>
+        
+        <div class="gcs-input-group">
+          <label class="gcs-input-label">Upload JSON File</label>
+          <label for="saFileInput" class="gcs-file-upload-label">
+            <i class="fa-solid fa-file-import"></i> <span id="saUploadFileName">Choose JSON File</span>
+          </label>
+          <input type="file" id="saFileInput" accept=".json" style="display: none;">
+        </div>
+        
+        <div class="gcs-input-group">
+          <label class="gcs-input-label">Or Paste JSON Content</label>
+          <textarea id="saTextarea" class="gcs-input" placeholder='{ "type": "service_account", ... }'></textarea>
+        </div>
+        
+        <button id="btnConnectSA" class="btn-primary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.65rem; font-size: 0.8rem;">
+          <i class="fa-solid fa-plug"></i> Connect Service Account
+        </button>
+        
+        <div id="saErrorMsg" style="color: var(--color-negative); font-size: 0.72rem; margin-top: 0.5rem; display: none; line-height: 1.3;"></div>
+      </div>
+
+      <!-- Manual Token Tab Content -->
+      <div id="tabContentToken" class="gcs-tab-content">
+        <div class="gcs-auth-text" style="font-size: 0.78rem; margin-bottom: 0.75rem;">
+          Paste a temporary OAuth access token directly. This token is short-lived (usually expires in 1 hour) but works on raw IP addresses.
+        </div>
+        
+        <div class="gcs-input-group">
+          <label class="gcs-input-label">OAuth Access Token</label>
+          <input type="password" id="gcsManualTokenInput" class="gcs-input" placeholder="ya29.a0AfH6SMA...">
+        </div>
+        
+        <button id="btnConnectManualToken" class="btn-primary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.65rem; font-size: 0.8rem;">
+          <i class="fa-solid fa-key"></i> Apply Access Token
+        </button>
+        
+        <div class="gcs-help-box">
+          <strong>How to generate a token:</strong>
+          <div style="margin-top: 0.25rem;">
+            If you have the Google Cloud SDK (gcloud) installed, run:<br>
+            <code>gcloud auth print-access-token</code>
+          </div>
+        </div>
+        
+        <div id="manualTokenErrorMsg" style="color: var(--color-negative); font-size: 0.72rem; margin-top: 0.5rem; display: none; line-height: 1.3;"></div>
+      </div>
     `;
+    
+    // Add event listeners for tabs
+    const tabs = authCard.querySelectorAll(".gcs-tab-btn");
+    tabs.forEach(tab => {
+      tab.addEventListener("click", () => {
+        tabs.forEach(t => t.classList.remove("active"));
+        authCard.querySelectorAll(".gcs-tab-content").forEach(c => c.classList.remove("active"));
+        
+        tab.classList.add("active");
+        const tabIdMap = {
+          oauth: "tabContentOAuth",
+          sa: "tabContentSA",
+          token: "tabContentToken"
+        };
+        const contentId = tabIdMap[tab.dataset.tab];
+        const content = document.getElementById(contentId);
+        if (content) content.classList.add("active");
+      });
+    });
+    
+    // Google OAuth login event listener
     document.getElementById("btnConnectGCS").addEventListener("click", loginGoogle);
+    
+    // Service Account upload listeners
+    const saFileInput = document.getElementById("saFileInput");
+    const saUploadFileName = document.getElementById("saUploadFileName");
+    const saTextarea = document.getElementById("saTextarea");
+    const saErrorMsg = document.getElementById("saErrorMsg");
+    
+    saFileInput.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      saUploadFileName.textContent = file.name;
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        saTextarea.value = evt.target.result;
+      };
+      reader.readAsText(file);
+    });
+    
+    document.getElementById("btnConnectSA").addEventListener("click", async () => {
+      saErrorMsg.style.display = "none";
+      const saVal = saTextarea.value.trim();
+      if (!saVal) {
+        saErrorMsg.textContent = "Error: Please paste or upload a Service Account JSON key file.";
+        saErrorMsg.style.display = "block";
+        return;
+      }
+      
+      try {
+        const saJson = JSON.parse(saVal);
+        if (!saJson.client_email || !saJson.private_key) {
+          saErrorMsg.textContent = "Error: Invalid Service Account JSON. Missing client_email or private_key.";
+          saErrorMsg.style.display = "block";
+          return;
+        }
+        
+        const hasSubtleCrypto = !!(window.crypto && window.crypto.subtle);
+        if (!hasSubtleCrypto) {
+          saErrorMsg.textContent = "Warning: Browser-based Service Account key signing requires a secure context (HTTPS or localhost) to use cryptography APIs. It is blocked on insecure HTTP IP addresses like this. Please use the 'Access Token' tab instead, or connect via localhost port forwarding.";
+          saErrorMsg.style.display = "block";
+          return;
+        }
+        
+        // Save SA JSON
+        localStorage.setItem("gcs_service_account", JSON.stringify(saJson));
+        localStorage.removeItem("gcs_manual_token_flag");
+        
+        // Show loading spinner
+        const btn = document.getElementById("btnConnectSA");
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Authenticating...`;
+        
+        const testToken = await getGoogleAccessToken();
+        if (testToken) {
+          renderGCSAuth();
+        } else {
+          btn.disabled = false;
+          btn.innerHTML = originalText;
+          saErrorMsg.textContent = "Error: Failed to obtain access token from Google. Check your Service Account key permissions.";
+          saErrorMsg.style.display = "block";
+        }
+      } catch (err) {
+        console.error("Service Account Auth Error:", err);
+        saErrorMsg.textContent = `Error: ${err.message || "Invalid JSON format"}`;
+        saErrorMsg.style.display = "block";
+      }
+    });
+    
+    // Manual Token listener
+    const manualTokenInput = document.getElementById("gcsManualTokenInput");
+    const manualTokenErrorMsg = document.getElementById("manualTokenErrorMsg");
+    
+    document.getElementById("btnConnectManualToken").addEventListener("click", () => {
+      manualTokenErrorMsg.style.display = "none";
+      const tokenVal = manualTokenInput.value.trim();
+      if (!tokenVal) {
+        manualTokenErrorMsg.textContent = "Error: Please enter an access token.";
+        manualTokenErrorMsg.style.display = "block";
+        return;
+      }
+      
+      // Store token with 1 hour expiration
+      const expiry = Date.now() + 3600 * 1000;
+      localStorage.setItem("gcs_access_token", tokenVal);
+      localStorage.setItem("gcs_token_expiry", expiry);
+      localStorage.setItem("gcs_manual_token_flag", "true");
+      localStorage.removeItem("gcs_service_account");
+      
+      renderGCSAuth();
+    });
     
     explorerSection.style.display = "none";
   }
@@ -1483,8 +1807,8 @@ function renderGCSFileList() {
   });
 }
 
-function playGCSAudio(file) {
-  const token = getGoogleAccessToken();
+async function playGCSAudio(file) {
+  const token = await getGoogleAccessToken();
   if (!token) {
     logoutGoogle();
     return;
