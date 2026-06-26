@@ -635,11 +635,19 @@ function openDrawer(call) {
 
   // Cost & Usage stats
   const totalCost = Number(call.total_cost_usd);
-  document.getElementById("drawerTotalCost").textContent = !isNaN(totalCost) ? `$${totalCost.toFixed(5)}` : "N/A";
-  document.getElementById("drawerTotalCostSum").textContent = !isNaN(totalCost) ? `$${totalCost.toFixed(5)}` : "N/A";
+  const durationMin = Number(call.audio_duration_minutes);
+  let costPerMinStr = "";
+  
+  if (!isNaN(totalCost) && !isNaN(durationMin) && durationMin > 0) {
+    const costPerMin = totalCost / durationMin;
+    costPerMinStr = ` ($${costPerMin.toFixed(4)}/min)`;
+  }
+  
+  const totalCostText = !isNaN(totalCost) ? `$${totalCost.toFixed(5)}${costPerMinStr}` : "N/A";
+  document.getElementById("drawerTotalCost").textContent = totalCostText;
+  document.getElementById("drawerTotalCostSum").textContent = totalCostText;
 
   const durationSec = Number(call.audio_duration_seconds);
-  const durationMin = Number(call.audio_duration_minutes);
   if (!isNaN(durationSec)) {
     document.getElementById("drawerAudioDuration").textContent = `${durationSec.toFixed(1)}s (${durationMin.toFixed(2)}m)`;
   } else {
