@@ -259,9 +259,14 @@
 
     <!-- Call Explorer Table -->
     <section class="explorer-card" aria-label="Call Records">
-      <div class="explorer-header">
-        <h2 class="chart-title"><i class="fa-solid fa-list"></i> Call Records Explorer</h2>
-        <span id="tableRecordCount" style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">Showing 0 calls</span>
+      <div class="explorer-header" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+        <h2 class="chart-title" style="margin: 0;"><i class="fa-solid fa-list"></i> Call Records Explorer</h2>
+        <div style="display: flex; align-items: center; gap: 1rem;">
+          <span id="tableRecordCount" style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">Showing 0 calls</span>
+          <button id="btnExportExcel" class="btn-secondary" style="height: 32px; display: flex; align-items: center; gap: 0.35rem; padding: 0 0.75rem; font-size: 0.75rem; font-weight: 600;" title="Export all calls in Supabase to Excel (CSV)">
+            <i class="fa-solid fa-file-excel"></i> Export Excel
+          </button>
+        </div>
       </div>
       
       <div class="table-wrapper">
@@ -494,6 +499,16 @@
             <option value="transcribed">Transcribed</option>
             <option value="pending">Pending</option>
           </select>
+        </div>
+        <!-- GCS Bulk Actions -->
+        <div id="gcsBulkActions" style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.25rem; margin-bottom: 0.25rem; font-size: 0.75rem; border-bottom: 1px solid var(--border-color);">
+          <div style="display: flex; align-items: center; gap: 0.5rem; color: var(--text-secondary);">
+            <input type="checkbox" id="gcsSelectAllCheckbox" style="cursor: pointer; width: 14px; height: 14px;">
+            <span id="gcsSelectedCountText">0 selected</span>
+          </div>
+          <button id="btnBulkAnalyze" class="btn-primary" style="height: 28px; font-size: 0.7rem; padding: 0 0.75rem; display: flex; align-items: center; gap: 0.25rem; border-radius: var(--radius-sm);" disabled>
+            <i class="fa-solid fa-wand-magic-sparkles"></i> Analyze Selected
+          </button>
         </div>
         
         <div id="gcsFileList" class="gcs-file-list">

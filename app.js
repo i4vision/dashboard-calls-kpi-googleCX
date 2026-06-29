@@ -26,7 +26,8 @@ let state = {
   gcsFiles: [],
   filteredGcsFiles: [],
   supabaseSettingsEnabled: true,
-  gcsTranscriptsMap: {}
+  gcsTranscriptsMap: {},
+  selectedGcsFiles: new Set()
 };
 
 // Initialize Application
@@ -102,6 +103,12 @@ function setupEventListeners() {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeDrawer();
   });
+
+  // Export Excel listener
+  const btnExportExcel = document.getElementById("btnExportExcel");
+  if (btnExportExcel) {
+    btnExportExcel.addEventListener("click", exportCallDataToExcel);
+  }
 }
 
 // Helper: Debounce search input
@@ -1622,6 +1629,34 @@ function setupGCSEventListeners() {
   document.getElementById("gcsSearchInput").addEventListener("input", filterGCSFiles);
   document.getElementById("gcsFilterStatus").addEventListener("change", filterGCSFiles);
 
+  // Bulk selection listener
+  const selectAllCheckbox = document.getElementById("gcsSelectAllCheckbox");
+  if (selectAllCheckbox) {
+    selectAllCheckbox.addEventListener("change", (e) => {
+      const checked = e.target.checked;
+      if (checked) {
+        state.filteredGcsFiles.forEach(file => {
+          const { status } = findMatchedCallForGCSFile(file);
+          if (status !== "analyzed") {
+            state.selectedGcsFiles.add(file.name);
+          }
+        });
+      } else {
+        state.filteredGcsFiles.forEach(file => {
+          state.selectedGcsFiles.delete(file.name);
+        });
+      }
+      renderGCSFileList();
+      updateBulkActionUI();
+    });
+  }
+
+  // Bulk analyze button listener
+  const btnBulkAnalyze = document.getElementById("btnBulkAnalyze");
+  if (btnBulkAnalyze) {
+    btnBulkAnalyze.addEventListener("click", triggerBulkCallAnalysisWebhook);
+  }
+
   // Save parameters listener
   const btnSaveParams = document.getElementById("btnSaveParameters");
   if (btnSaveParams) {
@@ -2158,6 +2193,15 @@ function renderGCSFileList() {
     }
 
     item.innerHTML = `
+      ${fileStatus !== "analyzed" ? `
+        <div class="gcs-checkbox-wrapper" style="margin-right: 0.5rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+          <input type="checkbox" class="gcs-item-checkbox" data-name="${file.name}" ${state.selectedGcsFiles.has(file.name) ? 'checked' : ''} style="cursor: pointer; width: 15px; height: 15px;">
+        </div>
+      ` : `
+        <div class="gcs-checkbox-wrapper" style="margin-right: 0.5rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 15px; opacity: 0.7; color: var(--color-positive);">
+          <i class="fa-solid fa-circle-check" style="font-size: 0.75rem;"></i>
+        </div>
+      `}
       <div class="gcs-file-info" style="flex: 1; min-width: 0;">
         <span class="gcs-file-name" title="${displayName}" style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${displayName}</span>
         <span class="gcs-file-meta" style="display: block; margin-top: 0.15rem;">${sizeStr} &bull; ${updatedDate}</span>
@@ -2199,6 +2243,23 @@ function renderGCSFileList() {
       playBtn.title = isPlaying ? "Pause recording" : "Play recording";
     }
 
+    // Bind checkbox change (stops propagation to prevent card click)
+    const cb = item.querySelector(".gcs-item-checkbox");
+    if (cb) {
+      cb.addEventListener("click", (e) => {
+        e.stopPropagation();
+      });
+      cb.addEventListener("change", (e) => {
+        const checked = e.target.checked;
+        if (checked) {
+          state.selectedGcsFiles.add(file.name);
+        } else {
+          state.selectedGcsFiles.delete(file.name);
+        }
+        updateBulkActionUI();
+      });
+    }
+
     if (matchedCall) {
       const viewDetailsBtn = item.querySelector(".gcs-view-details-btn");
       if (viewDetailsBtn) {
@@ -2219,6 +2280,9 @@ function renderGCSFileList() {
 
     container.appendChild(item);
   });
+
+  // Update select all count and disabled states at the end of rendering
+  updateBulkActionUI();
 }
 
 async function triggerCallAnalysisWebhook(file, btn) {
@@ -2314,4 +2378,190 @@ async function playGCSAudio(file) {
     const icon = activeEl ? activeEl.querySelector(".gcs-file-play i") : null;
     if (icon) icon.className = "fa-solid fa-play";
   });
+}
+
+function updateBulkActionUI() {
+  const selectedCount = state.selectedGcsFiles.size;
+  const countText = document.getElementById("gcsSelectedCountText");
+  const bulkAnalyzeBtn = document.getElementById("btnBulkAnalyze");
+  const selectAllCheckbox = document.getElementById("gcsSelectAllCheckbox");
+  
+  if (countText) {
+    countText.textContent = `${selectedCount} selected`;
+  }
+  
+  if (bulkAnalyzeBtn) {
+    bulkAnalyzeBtn.disabled = selectedCount === 0;
+  }
+  
+  if (selectAllCheckbox) {
+    // Determine if all visible checkable files are selected
+    const visibleCheckables = state.filteredGcsFiles.filter(file => {
+      const { status } = findMatchedCallForGCSFile(file);
+      return status !== "analyzed";
+    });
+    
+    if (visibleCheckables.length === 0) {
+      selectAllCheckbox.checked = false;
+      selectAllCheckbox.disabled = true;
+    } else {
+      selectAllCheckbox.disabled = false;
+      const allSelected = visibleCheckables.every(file => state.selectedGcsFiles.has(file.name));
+      selectAllCheckbox.checked = allSelected;
+    }
+  }
+}
+
+async function triggerBulkCallAnalysisWebhook() {
+  const btn = document.getElementById("btnBulkAnalyze");
+  const selectAllCheckbox = document.getElementById("gcsSelectAllCheckbox");
+  if (!btn) return;
+  const originalHtml = btn.innerHTML;
+  
+  const filesToAnalyze = state.filteredGcsFiles.filter(file => state.selectedGcsFiles.has(file.name));
+  if (filesToAnalyze.length === 0) return;
+  
+  btn.disabled = true;
+  if (selectAllCheckbox) selectAllCheckbox.disabled = true;
+  
+  const total = filesToAnalyze.length;
+  let completed = 0;
+  let successful = 0;
+  
+  btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Triggering (0/${total})...`;
+  
+  const webhookUrl = "https://n8n102.i4vision.us/webhook/cdf5e5e5-f8fb-42a6-902d-d5ca4c97d1a9";
+  
+  // Disable checkboxes visually during processing
+  document.querySelectorAll(".gcs-item-checkbox").forEach(cb => cb.disabled = true);
+  
+  // Fire webhook requests in parallel
+  const promises = filesToAnalyze.map(async (file) => {
+    const displayName = file.name.substring(GCS_PREFIX.length);
+    try {
+      const response = await fetch(webhookUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          audio_file_name: displayName,
+          filename: displayName,
+          file_name: displayName,
+          gcs_path: file.name
+        })
+      });
+      
+      if (response.ok || response.status === 200 || response.status === 201) {
+        successful++;
+        state.selectedGcsFiles.delete(file.name);
+      }
+    } catch (err) {
+      console.error("Error triggering analysis for file:", file.name, err);
+    } finally {
+      completed++;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Triggering (${completed}/${total})...`;
+    }
+  });
+  
+  await Promise.all(promises);
+  
+  btn.innerHTML = `<i class="fa-solid fa-circle-check"></i> Triggered ${successful}/${total}`;
+  
+  setTimeout(() => {
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+    if (selectAllCheckbox) selectAllCheckbox.disabled = false;
+    
+    renderGCSFileList();
+    updateBulkActionUI();
+  }, 3500);
+}
+
+function convertToCSV(arr) {
+  const headers = [
+    "Call ID", "Audio Filename", "Agent Name", "Duration (Min)", 
+    "Sentiment", "Risk Level", "Resolution Status", "Agent Score (0-10)", 
+    "Silence (Seconds)", "Silence (%)", "Total Cost (USD)", "Category", "Created At"
+  ];
+  
+  const rows = arr.map(c => {
+    const agentName = getAgentName(c);
+    const silencePct = c.silence_percentage ? (Number(c.silence_percentage) * 100).toFixed(1) + "%" : "0.0%";
+    const score = c.agent_score ? Number(c.agent_score).toFixed(1) : "N/A";
+    
+    return [
+      c.conversation_name || "",
+      c.audio_file_name || "",
+      agentName,
+      c.audio_duration_minutes || "",
+      c.sentiment || "",
+      c.risk_level || "",
+      c.resolution_status || "",
+      score,
+      c.silence_seconds || "",
+      silencePct,
+      c.total_cost_usd || "",
+      c.category || "",
+      c.created_at || ""
+    ].map(val => {
+      let str = String(val).replace(/"/g, '""');
+      if (str.includes(",") || str.includes("\n") || str.includes('"')) {
+        str = `"${str}"`;
+      }
+      return str;
+    });
+  });
+  
+  return [headers.join(","), ...rows.map(r => r.join(","))].join("\r\n");
+}
+
+function downloadCSV(csvContent, filename) {
+  const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  link.setAttribute("href", url);
+  link.setAttribute("download", filename);
+  link.style.visibility = "hidden";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+async function exportCallDataToExcel() {
+  const btn = document.getElementById("btnExportExcel");
+  if (!btn) return;
+  const originalHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Exporting...`;
+  
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/call_analytics_results?select=*`, {
+      method: "GET",
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Supabase API responded with status ${response.status}`);
+    }
+
+    const data = await response.json();
+    const csvContent = convertToCSV(data);
+    const dateStr = new Date().toISOString().split("T")[0];
+    downloadCSV(csvContent, `i4vision_calls_export_${dateStr}.csv`);
+    
+    btn.innerHTML = `<i class="fa-solid fa-circle-check"></i> Exported!`;
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    }, 2500);
+  } catch (error) {
+    console.error("Excel export error:", error);
+    alert(`Failed to export data: ${error.message}`);
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+  }
 }

@@ -1429,3 +1429,26 @@ select.gcs-input {
   cursor: not-allowed;
   transform: none;
 }
+
+/* GCS Bulk Actions toolbar styling */
+#gcsBulkActions {
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.75rem !important;
+  margin-top: 0.25rem;
+  margin-bottom: 0.75rem !important;
+}
+
+/* Checkbox styling */
+.gcs-checkbox-wrapper input[type="checkbox"] {
+  accent-color: var(--accent-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  outline: none;
+  transition: var(--transition);
+}
+
+.gcs-checkbox-wrapper input[type="checkbox"]:hover {
+  transform: scale(1.1);
+}
