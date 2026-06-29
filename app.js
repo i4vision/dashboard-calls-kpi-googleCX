@@ -2163,7 +2163,7 @@ function renderGCSFileList() {
         <span class="gcs-file-meta" style="display: block; margin-top: 0.15rem;">${sizeStr} &bull; ${updatedDate}</span>
         <div class="gcs-file-status-row" style="margin-top: 0.4rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
           ${statusBadge}
-          ${matchedCall ? `<button class="gcs-view-details-btn" title="Open Call Analytics Details"><i class="fa-solid fa-chart-simple"></i> Analytics</button>` : ''}
+          ${matchedCall ? `<button class="gcs-view-details-btn" title="Open Call Analytics Details"><i class="fa-solid fa-chart-simple"></i> Analytics</button>` : `<button class="gcs-analyze-btn" title="Send to webhook for analysis"><i class="fa-solid fa-wand-magic-sparkles"></i> Analyze</button>`}
         </div>
       </div>
       <div class="gcs-file-play" style="flex-shrink: 0; margin-left: 0.5rem;">
@@ -2175,7 +2175,7 @@ function renderGCSFileList() {
       item.classList.add("analyzed-call");
       item.title = "Click to view analytics in dashboard, or click play icon to play recording";
     } else {
-      item.title = "This call has not been analyzed yet (click play icon to play recording)";
+      item.title = "This call has not been analyzed yet (click Analyze button or play icon)";
     }
 
     if (isActiveClass) {
@@ -2207,10 +2207,61 @@ function renderGCSFileList() {
           viewCallAnalytics(matchedCall);
         });
       }
+    } else {
+      const analyzeBtn = item.querySelector(".gcs-analyze-btn");
+      if (analyzeBtn) {
+        analyzeBtn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          await triggerCallAnalysisWebhook(file, analyzeBtn);
+        });
+      }
     }
 
     container.appendChild(item);
   });
+}
+
+async function triggerCallAnalysisWebhook(file, btn) {
+  const webhookUrl = "https://n8n102.i4vision.us/webhook/cdf5e5e5-f8fb-42a6-902d-d5ca4c97d1a9";
+  const displayName = file.name.substring(GCS_PREFIX.length);
+  
+  const originalHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Sending...`;
+
+  try {
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        audio_file_name: displayName,
+        filename: displayName,
+        file_name: displayName,
+        gcs_path: file.name
+      })
+    });
+
+    if (response.ok || response.status === 200 || response.status === 201) {
+      btn.innerHTML = `<i class="fa-solid fa-circle-check"></i> Triggered`;
+      btn.style.borderColor = "var(--color-positive)";
+      btn.style.color = "var(--color-positive)";
+    } else {
+      throw new Error(`Webhook responded with status ${response.status}`);
+    }
+  } catch (err) {
+    console.error("Error triggering analysis webhook:", err);
+    btn.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Error`;
+    btn.style.borderColor = "var(--color-negative)";
+    btn.style.color = "var(--color-negative)";
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+      btn.style.borderColor = "";
+      btn.style.color = "";
+    }, 3000);
+  }
 }
 
 async function playGCSAudio(file) {
