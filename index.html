@@ -509,9 +509,14 @@
             <input type="checkbox" id="gcsSelectAllCheckbox" style="cursor: pointer; width: 14px; height: 14px;">
             <span id="gcsSelectedCountText">0 selected</span>
           </div>
-          <button id="btnBulkAnalyze" class="btn-primary" style="height: 28px; font-size: 0.7rem; padding: 0 0.75rem; display: flex; align-items: center; gap: 0.25rem; border-radius: var(--radius-sm);" disabled>
-            <i class="fa-solid fa-wand-magic-sparkles"></i> Analyze Selected
-          </button>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <button id="btnBulkReset" class="gcs-delete-recording-btn" style="height: 28px; font-size: 0.7rem; padding: 0 0.75rem; display: flex; align-items: center; gap: 0.25rem; border-radius: var(--radius-sm);" disabled>
+              <i class="fa-solid fa-trash-can"></i> Reset Selected
+            </button>
+            <button id="btnBulkAnalyze" class="btn-primary" style="height: 28px; font-size: 0.7rem; padding: 0 0.75rem; display: flex; align-items: center; gap: 0.25rem; border-radius: var(--radius-sm);" disabled>
+              <i class="fa-solid fa-wand-magic-sparkles"></i> Analyze Selected
+            </button>
+          </div>
         </div>
         
         <div id="gcsFileList" class="gcs-file-list">

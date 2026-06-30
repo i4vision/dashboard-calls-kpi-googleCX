@@ -1641,10 +1641,7 @@ function setupGCSEventListeners() {
       const checked = e.target.checked;
       if (checked) {
         state.filteredGcsFiles.forEach(file => {
-          const { status } = findMatchedCallForGCSFile(file);
-          if (status !== "analyzed") {
-            state.selectedGcsFiles.add(file.name);
-          }
+          state.selectedGcsFiles.add(file.name);
         });
       } else {
         state.filteredGcsFiles.forEach(file => {
@@ -1660,6 +1657,12 @@ function setupGCSEventListeners() {
   const btnBulkAnalyze = document.getElementById("btnBulkAnalyze");
   if (btnBulkAnalyze) {
     btnBulkAnalyze.addEventListener("click", triggerBulkCallAnalysisWebhook);
+  }
+
+  // Bulk reset button listener
+  const btnBulkReset = document.getElementById("btnBulkReset");
+  if (btnBulkReset) {
+    btnBulkReset.addEventListener("click", triggerBulkCallReset);
   }
 
   // Save parameters listener
@@ -2199,15 +2202,9 @@ function renderGCSFileList() {
     }
 
     item.innerHTML = `
-      ${fileStatus !== "analyzed" ? `
-        <div class="gcs-checkbox-wrapper" style="margin-right: 0.5rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-          <input type="checkbox" class="gcs-item-checkbox" data-name="${file.name}" ${state.selectedGcsFiles.has(file.name) ? 'checked' : ''} style="cursor: pointer; width: 15px; height: 15px;">
-        </div>
-      ` : `
-        <div class="gcs-checkbox-wrapper" style="margin-right: 0.5rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 15px; opacity: 0.7; color: var(--color-positive);">
-          <i class="fa-solid fa-circle-check" style="font-size: 0.75rem;"></i>
-        </div>
-      `}
+      <div class="gcs-checkbox-wrapper" style="margin-right: 0.5rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+        <input type="checkbox" class="gcs-item-checkbox" data-name="${file.name}" ${state.selectedGcsFiles.has(file.name) ? 'checked' : ''} style="cursor: pointer; width: 15px; height: 15px;">
+      </div>
       <div class="gcs-file-info" style="flex: 1; min-width: 0;">
         <span class="gcs-file-name" title="${displayName}" style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${displayName}</span>
         <span class="gcs-file-meta" style="display: block; margin-top: 0.15rem;">${sizeStr} &bull; ${updatedDate}</span>
@@ -2349,6 +2346,7 @@ function updateBulkActionUI() {
   const selectedCount = state.selectedGcsFiles.size;
   const countText = document.getElementById("gcsSelectedCountText");
   const bulkAnalyzeBtn = document.getElementById("btnBulkAnalyze");
+  const bulkResetBtn = document.getElementById("btnBulkReset");
   const selectAllCheckbox = document.getElementById("gcsSelectAllCheckbox");
   
   if (countText) {
@@ -2356,22 +2354,26 @@ function updateBulkActionUI() {
   }
   
   if (bulkAnalyzeBtn) {
-    bulkAnalyzeBtn.disabled = selectedCount === 0;
+    const hasAnalyzable = state.filteredGcsFiles.some(file => 
+      state.selectedGcsFiles.has(file.name) && findMatchedCallForGCSFile(file).status !== "analyzed"
+    );
+    bulkAnalyzeBtn.disabled = !hasAnalyzable;
+  }
+  
+  if (bulkResetBtn) {
+    const hasResettable = state.filteredGcsFiles.some(file => 
+      state.selectedGcsFiles.has(file.name) && findMatchedCallForGCSFile(file).status !== "pending"
+    );
+    bulkResetBtn.disabled = !hasResettable;
   }
   
   if (selectAllCheckbox) {
-    // Determine if all visible checkable files are selected
-    const visibleCheckables = state.filteredGcsFiles.filter(file => {
-      const { status } = findMatchedCallForGCSFile(file);
-      return status !== "analyzed";
-    });
-    
-    if (visibleCheckables.length === 0) {
+    if (state.filteredGcsFiles.length === 0) {
       selectAllCheckbox.checked = false;
       selectAllCheckbox.disabled = true;
     } else {
       selectAllCheckbox.disabled = false;
-      const allSelected = visibleCheckables.every(file => state.selectedGcsFiles.has(file.name));
+      const allSelected = state.filteredGcsFiles.every(file => state.selectedGcsFiles.has(file.name));
       selectAllCheckbox.checked = allSelected;
     }
   }
@@ -2629,4 +2631,113 @@ async function resetRecordingData(file, btn) {
     btn.disabled = false;
     btn.innerHTML = originalHtml;
   }
+}
+
+async function triggerBulkCallReset() {
+  const btn = document.getElementById("btnBulkReset");
+  const selectAllCheckbox = document.getElementById("gcsSelectAllCheckbox");
+  if (!btn) return;
+  const originalHtml = btn.innerHTML;
+  
+  const filesToReset = state.filteredGcsFiles.filter(file => 
+    state.selectedGcsFiles.has(file.name) && findMatchedCallForGCSFile(file).status !== "pending"
+  );
+  if (filesToReset.length === 0) return;
+  
+  const total = filesToReset.length;
+  const confirm1 = confirm(`Are you sure you want to reset all ${total} selected recordings?\nThis will delete their Supabase analysis rows and GCS transcript files.`);
+  if (!confirm1) return;
+  
+  const confirm2 = confirm(`WARNING: This action is permanent and cannot be undone.\nOnly the raw audio files under 'audio/' in GCS will be preserved.\n\nDo you want to proceed with resetting ${total} recordings?`);
+  if (!confirm2) return;
+  
+  btn.disabled = true;
+  if (selectAllCheckbox) selectAllCheckbox.disabled = true;
+  
+  let completed = 0;
+  let successful = 0;
+  
+  btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Resetting (0/${total})...`;
+  
+  // Disable checkboxes visually during processing
+  document.querySelectorAll(".gcs-item-checkbox").forEach(cb => cb.disabled = true);
+  
+  const token = await getGoogleAccessToken();
+  
+  const promises = filesToReset.map(async (file) => {
+    const displayName = file.name.substring(GCS_PREFIX.length);
+    const audioPrefix = displayName.replace(".mp3", "");
+    const sessionId = state.gcsTranscriptsMap[audioPrefix];
+    
+    try {
+      // 1. Delete from Supabase (A: by audio_file_name)
+      await fetch(`${SUPABASE_URL}/rest/v1/call_analytics_results?audio_file_name=eq.${encodeURIComponent(displayName)}`, {
+        method: "DELETE",
+        headers: {
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+        }
+      });
+      
+      // B: by conversation_name (Session ID)
+      if (sessionId) {
+        await fetch(`${SUPABASE_URL}/rest/v1/call_analytics_results?conversation_name=eq.${encodeURIComponent(sessionId)}`, {
+          method: "DELETE",
+          headers: {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        });
+        
+        await fetch(`${SUPABASE_URL}/rest/v1/call_analytics_results?conversation_name=like.*${encodeURIComponent(sessionId)}`, {
+          method: "DELETE",
+          headers: {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        });
+      }
+      
+      // 2. Delete GCS objects
+      if (token) {
+        const matches = state.gcsTranscriptObjects.filter(obj => obj.name && obj.name.includes(audioPrefix));
+        const deletePromises = matches.map(async (obj) => {
+          const deleteResp = await fetch(`https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o/${encodeURIComponent(obj.name)}?access_token=${token}`, {
+            method: "DELETE"
+          });
+          if (!deleteResp.ok && deleteResp.status !== 404) {
+            console.warn(`Failed to delete GCS object ${obj.name}: ${deleteResp.status}`);
+          }
+        });
+        await Promise.all(deletePromises);
+      }
+      
+      successful++;
+      state.selectedGcsFiles.delete(file.name);
+    } catch (err) {
+      console.error(`Error resetting file ${file.name}:`, err);
+    } finally {
+      completed++;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Resetting (${completed}/${total})...`;
+    }
+  });
+  
+  await Promise.all(promises);
+  
+  btn.innerHTML = `<i class="fa-solid fa-circle-check"></i> Reset ${successful}/${total}`;
+  
+  setTimeout(async () => {
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+    if (selectAllCheckbox) selectAllCheckbox.disabled = false;
+    
+    // Refresh Supabase calls
+    await fetchCallData();
+    
+    // Reload GCS files list
+    const freshToken = await getGoogleAccessToken();
+    if (freshToken) {
+      await loadGCSFiles(freshToken);
+    }
+  }, 2500);
 }
