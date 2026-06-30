@@ -1680,9 +1680,7 @@ function setupGCSEventListeners() {
     google: [
       { value: "chirp", label: "chirp (Recommended)" },
       { value: "latest_long", label: "latest_long" },
-      { value: "latest_short", label: "latest_short" },
-      { value: "telephony", label: "telephony" },
-      { value: "video", label: "video" }
+      { value: "latest_short", label: "latest_short" }
     ],
     openai: [
       { value: "whisper-1", label: "whisper-1 (Recommended)" }
