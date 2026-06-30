@@ -27,7 +27,8 @@ let state = {
   filteredGcsFiles: [],
   supabaseSettingsEnabled: true,
   gcsTranscriptsMap: {},
-  selectedGcsFiles: new Set()
+  selectedGcsFiles: new Set(),
+  gcsTranscriptObjects: []
 };
 
 // Initialize Application
@@ -2033,6 +2034,7 @@ async function loadGCSFiles(token) {
       if (d.items) transItems.push(...d.items);
     }
 
+    state.gcsTranscriptObjects = transItems;
     state.gcsTranscriptsMap = {};
     transItems.forEach(item => {
       if (!item.name || !item.name.endsWith(".json")) return;
@@ -2212,6 +2214,7 @@ function renderGCSFileList() {
         <div class="gcs-file-status-row" style="margin-top: 0.4rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
           ${statusBadge}
           ${matchedCall ? `<button class="gcs-view-details-btn" title="Open Call Analytics Details"><i class="fa-solid fa-chart-simple"></i> Analytics</button>` : ''}
+          ${fileStatus !== "pending" ? `<button class="gcs-delete-recording-btn" title="Reset recording: Delete transcript and analysis data"><i class="fa-solid fa-trash-can"></i> Reset</button>` : ''}
         </div>
       </div>
       <div class="gcs-file-play" style="flex-shrink: 0; margin-left: 0.5rem;">
@@ -2272,6 +2275,15 @@ function renderGCSFileList() {
           viewCallAnalytics(matchedCall);
         });
       }
+    }
+
+    // Bind GCS item reset/delete click
+    const deleteBtn = item.querySelector(".gcs-delete-recording-btn");
+    if (deleteBtn) {
+      deleteBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        resetRecordingData(file, deleteBtn);
+      });
     }
 
     container.appendChild(item);
@@ -2514,6 +2526,106 @@ async function exportCallDataToExcel(e) {
   } catch (error) {
     console.error("Excel export error:", error);
     alert(`Failed to export data: ${error.message}`);
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+  }
+}
+
+async function resetRecordingData(file, btn) {
+  const displayName = file.name.substring(GCS_PREFIX.length);
+  
+  // Double-check warning prompts
+  const confirm1 = confirm(`Are you sure you want to reset this recording?\nThis will delete the Supabase analysis row and all GCS transcript JSON files.`);
+  if (!confirm1) return;
+  
+  const confirm2 = confirm(`WARNING: This action is permanent and cannot be undone.\nOnly the raw audio file under 'audio/' in GCS will be preserved.\n\nDo you want to proceed?`);
+  if (!confirm2) return;
+  
+  const originalHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Resetting...`;
+  
+  try {
+    // 1. Resolve matched call and sessionId
+    const { matchedCall } = findMatchedCallForGCSFile(file);
+    const audioPrefix = displayName.replace(".mp3", "");
+    const sessionId = state.gcsTranscriptsMap[audioPrefix];
+    
+    // 2. Delete from Supabase
+    // A: Delete by audio_file_name
+    await fetch(`${SUPABASE_URL}/rest/v1/call_analytics_results?audio_file_name=eq.${encodeURIComponent(displayName)}`, {
+      method: "DELETE",
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+    
+    // B: Delete by conversation_name (Session ID)
+    if (sessionId) {
+      await fetch(`${SUPABASE_URL}/rest/v1/call_analytics_results?conversation_name=eq.${encodeURIComponent(sessionId)}`, {
+        method: "DELETE",
+        headers: {
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+        }
+      });
+      
+      // Also delete by full name path if it's there
+      await fetch(`${SUPABASE_URL}/rest/v1/call_analytics_results?conversation_name=like.*${encodeURIComponent(sessionId)}`, {
+        method: "DELETE",
+        headers: {
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+        }
+      });
+    }
+    
+    // 3. Delete from Google Cloud Storage
+    const token = await getGoogleAccessToken();
+    if (!token) {
+      throw new Error("Google access token not available. Please reconnect GCS.");
+    }
+    
+    // Find all matching transcript GCS objects in state.gcsTranscriptObjects
+    const matches = state.gcsTranscriptObjects.filter(obj => obj.name && obj.name.includes(audioPrefix));
+    
+    // Delete GCS objects in parallel
+    const deletePromises = matches.map(async (obj) => {
+      const deleteResp = await fetch(`https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o/${encodeURIComponent(obj.name)}?access_token=${token}`, {
+        method: "DELETE"
+      });
+      if (!deleteResp.ok && deleteResp.status !== 404) {
+        console.warn(`Failed to delete GCS object ${obj.name}: ${deleteResp.status}`);
+      }
+    });
+    
+    await Promise.all(deletePromises);
+    
+    // Clear selection state if this file was checked
+    state.selectedGcsFiles.delete(file.name);
+    
+    // Success feedback
+    btn.innerHTML = `<i class="fa-solid fa-circle-check"></i> Reset!`;
+    
+    // Reload dashboard call data and refresh GCS file listings
+    setTimeout(async () => {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+      
+      // Refresh Supabase calls in UI
+      await fetchCallData();
+      
+      // Re-load GCS files list to update display status
+      const freshToken = await getGoogleAccessToken();
+      if (freshToken) {
+        await loadGCSFiles(freshToken);
+      }
+    }, 1500);
+    
+  } catch (error) {
+    console.error("Error resetting recording:", error);
+    alert(`Failed to reset recording: ${error.message}`);
     btn.disabled = false;
     btn.innerHTML = originalHtml;
   }

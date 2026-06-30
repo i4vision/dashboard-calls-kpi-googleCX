@@ -1452,3 +1452,33 @@ select.gcs-input {
 .gcs-checkbox-wrapper input[type="checkbox"]:hover {
   transform: scale(1.1);
 }
+
+/* GCS Delete/Reset recording button styling */
+.gcs-delete-recording-btn {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.15rem 0.45rem;
+  background: rgba(244, 63, 94, 0.1);
+  border: 1px solid rgba(244, 63, 94, 0.3);
+  color: var(--color-negative);
+  border-radius: 3px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  transition: all 0.2s ease;
+  line-height: 1;
+}
+
+.gcs-delete-recording-btn:hover {
+  background: rgba(244, 63, 94, 0.2);
+  border-color: var(--color-negative);
+  color: #fda4af;
+  transform: translateY(-1px);
+}
+
+.gcs-delete-recording-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
