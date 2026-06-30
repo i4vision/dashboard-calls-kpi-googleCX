@@ -1467,7 +1467,7 @@ async function getAccessTokenFromServiceAccount(saJson) {
   const now = Math.floor(Date.now() / 1000);
   const payload = {
     iss: saJson.client_email,
-    scope: "https://www.googleapis.com/auth/devstorage.read_only",
+    scope: "https://www.googleapis.com/auth/devstorage.read_write",
     aud: saJson.token_uri || "https://oauth2.googleapis.com/token",
     exp: now + 3600,
     iat: now
@@ -1563,7 +1563,7 @@ async function getAccessTokenFromServiceAccount(saJson) {
 
 function loginGoogle() {
   const redirectUri = window.location.origin + window.location.pathname;
-  const scope = "https://www.googleapis.com/auth/devstorage.read_only";
+  const scope = "https://www.googleapis.com/auth/devstorage.read_write";
   const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GCS_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${encodeURIComponent(scope)}`;
   window.location.href = url;
 }
