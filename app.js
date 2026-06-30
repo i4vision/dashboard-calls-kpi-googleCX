@@ -2656,16 +2656,52 @@ async function resetRecordingData(file, btn) {
       throw new Error("Google access token not available. Please reconnect GCS.");
     }
     
-    // Find all matching transcript GCS objects in state.gcsTranscriptObjects
-    const matches = state.gcsTranscriptObjects.filter(obj => obj.name && obj.name.includes(audioPrefix));
+    // Search GCS directly using prefix matching for real-time accuracy and case safety
+    const searchPrefixes = [
+      `transcripts/${audioPrefix}`,
+      `cx-transcripts/${audioPrefix}`
+    ];
+    
+    const objectsToDelete = [];
+    
+    for (const prefix of searchPrefixes) {
+      const gcsListUrl = `https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o?prefix=${encodeURIComponent(prefix)}&access_token=${token}`;
+      try {
+        const listResp = await fetch(gcsListUrl);
+        if (listResp.ok) {
+          const listData = await listResp.json();
+          if (listData.items && listData.items.length > 0) {
+            listData.items.forEach(item => {
+              if (item.name && !objectsToDelete.includes(item.name)) {
+                objectsToDelete.push(item.name);
+              }
+            });
+          }
+        }
+      } catch (e) {
+        console.error(`Error querying GCS prefix ${prefix}:`, e);
+      }
+    }
+    
+    // Safety net fallback: check in state.gcsTranscriptObjects case-insensitively
+    if (state.gcsTranscriptObjects && state.gcsTranscriptObjects.length > 0) {
+      const lowerPrefix = audioPrefix.toLowerCase();
+      state.gcsTranscriptObjects.forEach(obj => {
+        if (obj.name && obj.name.toLowerCase().includes(lowerPrefix)) {
+          if (!objectsToDelete.includes(obj.name)) {
+            objectsToDelete.push(obj.name);
+          }
+        }
+      });
+    }
     
     // Delete GCS objects in parallel
-    const deletePromises = matches.map(async (obj) => {
-      const deleteResp = await fetch(`https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o/${encodeURIComponent(obj.name)}?access_token=${token}`, {
+    const deletePromises = objectsToDelete.map(async (name) => {
+      const deleteResp = await fetch(`https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o/${encodeURIComponent(name)}?access_token=${token}`, {
         method: "DELETE"
       });
       if (!deleteResp.ok && deleteResp.status !== 404) {
-        console.warn(`Failed to delete GCS object ${obj.name}: ${deleteResp.status}`);
+        console.warn(`Failed to delete GCS object ${name}: ${deleteResp.status}`);
       }
     });
     
@@ -2767,13 +2803,50 @@ async function triggerBulkCallReset() {
       
       // 2. Delete GCS objects
       if (token) {
-        const matches = state.gcsTranscriptObjects.filter(obj => obj.name && obj.name.includes(audioPrefix));
-        const deletePromises = matches.map(async (obj) => {
-          const deleteResp = await fetch(`https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o/${encodeURIComponent(obj.name)}?access_token=${token}`, {
+        const searchPrefixes = [
+          `transcripts/${audioPrefix}`,
+          `cx-transcripts/${audioPrefix}`
+        ];
+        
+        const objectsToDelete = [];
+        
+        for (const prefix of searchPrefixes) {
+          const gcsListUrl = `https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o?prefix=${encodeURIComponent(prefix)}&access_token=${token}`;
+          try {
+            const listResp = await fetch(gcsListUrl);
+            if (listResp.ok) {
+              const listData = await listResp.json();
+              if (listData.items && listData.items.length > 0) {
+                listData.items.forEach(item => {
+                  if (item.name && !objectsToDelete.includes(item.name)) {
+                    objectsToDelete.push(item.name);
+                  }
+                });
+              }
+            }
+          } catch (e) {
+            console.error(`Error querying GCS prefix ${prefix}:`, e);
+          }
+        }
+        
+        // Safety net fallback
+        if (state.gcsTranscriptObjects && state.gcsTranscriptObjects.length > 0) {
+          const lowerPrefix = audioPrefix.toLowerCase();
+          state.gcsTranscriptObjects.forEach(obj => {
+            if (obj.name && obj.name.toLowerCase().includes(lowerPrefix)) {
+              if (!objectsToDelete.includes(obj.name)) {
+                objectsToDelete.push(obj.name);
+              }
+            }
+          });
+        }
+        
+        const deletePromises = objectsToDelete.map(async (name) => {
+          const deleteResp = await fetch(`https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o/${encodeURIComponent(name)}?access_token=${token}`, {
             method: "DELETE"
           });
           if (!deleteResp.ok && deleteResp.status !== 404) {
-            console.warn(`Failed to delete GCS object ${obj.name}: ${deleteResp.status}`);
+            console.warn(`Failed to delete GCS object ${name}: ${deleteResp.status}`);
           }
         });
         await Promise.all(deletePromises);
