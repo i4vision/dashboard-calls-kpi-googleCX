@@ -1680,6 +1680,7 @@ function setupGCSEventListeners() {
     google: [
       { value: "chirp", label: "chirp (Recommended)" },
       { value: "latest_long", label: "latest_long" },
+      { value: "latest_short", label: "latest_short" },
       { value: "telephony", label: "telephony" },
       { value: "video", label: "video" }
     ],
