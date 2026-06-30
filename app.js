@@ -104,10 +104,14 @@ function setupEventListeners() {
     if (e.key === "Escape") closeDrawer();
   });
 
-  // Export Excel listener
+  // Export Excel listeners
   const btnExportExcel = document.getElementById("btnExportExcel");
   if (btnExportExcel) {
     btnExportExcel.addEventListener("click", exportCallDataToExcel);
+  }
+  const btnExportExcelHeader = document.getElementById("btnExportExcelHeader");
+  if (btnExportExcelHeader) {
+    btnExportExcelHeader.addEventListener("click", exportCallDataToExcel);
   }
 }
 
@@ -2528,8 +2532,8 @@ function downloadCSV(csvContent, filename) {
   document.body.removeChild(link);
 }
 
-async function exportCallDataToExcel() {
-  const btn = document.getElementById("btnExportExcel");
+async function exportCallDataToExcel(e) {
+  const btn = e ? e.currentTarget : (document.getElementById("btnExportExcelHeader") || document.getElementById("btnExportExcel"));
   if (!btn) return;
   const originalHtml = btn.innerHTML;
   btn.disabled = true;
