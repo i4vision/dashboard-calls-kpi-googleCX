@@ -1673,19 +1673,13 @@ function setupGCSEventListeners() {
   // STT Engine Dropdowns Setup
   const STT_MODELS = {
     google: [
-      { value: "chirp_2", label: "chirp_2 (Recommended)" },
-      { value: "chirp", label: "chirp" },
+      { value: "chirp", label: "chirp (Recommended)" },
       { value: "latest_long", label: "latest_long" },
-      { value: "latest_short", label: "latest_short" },
       { value: "telephony", label: "telephony" },
-      { value: "video", label: "video" },
-      { value: "medical_dictation", label: "medical_dictation" },
-      { value: "medical_conversation", label: "medical_conversation" }
+      { value: "video", label: "video" }
     ],
     openai: [
-      { value: "gpt-4o-mini-transcribe", label: "gpt-4o-mini-transcribe (Recommended)" },
-      { value: "gpt-4o-transcribe", label: "gpt-4o-transcribe" },
-      { value: "whisper-1", label: "whisper-1" }
+      { value: "whisper-1", label: "whisper-1 (Recommended)" }
     ]
   };
 
@@ -2451,7 +2445,7 @@ async function triggerBulkCallAnalysisWebhook() {
   if (filesToAnalyze.length === 0) return;
   
   const sttProvider = document.getElementById("sttProviderSelect") ? document.getElementById("sttProviderSelect").value : "google";
-  const sttModel = document.getElementById("sttModelSelect") ? document.getElementById("sttModelSelect").value : "chirp_2";
+  const sttModel = document.getElementById("sttModelSelect") ? document.getElementById("sttModelSelect").value : "chirp";
   
   btn.disabled = true;
   if (selectAllCheckbox) selectAllCheckbox.disabled = true;
