@@ -677,6 +677,11 @@ function openDrawer(call) {
     document.getElementById("drawerAudioDuration").textContent = "N/A";
   }
 
+  const provider = call.stt_provider ? formatString(call.stt_provider) : "N/A";
+  const model = call.stt_model || "";
+  const engineText = model ? `${provider} (${model})` : provider;
+  document.getElementById("drawerSTTEngine").textContent = engineText;
+
   document.getElementById("drawerOpenAIModel").textContent = call.openai_model || "N/A";
 
   const inputTokens = call.openai_input_tokens;
@@ -1665,6 +1670,63 @@ function setupGCSEventListeners() {
     btnBulkReset.addEventListener("click", triggerBulkCallReset);
   }
 
+  // STT Engine Dropdowns Setup
+  const STT_MODELS = {
+    google: [
+      { value: "chirp_2", label: "chirp_2 (Recommended)" },
+      { value: "chirp", label: "chirp" },
+      { value: "latest_long", label: "latest_long" },
+      { value: "latest_short", label: "latest_short" },
+      { value: "telephony", label: "telephony" },
+      { value: "video", label: "video" },
+      { value: "medical_dictation", label: "medical_dictation" },
+      { value: "medical_conversation", label: "medical_conversation" }
+    ],
+    openai: [
+      { value: "gpt-4o-mini-transcribe", label: "gpt-4o-mini-transcribe (Recommended)" },
+      { value: "gpt-4o-transcribe", label: "gpt-4o-transcribe" },
+      { value: "whisper-1", label: "whisper-1" }
+    ]
+  };
+
+  const sttProviderSelect = document.getElementById("sttProviderSelect");
+  const sttModelSelect = document.getElementById("sttModelSelect");
+
+  function updateSTTModelsList() {
+    if (!sttProviderSelect || !sttModelSelect) return;
+    const provider = sttProviderSelect.value;
+    sttModelSelect.innerHTML = "";
+    
+    const models = STT_MODELS[provider] || [];
+    models.forEach(model => {
+      const opt = document.createElement("option");
+      opt.value = model.value;
+      opt.textContent = model.label;
+      sttModelSelect.appendChild(opt);
+    });
+    
+    localStorage.setItem("gcs_stt_provider", provider);
+    localStorage.setItem("gcs_stt_model", sttModelSelect.value);
+  }
+
+  if (sttProviderSelect && sttModelSelect) {
+    sttProviderSelect.addEventListener("change", updateSTTModelsList);
+    sttModelSelect.addEventListener("change", () => {
+      localStorage.setItem("gcs_stt_model", sttModelSelect.value);
+    });
+
+    // Load saved settings
+    const savedProvider = localStorage.getItem("gcs_stt_provider") || "google";
+    const savedModel = localStorage.getItem("gcs_stt_model");
+    
+    sttProviderSelect.value = savedProvider;
+    updateSTTModelsList();
+    
+    if (savedModel && Array.from(sttModelSelect.options).some(o => o.value === savedModel)) {
+      sttModelSelect.value = savedModel;
+    }
+  }
+
   // Save parameters listener
   const btnSaveParams = document.getElementById("btnSaveParameters");
   if (btnSaveParams) {
@@ -2388,6 +2450,9 @@ async function triggerBulkCallAnalysisWebhook() {
   const filesToAnalyze = state.filteredGcsFiles.filter(file => state.selectedGcsFiles.has(file.name));
   if (filesToAnalyze.length === 0) return;
   
+  const sttProvider = document.getElementById("sttProviderSelect") ? document.getElementById("sttProviderSelect").value : "google";
+  const sttModel = document.getElementById("sttModelSelect") ? document.getElementById("sttModelSelect").value : "chirp_2";
+  
   btn.disabled = true;
   if (selectAllCheckbox) selectAllCheckbox.disabled = true;
   
@@ -2415,7 +2480,9 @@ async function triggerBulkCallAnalysisWebhook() {
           audio_file_name: displayName,
           filename: displayName,
           file_name: displayName,
-          gcs_path: file.name
+          gcs_path: file.name,
+          stt_provider: sttProvider,
+          stt_model: sttModel
         })
       });
       
@@ -2449,7 +2516,8 @@ function convertToCSV(arr) {
   const headers = [
     "Call ID", "Audio Filename", "Agent Name", "Duration (Min)", 
     "Sentiment", "Risk Level", "Resolution Status", "Agent Score (0-10)", 
-    "Silence (Seconds)", "Silence (%)", "Total Cost (USD)", "Category", "Created At"
+    "Silence (Seconds)", "Silence (%)", "Total Cost (USD)", "Category", 
+    "STT Provider", "STT Model", "STT Minutes", "STT Cost (USD)", "Total Processing Cost (USD)", "Created At"
   ];
   
   const rows = arr.map(c => {
@@ -2470,6 +2538,11 @@ function convertToCSV(arr) {
       silencePct,
       c.total_cost_usd || "",
       c.category || "",
+      c.stt_provider || "",
+      c.stt_model || "",
+      c.stt_minutes || "",
+      c.stt_cost_usd || "",
+      c.total_processing_cost_usd || "",
       c.created_at || ""
     ].map(val => {
       let str = String(val).replace(/"/g, '""');
