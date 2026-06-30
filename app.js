@@ -2050,6 +2050,36 @@ INSERT INTO dashboard_settings (id) VALUES (1);</pre>
   }
 }
 
+async function fetchAllGcsObjects(prefix, token) {
+  let objects = [];
+  let pageToken = "";
+  
+  do {
+    let url = `https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o?prefix=${encodeURIComponent(prefix)}`;
+    if (pageToken) {
+      url += `&pageToken=${encodeURIComponent(pageToken)}`;
+    }
+    
+    const resp = await fetch(url, {
+      headers: {
+        "Authorization": `Bearer ${token}`
+      }
+    });
+    
+    if (!resp.ok) {
+      throw new Error(`Failed to list GCS objects for prefix ${prefix}: ${resp.status}`);
+    }
+    
+    const data = await resp.json();
+    if (data.items) {
+      objects.push(...data.items);
+    }
+    pageToken = data.nextPageToken || "";
+  } while (pageToken);
+  
+  return objects;
+}
+
 async function loadGCSFiles(token) {
   const listContainer = document.getElementById("gcsFileList");
   listContainer.innerHTML = `
@@ -2060,42 +2090,17 @@ async function loadGCSFiles(token) {
   `;
 
   try {
-    const [audioResp, transcriptsResp, cxTranscriptsResp] = await Promise.all([
-      fetch(`https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o?prefix=${encodeURIComponent(GCS_PREFIX)}`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      }),
-      fetch(`https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o?prefix=transcripts/`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      }),
-      fetch(`https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o?prefix=cx-transcripts/`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      })
+    const [audioItems, transItems, cxTransItems] = await Promise.all([
+      fetchAllGcsObjects(GCS_PREFIX, token),
+      fetchAllGcsObjects("transcripts/", token),
+      fetchAllGcsObjects("cx-transcripts/", token)
     ]);
 
-    if (!audioResp.ok) {
-      if (audioResp.status === 401) {
-        logoutGoogle();
-        throw new Error("Session expired. Please reconnect.");
-      }
-      throw new Error(`Google API returned status ${audioResp.status}`);
-    }
-
-    const audioData = await audioResp.json();
-    
-    // Parse transcript mappings
-    const transItems = [];
-    if (transcriptsResp.ok) {
-      const d = await transcriptsResp.json();
-      if (d.items) transItems.push(...d.items);
-    }
-    if (cxTranscriptsResp.ok) {
-      const d = await cxTranscriptsResp.json();
-      if (d.items) transItems.push(...d.items);
-    }
-
-    state.gcsTranscriptObjects = transItems;
+    const allTranscriptItems = [...transItems, ...cxTransItems];
+    state.gcsTranscriptObjects = allTranscriptItems;
     state.gcsTranscriptsMap = {};
-    transItems.forEach(item => {
+    
+    allTranscriptItems.forEach(item => {
       if (!item.name || !item.name.endsWith(".json")) return;
       const basename = item.name.split("/").pop();
       if (basename.includes("_transcript_")) {
@@ -2103,10 +2108,11 @@ async function loadGCSFiles(token) {
         const audioPrefix = parts[0];
         const sessionId = parts[1].replace(".json", "");
         state.gcsTranscriptsMap[audioPrefix] = sessionId;
+        state.gcsTranscriptsMap[audioPrefix.toLowerCase()] = sessionId;
       }
     });
     
-    state.gcsFiles = (audioData.items || []).filter(item => {
+    state.gcsFiles = audioItems.filter(item => {
       return item.name && item.name.toLowerCase().endsWith(".mp3") && item.name !== GCS_PREFIX;
     });
     
@@ -2146,7 +2152,7 @@ function findMatchedCallForGCSFile(file) {
   
   // 2. Fallback to GCS transcript JSON name mappings
   const audioPrefix = displayName.replace(".mp3", "");
-  const sessionId = state.gcsTranscriptsMap[audioPrefix];
+  const sessionId = state.gcsTranscriptsMap[audioPrefix] || state.gcsTranscriptsMap[audioPrefix.toLowerCase()];
   if (sessionId) {
     matchedCall = state.allCalls.find(c => {
       const callSessionId = formatConvName(c.conversation_name).toLowerCase();
