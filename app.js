@@ -2714,7 +2714,8 @@ async function resetRecordingData(file, btn) {
         }
       });
       if (!deleteResp.ok && deleteResp.status !== 404) {
-        console.warn(`Failed to delete GCS object ${name}: ${deleteResp.status}`);
+        const errorText = await deleteResp.text();
+        throw new Error(`Google Cloud Storage rejected deletion of '${name}': Status ${deleteResp.status} - ${errorText}`);
       }
     });
     
@@ -2866,7 +2867,8 @@ async function triggerBulkCallReset() {
             }
           });
           if (!deleteResp.ok && deleteResp.status !== 404) {
-            console.warn(`Failed to delete GCS object ${name}: ${deleteResp.status}`);
+            const errorText = await deleteResp.text();
+            throw new Error(`Google Cloud Storage rejected deletion of '${name}': Status ${deleteResp.status} - ${errorText}`);
           }
         });
         await Promise.all(deletePromises);
