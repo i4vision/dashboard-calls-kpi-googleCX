@@ -1283,7 +1283,7 @@ function checkGoogleAuth() {
     if (token) {
       const expiryTime = Date.now() + expiresSec * 1000;
       localStorage.setItem("gcs_access_token", token);
-      localStorage.setItem("gcs_token_expiry", expiryTime);
+      localStorage.setItem("gcs_token_expiry", `v3_${expiryTime}`);
       
       // Clean URL hash so it looks nice
       window.history.replaceState(null, null, window.location.pathname);
@@ -1423,14 +1423,19 @@ async function deleteSettingFromSupabase(key) {
 
 async function getGoogleAccessToken() {
   const token = localStorage.getItem("gcs_access_token");
-  const expiry = localStorage.getItem("gcs_token_expiry");
+  const expiryRaw = localStorage.getItem("gcs_token_expiry");
   
-  // 30 seconds buffer
-  if (token && expiry && Date.now() < Number(expiry) - 30000) {
-    return token;
+  if (token && expiryRaw) {
+    const parts = expiryRaw.split("_");
+    if (parts.length === 2 && parts[0] === "v3") {
+      const expiry = Number(parts[1]);
+      if (Date.now() < expiry - 30000) {
+        return token;
+      }
+    }
   }
   
-  // Clean up if expired or missing
+  // Clean up if expired, missing, or scope mismatched
   localStorage.removeItem("gcs_access_token");
   localStorage.removeItem("gcs_token_expiry");
   
@@ -1443,11 +1448,11 @@ async function getGoogleAccessToken() {
       
       const newExpiry = Date.now() + (data.expires_in || 3600) * 1000;
       localStorage.setItem("gcs_access_token", data.access_token);
-      localStorage.setItem("gcs_token_expiry", newExpiry);
+      localStorage.setItem("gcs_token_expiry", `v3_${newExpiry}`);
       
       // Save refreshed credentials to database
       await saveSettingToSupabase("gcs_access_token", data.access_token);
-      await saveSettingToSupabase("gcs_token_expiry", String(newExpiry));
+      await saveSettingToSupabase("gcs_token_expiry", `v3_${newExpiry}`);
       
       return data.access_token;
     } catch (err) {
@@ -2033,13 +2038,13 @@ INSERT INTO dashboard_settings (id) VALUES (1);</pre>
       // Store token with 1 hour expiration
       const expiry = Date.now() + 3600 * 1000;
       localStorage.setItem("gcs_access_token", tokenVal);
-      localStorage.setItem("gcs_token_expiry", expiry);
+      localStorage.setItem("gcs_token_expiry", `v3_${expiry}`);
       localStorage.setItem("gcs_manual_token_flag", "true");
       localStorage.removeItem("gcs_service_account");
       
       // Save to Supabase
       await saveSettingToSupabase("gcs_access_token", tokenVal);
-      await saveSettingToSupabase("gcs_token_expiry", String(expiry));
+      await saveSettingToSupabase("gcs_token_expiry", `v3_${expiry}`);
       await saveSettingToSupabase("gcs_manual_token_flag", "true");
       await deleteSettingFromSupabase("gcs_service_account");
       
