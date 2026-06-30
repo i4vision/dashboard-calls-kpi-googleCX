@@ -2665,9 +2665,13 @@ async function resetRecordingData(file, btn) {
     const objectsToDelete = [];
     
     for (const prefix of searchPrefixes) {
-      const gcsListUrl = `https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o?prefix=${encodeURIComponent(prefix)}&access_token=${token}`;
+      const gcsListUrl = `https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o?prefix=${encodeURIComponent(prefix)}`;
       try {
-        const listResp = await fetch(gcsListUrl);
+        const listResp = await fetch(gcsListUrl, {
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
         if (listResp.ok) {
           const listData = await listResp.json();
           if (listData.items && listData.items.length > 0) {
@@ -2697,8 +2701,11 @@ async function resetRecordingData(file, btn) {
     
     // Delete GCS objects in parallel
     const deletePromises = objectsToDelete.map(async (name) => {
-      const deleteResp = await fetch(`https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o/${encodeURIComponent(name)}?access_token=${token}`, {
-        method: "DELETE"
+      const deleteResp = await fetch(`https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o/${encodeURIComponent(name)}`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
       });
       if (!deleteResp.ok && deleteResp.status !== 404) {
         console.warn(`Failed to delete GCS object ${name}: ${deleteResp.status}`);
@@ -2811,9 +2818,13 @@ async function triggerBulkCallReset() {
         const objectsToDelete = [];
         
         for (const prefix of searchPrefixes) {
-          const gcsListUrl = `https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o?prefix=${encodeURIComponent(prefix)}&access_token=${token}`;
+          const gcsListUrl = `https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o?prefix=${encodeURIComponent(prefix)}`;
           try {
-            const listResp = await fetch(gcsListUrl);
+            const listResp = await fetch(gcsListUrl, {
+              headers: {
+                "Authorization": `Bearer ${token}`
+              }
+            });
             if (listResp.ok) {
               const listData = await listResp.json();
               if (listData.items && listData.items.length > 0) {
@@ -2842,8 +2853,11 @@ async function triggerBulkCallReset() {
         }
         
         const deletePromises = objectsToDelete.map(async (name) => {
-          const deleteResp = await fetch(`https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o/${encodeURIComponent(name)}?access_token=${token}`, {
-            method: "DELETE"
+          const deleteResp = await fetch(`https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o/${encodeURIComponent(name)}`, {
+            method: "DELETE",
+            headers: {
+              "Authorization": `Bearer ${token}`
+            }
           });
           if (!deleteResp.ok && deleteResp.status !== 404) {
             console.warn(`Failed to delete GCS object ${name}: ${deleteResp.status}`);
