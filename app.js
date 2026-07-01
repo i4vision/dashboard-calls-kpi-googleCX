@@ -88,6 +88,7 @@ function setupEventListeners() {
 
   // Filters
   document.getElementById("searchBar").addEventListener("input", debounce(applyFilters, 250));
+  document.getElementById("searchAudio").addEventListener("input", debounce(applyFilters, 250));
   document.getElementById("filterSentiment").addEventListener("change", applyFilters);
   document.getElementById("filterRisk").addEventListener("change", applyFilters);
   document.getElementById("filterResolution").addEventListener("change", applyFilters);
@@ -212,21 +213,27 @@ function populateCategoryDropdown() {
 // ==========================================================================
 function applyFilters() {
   const searchQuery = document.getElementById("searchBar").value.toLowerCase().trim();
+  const audioSearchQuery = document.getElementById("searchAudio").value.toLowerCase().trim();
   const sentimentFilter = document.getElementById("filterSentiment").value;
   const riskFilter = document.getElementById("filterRisk").value;
   const resolutionFilter = document.getElementById("filterResolution").value;
   const categoryFilter = document.getElementById("filterCategory").value;
 
   state.filteredCalls = state.allCalls.filter(call => {
-    // Search Filter
+    // Search Filter (Generic query)
     const searchMatch = !searchQuery || 
       (call.conversation_name && call.conversation_name.toLowerCase().includes(searchQuery)) ||
+      (call.audio_file_name && call.audio_file_name.toLowerCase().includes(searchQuery)) ||
       (call.customer_issue && call.customer_issue.toLowerCase().includes(searchQuery)) ||
       (call.summary && call.summary.toLowerCase().includes(searchQuery)) ||
       (call.transcript && call.transcript.toLowerCase().includes(searchQuery)) ||
       (call.category && call.category.toLowerCase().includes(searchQuery)) ||
       (call.entities && call.entities.toLowerCase().includes(searchQuery)) ||
       (call.next_action && call.next_action.toLowerCase().includes(searchQuery));
+
+    // Audio File Name Search Filter
+    const audioSearchMatch = !audioSearchQuery ||
+      (call.audio_file_name && call.audio_file_name.toLowerCase().includes(audioSearchQuery));
 
     // Sentiment Filter
     const sentimentMatch = sentimentFilter === "all" || call.sentiment === sentimentFilter;
@@ -240,7 +247,7 @@ function applyFilters() {
     // Category Filter
     const categoryMatch = categoryFilter === "all" || getParentCategory(call.category) === categoryFilter;
 
-    return searchMatch && sentimentMatch && riskMatch && resolutionMatch && categoryMatch;
+    return searchMatch && audioSearchMatch && sentimentMatch && riskMatch && resolutionMatch && categoryMatch;
   });
 
   updateDashboardUI();
@@ -248,6 +255,7 @@ function applyFilters() {
 
 function resetFilters() {
   document.getElementById("searchBar").value = "";
+  document.getElementById("searchAudio").value = "";
   document.getElementById("filterSentiment").value = "all";
   document.getElementById("filterRisk").value = "all";
   document.getElementById("filterResolution").value = "all";
@@ -676,6 +684,8 @@ function openDrawer(call) {
   } else {
     document.getElementById("drawerAudioDuration").textContent = "N/A";
   }
+
+  document.getElementById("drawerAudioFileName").textContent = call.audio_file_name || "N/A";
 
   const provider = call.stt_provider ? formatString(call.stt_provider) : "N/A";
   const model = call.stt_model || "";

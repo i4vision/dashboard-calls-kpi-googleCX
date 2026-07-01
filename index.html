@@ -47,7 +47,14 @@
       <div class="filter-group search-group">
         <label for="searchBar" class="filter-label">Search</label>
         <div style="position: relative; width: 100%;">
-          <input type="text" id="searchBar" class="filter-control" placeholder="Search transcripts, issues, categories, next actions...">
+          <input type="text" id="searchBar" class="filter-control" placeholder="Search transcripts, audio files, issues, categories...">
+        </div>
+      </div>
+      
+      <div class="filter-group search-group">
+        <label for="searchAudio" class="filter-label">Search Audio File</label>
+        <div style="position: relative; width: 100%;">
+          <input type="text" id="searchAudio" class="filter-control" placeholder="Search by MP3 name...">
         </div>
       </div>
       
@@ -356,6 +363,10 @@
           <div class="details-item">
             <span class="details-item-label">Audio Duration</span>
             <span id="drawerAudioDuration" class="details-item-value">-</span>
+          </div>
+          <div class="details-item" style="grid-column: span 2;">
+            <span class="details-item-label">Audio File Name</span>
+            <span id="drawerAudioFileName" class="details-item-value" style="font-size: 0.8rem; word-break: break-all; font-family: var(--font-mono);">-</span>
           </div>
           <div class="details-item" style="grid-column: span 2;">
             <span class="details-item-label">Speech-to-Text (STT) Engine</span>
