@@ -42,66 +42,6 @@
   <!-- Main Dashboard Container -->
   <main class="dashboard-container">
     
-    <!-- Dynamic Filters Strip -->
-    <section class="filter-strip" aria-label="Dashboard Filters">
-      <div class="filter-group search-group">
-        <label for="searchBar" class="filter-label">Search</label>
-        <div style="position: relative; width: 100%;">
-          <input type="text" id="searchBar" class="filter-control" placeholder="Search transcripts, audio files, issues, categories...">
-        </div>
-      </div>
-      
-      <div class="filter-group search-group">
-        <label for="searchAudio" class="filter-label">Search Audio File</label>
-        <div style="position: relative; width: 100%;">
-          <input type="text" id="searchAudio" class="filter-control" placeholder="Search by MP3 name...">
-        </div>
-      </div>
-      
-      <div class="filter-group">
-        <label for="filterSentiment" class="filter-label">Sentiment</label>
-        <select id="filterSentiment" class="filter-control">
-          <option value="all">All Sentiments</option>
-          <option value="positive">Positive</option>
-          <option value="neutral">Neutral</option>
-          <option value="negative">Negative</option>
-        </select>
-      </div>
-
-      <div class="filter-group">
-        <label for="filterRisk" class="filter-label">Risk Level</label>
-        <select id="filterRisk" class="filter-control">
-          <option value="all">All Risks</option>
-          <option value="low">Low</option>
-          <option value="medium">Medium</option>
-          <option value="high">High</option>
-        </select>
-      </div>
-
-      <div class="filter-group">
-        <label for="filterResolution" class="filter-label">Resolution</label>
-        <select id="filterResolution" class="filter-control">
-          <option value="all">All Statuses</option>
-          <option value="resolved">Resolved</option>
-          <option value="unresolved">Unresolved</option>
-        </select>
-      </div>
-
-      <div class="filter-group">
-        <label for="filterCategory" class="filter-label">Category</label>
-        <select id="filterCategory" class="filter-control">
-          <option value="all">All Categories</option>
-          <!-- Dynamic insertion of categories -->
-        </select>
-      </div>
-
-      <div class="filter-actions">
-        <button id="resetFilters" class="btn-secondary" title="Clear all filters">
-          <i class="fa-solid fa-rotate-left"></i> Reset
-        </button>
-      </div>
-    </section>
-
     <!-- KPI Summary Grid -->
     <section class="kpi-grid" aria-label="KPI Metrics">
       <!-- KPI 1: Total Calls -->
@@ -278,6 +218,66 @@
           </button>
         </div>
       </div>
+      
+      <!-- Dynamic Filters Strip -->
+      <section class="filter-strip" aria-label="Dashboard Filters" style="margin: 1.5rem 0 1rem 0; border: none; background: transparent; padding: 0; box-shadow: none;">
+        <div class="filter-group search-group">
+          <label for="searchBar" class="filter-label">Search</label>
+          <div style="position: relative; width: 100%;">
+            <input type="text" id="searchBar" class="filter-control" placeholder="Search transcripts, audio files, issues, categories...">
+          </div>
+        </div>
+        
+        <div class="filter-group search-group">
+          <label for="searchAudio" class="filter-label">Search Audio File</label>
+          <div style="position: relative; width: 100%;">
+            <input type="text" id="searchAudio" class="filter-control" placeholder="Search by MP3 name...">
+          </div>
+        </div>
+        
+        <div class="filter-group">
+          <label for="filterSentiment" class="filter-label">Sentiment</label>
+          <select id="filterSentiment" class="filter-control">
+            <option value="all">All Sentiments</option>
+            <option value="positive">Positive</option>
+            <option value="neutral">Neutral</option>
+            <option value="negative">Negative</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label for="filterRisk" class="filter-label">Risk Level</label>
+          <select id="filterRisk" class="filter-control">
+            <option value="all">All Risks</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label for="filterResolution" class="filter-label">Resolution</label>
+          <select id="filterResolution" class="filter-control">
+            <option value="all">All Statuses</option>
+            <option value="resolved">Resolved</option>
+            <option value="unresolved">Unresolved</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label for="filterCategory" class="filter-label">Category</label>
+          <select id="filterCategory" class="filter-control">
+            <option value="all">All Categories</option>
+            <!-- Dynamic insertion of categories -->
+          </select>
+        </div>
+
+        <div class="filter-actions">
+          <button id="resetFilters" class="btn-secondary" title="Clear all filters">
+            <i class="fa-solid fa-rotate-left"></i> Reset
+          </button>
+        </div>
+      </section>
       
       <div class="table-wrapper">
         <table class="call-table">
