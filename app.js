@@ -1711,7 +1711,8 @@ function setupGCSEventListeners() {
       { value: "whisper-1", label: "whisper-1 (Recommended)" }
     ],
     local: [
-      { value: "local_whisper", label: "local_whisper" }
+      { value: "local_whisper", label: "local_whisper" },
+      { value: "parakeet", label: "parakeet" }
     ]
   };
 
