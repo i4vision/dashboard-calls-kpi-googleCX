@@ -272,6 +272,17 @@
           </select>
         </div>
 
+        <div class="filter-group">
+          <label for="filterDuration" class="filter-label">Call Length</label>
+          <select id="filterDuration" class="filter-control">
+            <option value="all">All Durations</option>
+            <option value="0-30">Short (&lt; 30s)</option>
+            <option value="30-120">Medium (30s - 2m)</option>
+            <option value="120-300">Long (2m - 5m)</option>
+            <option value="300-999999">Extended (&gt; 5m)</option>
+          </select>
+        </div>
+
         <div class="filter-actions">
           <button id="resetFilters" class="btn-secondary" title="Clear all filters">
             <i class="fa-solid fa-rotate-left"></i> Reset
@@ -516,6 +527,7 @@
               <select id="sttProviderSelect" class="gcs-input" style="width: 100%; height: 32px; padding: 0 0.5rem; font-size: 0.75rem; cursor: pointer;">
                 <option value="google">Google</option>
                 <option value="openai">OpenAI</option>
+                <option value="local">Local</option>
               </select>
             </div>
             <div style="flex: 1;">

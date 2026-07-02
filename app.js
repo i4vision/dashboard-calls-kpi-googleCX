@@ -93,6 +93,7 @@ function setupEventListeners() {
   document.getElementById("filterRisk").addEventListener("change", applyFilters);
   document.getElementById("filterResolution").addEventListener("change", applyFilters);
   document.getElementById("filterCategory").addEventListener("change", applyFilters);
+  document.getElementById("filterDuration").addEventListener("change", applyFilters);
   
   // Reset filters
   document.getElementById("resetFilters").addEventListener("click", resetFilters);
@@ -218,6 +219,7 @@ function applyFilters() {
   const riskFilter = document.getElementById("filterRisk").value;
   const resolutionFilter = document.getElementById("filterResolution").value;
   const categoryFilter = document.getElementById("filterCategory").value;
+  const durationFilter = document.getElementById("filterDuration").value;
 
   state.filteredCalls = state.allCalls.filter(call => {
     // Search Filter (Generic query)
@@ -247,7 +249,19 @@ function applyFilters() {
     // Category Filter
     const categoryMatch = categoryFilter === "all" || getParentCategory(call.category) === categoryFilter;
 
-    return searchMatch && audioSearchMatch && sentimentMatch && riskMatch && resolutionMatch && categoryMatch;
+    // Duration Filter
+    let durationMatch = true;
+    if (durationFilter !== "all") {
+      const durationSec = Number(call.audio_duration_seconds);
+      if (isNaN(durationSec)) {
+        durationMatch = false;
+      } else {
+        const [min, max] = durationFilter.split("-").map(Number);
+        durationMatch = durationSec >= min && durationSec < max;
+      }
+    }
+
+    return searchMatch && audioSearchMatch && sentimentMatch && riskMatch && resolutionMatch && categoryMatch && durationMatch;
   });
 
   updateDashboardUI();
@@ -260,6 +274,7 @@ function resetFilters() {
   document.getElementById("filterRisk").value = "all";
   document.getElementById("filterResolution").value = "all";
   document.getElementById("filterCategory").value = "all";
+  document.getElementById("filterDuration").value = "all";
   
   state.filteredCalls = [...state.allCalls];
   updateDashboardUI();
@@ -1694,6 +1709,9 @@ function setupGCSEventListeners() {
     ],
     openai: [
       { value: "whisper-1", label: "whisper-1 (Recommended)" }
+    ],
+    local: [
+      { value: "local_whisper", label: "local_whisper" }
     ]
   };
 
