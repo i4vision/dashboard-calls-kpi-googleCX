@@ -1712,7 +1712,8 @@ function setupGCSEventListeners() {
     ],
     local: [
       { value: "local_whisper", label: "local_whisper" },
-      { value: "parakeet", label: "parakeet" }
+      { value: "parakeet", label: "parakeet" },
+      { value: "whisperx", label: "whisperx" }
     ]
   };
 
