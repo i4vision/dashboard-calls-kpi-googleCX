@@ -702,6 +702,13 @@ function openDrawer(call) {
 
   document.getElementById("drawerAudioFileName").textContent = call.audio_file_name || "N/A";
 
+  const sttProcSec = Number(call.stt_processing_seconds);
+  if (!isNaN(sttProcSec) && call.stt_processing_seconds !== null && call.stt_processing_seconds !== undefined) {
+    document.getElementById("drawerSTTProcessingSeconds").textContent = `${sttProcSec.toFixed(1)}s`;
+  } else {
+    document.getElementById("drawerSTTProcessingSeconds").textContent = "N/A";
+  }
+
   const provider = call.stt_provider ? formatString(call.stt_provider) : "N/A";
   const model = call.stt_model || "";
   const engineText = model ? `${provider} (${model})` : provider;
