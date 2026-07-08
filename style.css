@@ -1482,3 +1482,122 @@ select.gcs-input {
   cursor: not-allowed;
   transform: none;
 }
+
+/* ==========================================================================
+   AI Analytics Chat Sidebar & Bubbles Styling
+   ========================================================================== */
+
+/* Chat Messages Scroll Log */
+.chat-message-log {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+/* Chat bubble styling */
+.chat-bubble {
+  max-width: 85%;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-lg);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+/* Assistant Bubble */
+.chat-bubble.assistant {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  align-self: flex-start;
+  border-top-left-radius: var(--radius-xs);
+}
+
+/* User Bubble */
+.chat-bubble.user {
+  background: var(--accent-primary);
+  color: #ffffff;
+  align-self: flex-end;
+  border-top-right-radius: var(--radius-xs);
+}
+
+/* Loading/Spinner Bubble */
+.chat-bubble.system-loading {
+  background: transparent;
+  color: var(--text-muted);
+  align-self: flex-start;
+  font-style: italic;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* System Error Bubble */
+.chat-bubble.system-error {
+  background: rgba(244, 63, 94, 0.1);
+  color: var(--color-negative);
+  border: 1px solid rgba(244, 63, 94, 0.2);
+  align-self: center;
+  font-weight: 500;
+  text-align: center;
+}
+
+/* Custom chips styling */
+.chat-chip {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  border-radius: 20px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.chat-chip:hover {
+  background: var(--accent-primary);
+  color: #ffffff;
+  border-color: var(--accent-primary);
+  transform: translateY(-1px);
+}
+
+/* Chat details text styling in Markdown output */
+.chat-bubble p {
+  margin: 0 0 0.5rem 0;
+}
+.chat-bubble p:last-child {
+  margin-bottom: 0;
+}
+.chat-bubble ul, .chat-bubble ol {
+  margin: 0.35rem 0 0.35rem 1.25rem;
+  padding: 0;
+}
+.chat-bubble li {
+  margin-bottom: 0.25rem;
+}
+.chat-bubble table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.5rem 0;
+  font-size: 0.75rem;
+}
+.chat-bubble th, .chat-bubble td {
+  border: 1px solid var(--border-color);
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+}
+.chat-bubble th {
+  background: rgba(255, 255, 255, 0.05);
+  font-weight: 600;
+}
+.chat-bubble code {
+  font-family: var(--font-mono);
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0.1rem 0.3rem;
+  border-radius: var(--radius-xs);
+  font-size: 0.75rem;
+}

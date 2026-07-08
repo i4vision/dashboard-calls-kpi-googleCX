@@ -104,7 +104,10 @@ function setupEventListeners() {
   
   // Press Escape to close drawer
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeDrawer();
+    if (e.key === "Escape") {
+      closeDrawer();
+      closeChatDrawer();
+    }
   });
 
   // Export Excel listeners
@@ -116,6 +119,9 @@ function setupEventListeners() {
   if (btnExportExcelHeader) {
     btnExportExcelHeader.addEventListener("click", exportCallDataToExcel);
   }
+
+  // Setup Chat Drawer triggers and keys
+  setupChatDrawer();
 }
 
 // Helper: Debounce search input
@@ -2943,4 +2949,412 @@ async function triggerBulkCallReset() {
       await loadGCSFiles(freshToken);
     }
   }, 2500);
+}
+
+// ==========================================================================
+// AI Analytics Chat Drawer & Hybrid OKF/RAG Logic
+// ==========================================================================
+
+function setupChatDrawer() {
+  const btnOpenChat = document.getElementById("btnOpenChat");
+  const chatDrawer = document.getElementById("chatDrawer");
+  const chatDrawerClose = document.getElementById("chatDrawerClose");
+  const chatSidebarBackdrop = document.getElementById("chatSidebarBackdrop");
+  
+  const btnChatSettingsToggle = document.getElementById("btnChatSettingsToggle");
+  const chatConfigSection = document.getElementById("chatConfigSection");
+  
+  const btnChatApiKeyVisibility = document.getElementById("btnChatApiKeyVisibility");
+  const chatApiKeyInput = document.getElementById("chatApiKeyInput");
+  
+  const btnSaveChatConfig = document.getElementById("btnSaveChatConfig");
+  const chatModelSelect = document.getElementById("chatModelSelect");
+  const chatConfigSaveStatus = document.getElementById("chatConfigSaveStatus");
+  const chatNoKeyWarning = document.getElementById("chatNoKeyWarning");
+  
+  const btnChatSend = document.getElementById("btnChatSend");
+  const chatInput = document.getElementById("chatInput");
+  
+  // Drawer visibility
+  if (btnOpenChat) {
+    btnOpenChat.addEventListener("click", openChatDrawer);
+  }
+  if (chatDrawerClose) {
+    chatDrawerClose.addEventListener("click", closeChatDrawer);
+  }
+  if (chatSidebarBackdrop) {
+    chatSidebarBackdrop.addEventListener("click", closeChatDrawer);
+  }
+  
+  // Config Section Toggle
+  if (btnChatSettingsToggle && chatConfigSection) {
+    btnChatSettingsToggle.addEventListener("click", () => {
+      const isHidden = chatConfigSection.style.display === "none";
+      chatConfigSection.style.display = isHidden ? "block" : "none";
+    });
+  }
+  
+  // API Key visibility toggle
+  if (btnChatApiKeyVisibility && chatApiKeyInput) {
+    btnChatApiKeyVisibility.addEventListener("click", () => {
+      const isPassword = chatApiKeyInput.type === "password";
+      chatApiKeyInput.type = isPassword ? "text" : "password";
+      btnChatApiKeyVisibility.innerHTML = isPassword ? '<i class="fa-solid fa-eye-slash"></i>' : '<i class="fa-solid fa-eye"></i>';
+    });
+  }
+  
+  // Save credentials config
+  if (btnSaveChatConfig) {
+    btnSaveChatConfig.addEventListener("click", () => {
+      const keyVal = chatApiKeyInput.value.trim();
+      const modelVal = chatModelSelect.value;
+      
+      localStorage.setItem("gcs_openai_api_key", keyVal);
+      localStorage.setItem("gcs_openai_model", modelVal);
+      
+      state.openaiApiKey = keyVal;
+      state.openaiModel = modelVal;
+      
+      if (keyVal) {
+        if (chatNoKeyWarning) chatNoKeyWarning.style.display = "none";
+      } else {
+        if (chatNoKeyWarning) chatNoKeyWarning.style.display = "block";
+      }
+      
+      if (chatConfigSaveStatus) chatConfigSaveStatus.style.display = "block";
+      setTimeout(() => {
+        if (chatConfigSaveStatus) chatConfigSaveStatus.style.display = "none";
+        if (chatConfigSection) chatConfigSection.style.display = "none"; // auto close config on save
+      }, 1500);
+    });
+  }
+  
+  // Load saved config on init
+  const savedKey = localStorage.getItem("gcs_openai_api_key") || "";
+  const savedModel = localStorage.getItem("gcs_openai_model") || "gpt-4o-mini";
+  
+  state.openaiApiKey = savedKey;
+  state.openaiModel = savedModel;
+  
+  if (chatApiKeyInput) chatApiKeyInput.value = savedKey;
+  if (chatModelSelect) chatModelSelect.value = savedModel;
+  
+  // Send message on click
+  if (btnChatSend) {
+    btnChatSend.addEventListener("click", handleChatSend);
+  }
+  
+  // Send message on Enter, permit new line on Shift+Enter
+  if (chatInput) {
+    chatInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleChatSend();
+      }
+    });
+  }
+  
+  // Bind quick action chips
+  const chips = document.querySelectorAll(".chat-chip");
+  chips.forEach(chip => {
+    chip.addEventListener("click", () => {
+      const prompt = chip.getAttribute("data-prompt");
+      if (chatInput) {
+        chatInput.value = prompt;
+        handleChatSend();
+      }
+    });
+  });
+}
+
+function openChatDrawer() {
+  const chatDrawer = document.getElementById("chatDrawer");
+  const chatSidebarBackdrop = document.getElementById("chatSidebarBackdrop");
+  const chatNoKeyWarning = document.getElementById("chatNoKeyWarning");
+  
+  if (chatDrawer && chatSidebarBackdrop) {
+    chatDrawer.classList.add("active");
+    chatDrawer.setAttribute("aria-hidden", "false");
+    chatSidebarBackdrop.classList.add("active");
+    chatSidebarBackdrop.setAttribute("aria-hidden", "false");
+  }
+  
+  const savedKey = localStorage.getItem("gcs_openai_api_key") || "";
+  if (!savedKey && chatNoKeyWarning) {
+    chatNoKeyWarning.style.display = "block";
+  } else if (chatNoKeyWarning) {
+    chatNoKeyWarning.style.display = "none";
+  }
+}
+
+function closeChatDrawer() {
+  const chatDrawer = document.getElementById("chatDrawer");
+  const chatSidebarBackdrop = document.getElementById("chatSidebarBackdrop");
+  
+  if (chatDrawer && chatSidebarBackdrop) {
+    chatDrawer.classList.remove("active");
+    chatDrawer.setAttribute("aria-hidden", "true");
+    chatSidebarBackdrop.classList.remove("active");
+    chatSidebarBackdrop.setAttribute("aria-hidden", "true");
+  }
+}
+
+function appendChatMessage(role, text) {
+  const messageLog = document.getElementById("chatMessageLog");
+  if (!messageLog) return null;
+  
+  const bubble = document.createElement("div");
+  bubble.className = `chat-bubble ${role}`;
+  
+  if (role === "assistant") {
+    bubble.innerHTML = formatMarkdown(text);
+  } else {
+    bubble.textContent = text;
+  }
+  
+  messageLog.appendChild(bubble);
+  messageLog.scrollTop = messageLog.scrollHeight;
+  
+  return bubble;
+}
+
+function retrieveTranscriptsForQuery(query) {
+  if (!query || !state.allCalls || state.allCalls.length === 0) return "";
+  
+  const queryTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
+  if (queryTerms.length === 0) return "";
+
+  const scoredCalls = state.allCalls.map(call => {
+    let score = 0;
+    const textToSearch = ((call.transcript || "") + " " + (call.summary || "")).toLowerCase();
+    
+    queryTerms.forEach(term => {
+      let index = textToSearch.indexOf(term);
+      while (index !== -1) {
+        score++;
+        index = textToSearch.indexOf(term, index + term.length);
+      }
+    });
+    
+    return { call, score };
+  });
+
+  const matches = scoredCalls.filter(c => c.score > 0).sort((a, b) => b.score - a.score).slice(0, 3);
+  if (matches.length === 0) return "";
+
+  let context = "\n### RETRIEVED TRANSCRIPTS (RAG ARCHIVE)\n";
+  matches.forEach((m, idx) => {
+    const call = m.call;
+    const cleanTranscript = (call.transcript || "").trim();
+    const snippet = cleanTranscript.length > 800 ? cleanTranscript.substring(0, 800) + "..." : cleanTranscript;
+    context += `\n**Match #${idx + 1}: Call ID ${call.conversation_name} (Agent: ${getAgentName(call)})**\n`;
+    context += `> Transcript snippet: "${snippet}"\n`;
+  });
+
+  return context;
+}
+
+function compileOKFCallsContext() {
+  const callsToInclude = state.filteredCalls || state.allCalls || [];
+  if (callsToInclude.length === 0) {
+    return "No calls are currently loaded in the dashboard.";
+  }
+  
+  const limitedCalls = callsToInclude.slice(0, 80);
+  
+  let md = "## CURATED CALL METADATA (OKF CORE)\n";
+  md += `Showing top ${limitedCalls.length} calls matching current active filters:\n\n`;
+  md += "| Call ID | Agent | Date | Category | Sentiment | Risk | Score | Silence % | Cost (USD) | Summary |\n";
+  md += "|---|---|---|---|---|---|---|---|---|---|\n";
+  
+  limitedCalls.forEach(call => {
+    const id = call.conversation_name || "N/A";
+    const agent = getAgentName(call);
+    const date = call.created_at ? call.created_at.substring(0, 10) : "N/A";
+    const cat = call.category || "N/A";
+    const sent = call.sentiment || "N/A";
+    const risk = call.risk_level || "N/A";
+    const score = call.agent_score !== null && call.agent_score !== undefined ? `${call.agent_score}/10` : "N/A";
+    const silence = call.silence_percentage !== null && call.silence_percentage !== undefined ? `${(Number(call.silence_percentage) * 100).toFixed(0)}%` : "N/A";
+    const cost = call.total_cost_usd !== null && call.total_cost_usd !== undefined ? `$${Number(call.total_cost_usd).toFixed(3)}` : "N/A";
+    const sum = call.summary ? call.summary.replace(/\n/g, " ").substring(0, 100) + "..." : "No summary";
+    
+    md += `| ${id} | ${agent} | ${date} | ${cat} | ${sent} | ${risk} | ${score} | ${silence} | ${cost} | ${sum} |\n`;
+  });
+  
+  return md;
+}
+
+function formatMarkdown(text) {
+  if (!text) return "";
+  
+  let html = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  html = html.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+  html = html.replace(/__(.*?)__/g, "<strong>$1</strong>");
+
+  html = html.replace(/```([\s\S]*?)```/g, "<pre><code>$1</code></pre>");
+  html = html.replace(/`(.*?)`/g, "<code>$1</code>");
+
+  const lines = html.split("\n");
+  let inTable = false;
+  let tableRows = [];
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (line.startsWith("|") && line.endsWith("|")) {
+      if (!inTable) {
+        inTable = true;
+        tableRows = [];
+      }
+      if (line.match(/^\|[\s:-|]*\|$/)) {
+        continue;
+      }
+      const cells = line.split("|").slice(1, -1).map(c => c.trim());
+      tableRows.push(cells);
+      lines[i] = "";
+    } else {
+      if (inTable) {
+        let tableHtml = "<table><thead><tr>";
+        tableRows[0].forEach(cell => {
+          tableHtml += `<th>${cell}</th>`;
+        });
+        tableHtml += "</tr></thead><tbody>";
+        for (let r = 1; r < tableRows.length; r++) {
+          tableHtml += "<tr>";
+          tableRows[r].forEach(cell => {
+            tableHtml += `<td>${cell}</td>`;
+          });
+          tableHtml += "</tr>";
+        }
+        tableHtml += "</tbody></table>";
+        lines[i - tableRows.length - 1] = tableHtml;
+        inTable = false;
+      }
+    }
+  }
+  
+  if (inTable) {
+    let tableHtml = "<table><thead><tr>";
+    tableRows[0].forEach(cell => {
+      tableHtml += `<th>${cell}</th>`;
+    });
+    tableHtml += "</tr></thead><tbody>";
+    for (let r = 1; r < tableRows.length; r++) {
+      tableHtml += "<tr>";
+      tableRows[r].forEach(cell => {
+        tableHtml += `<td>${cell}</td>`;
+      });
+      tableHtml += "</tr>";
+    }
+    tableHtml += "</tbody></table>";
+    lines[lines.length - 1] = tableHtml;
+  }
+  
+  html = lines.filter(l => l !== "").join("\n");
+
+  html = html.replace(/^\s*[-*]\s+(.*?)$/gm, "<li>$1</li>");
+  html = html.replace(/(<li>.*?<\/li>)/gs, "<ul>$1<\/ul>");
+  html = html.replace(/<\/ul>\s*<ul>/g, "");
+
+  html = html.replace(/^\s*\d+\.\s+(.*?)$/gm, "<li>$1</li>");
+  html = html.replace(/(<li>.*?<\/li>)/gs, "<ol>$1<\/ol>");
+  html = html.replace(/<\/ol>\s*<ol>/g, "");
+
+  const blocks = html.split("\n\n");
+  html = blocks.map(block => {
+    block = block.trim();
+    if (block.startsWith("<table") || block.startsWith("<pre") || block.startsWith("<ul") || block.startsWith("<ol") || block.startsWith("<li>")) {
+      return block;
+    }
+    return `<p>${block.replace(/\n/g, "<br>")}</p>`;
+  }).join("");
+
+  return html;
+}
+
+async function handleChatSend() {
+  const chatInput = document.getElementById("chatInput");
+  if (!chatInput) return;
+  
+  const text = chatInput.value.trim();
+  if (!text) return;
+  
+  chatInput.value = "";
+  
+  const apiKey = state.openaiApiKey || localStorage.getItem("gcs_openai_api_key") || "";
+  if (!apiKey) {
+    appendChatMessage("user", text);
+    appendChatMessage("system-error", "Error: OpenAI API Key is missing. Please enter your API Key in the chat settings config panel (gear icon).");
+    return;
+  }
+  
+  appendChatMessage("user", text);
+  
+  const loadingBubble = document.createElement("div");
+  loadingBubble.className = "chat-bubble system-loading";
+  loadingBubble.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> AI is thinking...';
+  const messageLog = document.getElementById("chatMessageLog");
+  if (messageLog) {
+    messageLog.appendChild(loadingBubble);
+    messageLog.scrollTop = messageLog.scrollHeight;
+  }
+  
+  try {
+    const okfContext = compileOKFCallsContext();
+    const ragContext = retrieveTranscriptsForQuery(text);
+    
+    const systemPrompt = `You are the Call Center Analytics AI Assistant. Your job is to answer questions about the call analytics database.
+You are equipped with a hybrid analytics stack:
+1. CURATED METADATA (OKF): A clean Markdown table containing structural metadata of the calls (IDs, scores, sentiments, silence %, categories, summaries).
+2. TRANSCRIPT SNIPPETS (RAG): A selection of the top matching call transcripts based on the user's query context.
+
+When answering:
+- Be highly factual and deterministic. Rely first on the Curated Metadata (OKF) table for numbers, counts, and categories.
+- If the user asks about specific quotes or dialogue details, search the Transcript Snippets (RAG) context.
+- Format your response using markdown. Use bulleted lists, bold text, and HTML-like markdown tables where appropriate.
+- If the user's question cannot be answered by the provided data, state that clearly.
+- Keep your answers concise, professional, and directly actionable.
+`;
+
+    const model = state.openaiModel || localStorage.getItem("gcs_openai_model") || "gpt-4o-mini";
+    
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: `Here is the call context:\n\n${okfContext}\n${ragContext}\n\nUser Question: ${text}` }
+        ],
+        temperature: 0.2
+      })
+    });
+    
+    loadingBubble.remove();
+    
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      const errMsg = errData.error?.message || `HTTP error ${response.status}`;
+      appendChatMessage("system-error", `OpenAI API Error: ${errMsg}`);
+      return;
+    }
+    
+    const data = await response.json();
+    const reply = data.choices?.[0]?.message?.content || "No reply received.";
+    
+    appendChatMessage("assistant", reply);
+    
+  } catch (err) {
+    loadingBubble.remove();
+    console.error("Chat completion request failed:", err);
+    appendChatMessage("system-error", `Request Failed: ${err.message}`);
+  }
 }

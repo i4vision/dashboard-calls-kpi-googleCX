@@ -33,6 +33,9 @@
       <button id="btnOpenAudioSidebar" class="btn-secondary" style="height: 38px; display: flex; align-items: center; gap: 0.5rem; padding: 0 1rem; font-size: 0.85rem;" title="Open Call Recordings">
         <i class="fa-solid fa-folder-open"></i> Recordings
       </button>
+      <button id="btnOpenChat" class="btn-primary" style="height: 38px; display: flex; align-items: center; gap: 0.5rem; padding: 0 1rem; font-size: 0.85rem;" title="Ask AI about calls">
+        <i class="fa-solid fa-comments"></i> Ask AI
+      </button>
       <button id="themeToggle" class="btn-icon" title="Toggle Theme" aria-label="Toggle Theme">
         <i class="fa-solid fa-moon"></i>
       </button>
@@ -596,6 +599,86 @@
       </div>
       
       <audio id="gcsAudioElement" controls style="width: 100%; margin-top: 0.5rem;"></audio>
+    </div>
+  </aside>
+
+  <!-- AI Analytics Chat Sidebar (Right Drawer) -->
+  <div id="chatSidebarBackdrop" class="drawer-backdrop" aria-hidden="true"></div>
+  <aside id="chatDrawer" class="drawer drawer-right" aria-label="AI Analytics Chat Sidebar" aria-hidden="true" style="width: 450px;">
+    <div class="drawer-header">
+      <div class="drawer-title-group" style="display: flex; align-items: center; gap: 0.5rem;">
+        <i class="fa-solid fa-comments" style="color: var(--accent-primary); font-size: 1.25rem;"></i>
+        <h2 class="drawer-title" style="margin: 0;">AI Analytics Chat</h2>
+      </div>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <button id="btnChatSettingsToggle" class="btn-icon" title="Toggle Credentials Settings" style="font-size: 0.95rem; width: 32px; height: 32px;">
+          <i class="fa-solid fa-gear"></i>
+        </button>
+        <button id="chatDrawerClose" class="drawer-close" title="Close chat panel" aria-label="Close chat panel" style="margin: 0; position: static;">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Credentials & Model Config Area -->
+    <div id="chatConfigSection" class="settings-card" style="display: none; margin: 0.75rem; padding: 0.75rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+      <div style="font-size: 0.8rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">
+        OpenAI Connection Config
+      </div>
+      <div style="margin-bottom: 0.5rem;">
+        <label class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">OPENAI API KEY</label>
+        <div style="position: relative;">
+          <input type="password" id="chatApiKeyInput" placeholder="sk-..." class="gcs-input" style="width: 100%; padding-right: 2rem; font-size: 0.75rem;">
+          <button id="btnChatApiKeyVisibility" class="btn-icon" style="position: absolute; right: 0.25rem; top: 50%; transform: translateY(-50%); font-size: 0.8rem; width: 24px; height: 24px;">
+            <i class="fa-solid fa-eye"></i>
+          </button>
+        </div>
+      </div>
+      <div style="margin-bottom: 0.75rem;">
+        <label class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">LLM MODEL</label>
+        <select id="chatModelSelect" class="gcs-input" style="width: 100%; height: 32px; padding: 0 0.5rem; font-size: 0.75rem; cursor: pointer;">
+          <option value="gpt-4o-mini">gpt-4o-mini (Recommended - Fast & Cheap)</option>
+          <option value="gpt-4o">gpt-4o (Smartest)</option>
+        </select>
+      </div>
+      <button id="btnSaveChatConfig" class="btn-primary" style="width: 100%; font-size: 0.75rem; padding: 0.45rem; display: flex; align-items: center; justify-content: center; gap: 0.35rem;">
+        <i class="fa-solid fa-floppy-disk"></i> Save & Connect
+      </button>
+      <div id="chatConfigSaveStatus" style="font-size: 0.68rem; margin-top: 0.4rem; text-align: center; color: var(--color-positive); display: none;">
+        <i class="fa-solid fa-circle-check"></i> Connection config saved locally!
+      </div>
+    </div>
+
+    <!-- Chat Messages Body -->
+    <div class="drawer-body" style="padding: 0; display: flex; flex-direction: column; overflow: hidden; height: 100%;">
+      
+      <!-- Welcome Message & Warning if no API key is set -->
+      <div id="chatNoKeyWarning" class="alert alert-warning" style="margin: 0.75rem; font-size: 0.75rem; padding: 0.75rem; border-radius: var(--radius-md); display: none;">
+        <i class="fa-solid fa-triangle-exclamation" style="margin-right: 0.35rem;"></i>
+        Please open <strong>Settings <i class="fa-solid fa-gear"></i></strong> above to save your OpenAI API Key before chatting.
+      </div>
+
+      <!-- Messages Log -->
+      <div id="chatMessageLog" class="chat-message-log" style="flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 1rem;">
+        <div class="chat-bubble assistant">
+          Hello! I am your AI Analytics assistant. I can query calls metadata (OKF) or search deep call transcripts (RAG) to answer your questions. How can I help you today?
+        </div>
+      </div>
+
+      <!-- Quick Action Chips -->
+      <div id="chatChipsContainer" style="padding: 0.5rem 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; border-top: 1px solid var(--border-color); background: var(--bg-secondary);">
+        <button class="chat-chip" data-prompt="Summarize the main issues mentioned in today's calls.">Summarize main issues</button>
+        <button class="chat-chip" data-prompt="Which agent has the lowest score and what are their next actions?">Lowest score summary</button>
+        <button class="chat-chip" data-prompt="Are there any calls with medium or high risk levels? Detail them.">Find risk calls</button>
+      </div>
+
+      <!-- Input Bar Footer -->
+      <div class="chat-input-bar" style="padding: 0.75rem 1rem; border-top: 1px solid var(--border-color); display: flex; gap: 0.5rem; align-items: center; background: var(--bg-secondary);">
+        <textarea id="chatInput" placeholder="Ask a question about the calls..." style="flex: 1; height: 40px; min-height: 40px; max-height: 120px; padding: 0.5rem 0.75rem; font-size: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-primary); color: var(--text-primary); resize: none; font-family: inherit; line-height: 1.4; outline: none;"></textarea>
+        <button id="btnChatSend" class="btn-primary" style="height: 40px; width: 40px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-md); padding: 0;" title="Send Message">
+          <i class="fa-solid fa-paper-plane"></i>
+        </button>
+      </div>
     </div>
   </aside>
 
