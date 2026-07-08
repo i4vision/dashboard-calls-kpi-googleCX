@@ -107,6 +107,7 @@ function setupEventListeners() {
     if (e.key === "Escape") {
       closeDrawer();
       closeChatDrawer();
+      closeChatTableModal();
     }
   });
 
@@ -3065,6 +3066,37 @@ function setupChatDrawer() {
       }
     });
   });
+
+  // Table expansion event delegation
+  const chatMessageLog = document.getElementById("chatMessageLog");
+  if (chatMessageLog) {
+    chatMessageLog.addEventListener("click", (e) => {
+      const btn = e.target.closest(".btn-expand-table");
+      if (btn) {
+        const container = btn.closest(".chat-table-container");
+        if (container) {
+          const table = container.querySelector("table");
+          if (table) {
+            openChatTableModal(table.outerHTML);
+          }
+        }
+      }
+    });
+  }
+
+  // Expanded View Modal close handlers
+  const btnCloseChatTableModal = document.getElementById("btnCloseChatTableModal");
+  const chatTableModal = document.getElementById("chatTableModal");
+  if (btnCloseChatTableModal) {
+    btnCloseChatTableModal.addEventListener("click", closeChatTableModal);
+  }
+  if (chatTableModal) {
+    chatTableModal.addEventListener("click", (e) => {
+      if (e.target === chatTableModal) {
+        closeChatTableModal();
+      }
+    });
+  }
 }
 
 function openChatDrawer() {
@@ -3096,6 +3128,26 @@ function closeChatDrawer() {
     chatDrawer.setAttribute("aria-hidden", "true");
     chatSidebarBackdrop.classList.remove("active");
     chatSidebarBackdrop.setAttribute("aria-hidden", "true");
+  }
+}
+
+function openChatTableModal(tableHtml) {
+  const modal = document.getElementById("chatTableModal");
+  const modalBody = document.getElementById("chatTableModalBody");
+  if (modal && modalBody) {
+    modalBody.innerHTML = tableHtml;
+    modal.style.display = "flex";
+  }
+}
+
+function closeChatTableModal() {
+  const modal = document.getElementById("chatTableModal");
+  const modalBody = document.getElementById("chatTableModalBody");
+  if (modal) {
+    modal.style.display = "none";
+  }
+  if (modalBody) {
+    modalBody.innerHTML = "";
   }
 }
 
@@ -3222,7 +3274,7 @@ function formatMarkdown(text) {
       lines[i] = "";
     } else {
       if (inTable) {
-        let tableHtml = '<div class="chat-table-wrapper"><table><thead><tr>';
+        let tableHtml = '<div class="chat-table-container"><button class="btn-expand-table" title="Expand view"><i class="fa-solid fa-expand"></i></button><div class="chat-table-wrapper"><table><thead><tr>';
         tableRows[0].forEach(cell => {
           tableHtml += `<th>${cell}</th>`;
         });
@@ -3234,7 +3286,7 @@ function formatMarkdown(text) {
           });
           tableHtml += "</tr>";
         }
-        tableHtml += "</tbody></table></div>";
+        tableHtml += "</tbody></table></div></div>";
         lines[i - tableRows.length - 1] = tableHtml;
         inTable = false;
       }
@@ -3242,7 +3294,7 @@ function formatMarkdown(text) {
   }
   
   if (inTable) {
-    let tableHtml = '<div class="chat-table-wrapper"><table><thead><tr>';
+    let tableHtml = '<div class="chat-table-container"><button class="btn-expand-table" title="Expand view"><i class="fa-solid fa-expand"></i></button><div class="chat-table-wrapper"><table><thead><tr>';
     tableRows[0].forEach(cell => {
       tableHtml += `<th>${cell}</th>`;
     });
@@ -3254,7 +3306,7 @@ function formatMarkdown(text) {
       });
       tableHtml += "</tr>";
     }
-    tableHtml += "</tbody></table></div>";
+    tableHtml += "</tbody></table></div></div>";
     lines[lines.length - 1] = tableHtml;
   }
   
@@ -3271,7 +3323,7 @@ function formatMarkdown(text) {
   const blocks = html.split("\n\n");
   html = blocks.map(block => {
     block = block.trim();
-    if (block.startsWith("<div class=\"chat-table-wrapper\"") || block.startsWith("<table") || block.startsWith("<pre") || block.startsWith("<ul") || block.startsWith("<ol") || block.startsWith("<li>")) {
+    if (block.startsWith("<div class=\"chat-table-container\"") || block.startsWith("<table") || block.startsWith("<pre") || block.startsWith("<ul") || block.startsWith("<ol") || block.startsWith("<li>")) {
       return block;
     }
     return `<p>${block.replace(/\n/g, "<br>")}</p>`;

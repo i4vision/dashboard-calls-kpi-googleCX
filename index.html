@@ -682,6 +682,24 @@
     </div>
   </aside>
 
+  <!-- Large Table Modal -->
+  <div id="chatTableModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(5px); z-index: 2000; align-items: center; justify-content: center; padding: 2rem;">
+    <div class="modal-content" style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-lg); width: 100%; max-width: 1100px; max-height: 85%; display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--shadow-xl); animation: zoomIn 0.2s ease;">
+      <div class="drawer-header" style="border-bottom: 1px solid var(--border-color); padding: 1rem; display: flex; justify-content: space-between; align-items: center; background: var(--bg-secondary);">
+        <div style="display: flex; align-items: center; gap: 0.5rem; font-weight: 600; color: var(--text-primary);">
+          <i class="fa-solid fa-table" style="color: var(--accent-primary); font-size: 1.1rem;"></i>
+          <span>Expanded Data View</span>
+        </div>
+        <button id="btnCloseChatTableModal" class="drawer-close" title="Close Expanded View" aria-label="Close Expanded View" style="margin: 0; position: static; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div id="chatTableModalBody" style="padding: 1.5rem; overflow: auto; flex: 1; background: var(--bg-secondary);">
+        <!-- Injected table -->
+      </div>
+    </div>
+  </div>
+
   <!-- Script logic -->
   <script type="module" src="./app.js"></script>
 </body>

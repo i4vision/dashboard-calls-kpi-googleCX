@@ -1579,12 +1579,20 @@ select.gcs-input {
 .chat-bubble li {
   margin-bottom: 0.25rem;
 }
+.chat-table-container {
+  position: relative;
+  margin: 0.75rem 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
 .chat-table-wrapper {
   width: 100%;
   overflow-x: auto;
-  margin: 0.5rem 0;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-color);
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 0;
   -webkit-overflow-scrolling: touch;
 }
 .chat-bubble table {
@@ -1607,6 +1615,54 @@ select.gcs-input {
   text-align: left;
   white-space: nowrap;
   background: rgba(255, 255, 255, 0.02);
+}
+.btn-expand-table {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-secondary);
+  border-radius: 4px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  transition: all 0.2s ease;
+  font-size: 0.75rem;
+}
+.btn-expand-table:hover {
+  background: var(--accent-primary);
+  color: #ffffff;
+  border-color: var(--accent-primary);
+  transform: scale(1.05);
+}
+#chatTableModalBody table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+#chatTableModalBody th, #chatTableModalBody td {
+  border: 1px solid var(--border-color);
+  padding: 0.6rem 0.8rem;
+  text-align: left;
+}
+#chatTableModalBody th {
+  background: rgba(255, 255, 255, 0.08);
+  font-weight: 600;
+  white-space: nowrap;
+}
+#chatTableModalBody td {
+  background: rgba(255, 255, 255, 0.02);
+  white-space: normal; 
+  word-break: break-word;
+}
+#chatTableModalBody td:first-child {
+  font-family: var(--font-mono);
+  font-weight: 600;
 }
 .chat-bubble code {
   font-family: var(--font-mono);
