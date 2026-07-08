@@ -3168,7 +3168,10 @@ function compileOKFCallsContext() {
   md += "|---|---|---|---|---|---|---|---|---|---|\n";
   
   limitedCalls.forEach(call => {
-    const id = call.conversation_name || "N/A";
+    let id = call.conversation_name || "N/A";
+    if (id.includes("/conversations/")) {
+      id = id.substring(id.lastIndexOf("/") + 1);
+    }
     const agent = getAgentName(call);
     const date = call.created_at ? call.created_at.substring(0, 10) : "N/A";
     const cat = call.category || "N/A";
@@ -3210,7 +3213,7 @@ function formatMarkdown(text) {
         inTable = true;
         tableRows = [];
       }
-      if (line.match(/^\|[\s:-|]*\|$/)) {
+      if (line.match(/^\|[\s:\-|]*\|$/)) {
         lines[i] = "";
         continue;
       }

@@ -1583,17 +1583,21 @@ select.gcs-input {
   width: 100%;
   border-collapse: collapse;
   margin: 0.5rem 0;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
 }
-.chat-bubble th, .chat-bubble td {
+.chat-bubble th {
   border: 1px solid var(--border-color);
   padding: 0.35rem 0.5rem;
   text-align: left;
-  word-break: break-all;
-}
-.chat-bubble th {
   background: rgba(255, 255, 255, 0.05);
   font-weight: 600;
+  white-space: nowrap;
+}
+.chat-bubble td {
+  border: 1px solid var(--border-color);
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+  word-break: break-word;
 }
 .chat-bubble code {
   font-family: var(--font-mono);
