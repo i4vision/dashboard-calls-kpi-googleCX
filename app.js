@@ -3222,7 +3222,7 @@ function formatMarkdown(text) {
       lines[i] = "";
     } else {
       if (inTable) {
-        let tableHtml = "<table><thead><tr>";
+        let tableHtml = '<div class="chat-table-wrapper"><table><thead><tr>';
         tableRows[0].forEach(cell => {
           tableHtml += `<th>${cell}</th>`;
         });
@@ -3234,7 +3234,7 @@ function formatMarkdown(text) {
           });
           tableHtml += "</tr>";
         }
-        tableHtml += "</tbody></table>";
+        tableHtml += "</tbody></table></div>";
         lines[i - tableRows.length - 1] = tableHtml;
         inTable = false;
       }
@@ -3242,7 +3242,7 @@ function formatMarkdown(text) {
   }
   
   if (inTable) {
-    let tableHtml = "<table><thead><tr>";
+    let tableHtml = '<div class="chat-table-wrapper"><table><thead><tr>';
     tableRows[0].forEach(cell => {
       tableHtml += `<th>${cell}</th>`;
     });
@@ -3254,7 +3254,7 @@ function formatMarkdown(text) {
       });
       tableHtml += "</tr>";
     }
-    tableHtml += "</tbody></table>";
+    tableHtml += "</tbody></table></div>";
     lines[lines.length - 1] = tableHtml;
   }
   
@@ -3271,7 +3271,7 @@ function formatMarkdown(text) {
   const blocks = html.split("\n\n");
   html = blocks.map(block => {
     block = block.trim();
-    if (block.startsWith("<table") || block.startsWith("<pre") || block.startsWith("<ul") || block.startsWith("<ol") || block.startsWith("<li>")) {
+    if (block.startsWith("<div class=\"chat-table-wrapper\"") || block.startsWith("<table") || block.startsWith("<pre") || block.startsWith("<ul") || block.startsWith("<ol") || block.startsWith("<li>")) {
       return block;
     }
     return `<p>${block.replace(/\n/g, "<br>")}</p>`;
