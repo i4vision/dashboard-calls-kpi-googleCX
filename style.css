@@ -1589,6 +1589,7 @@ select.gcs-input {
   border: 1px solid var(--border-color);
   padding: 0.35rem 0.5rem;
   text-align: left;
+  word-break: break-all;
 }
 .chat-bubble th {
   background: rgba(255, 255, 255, 0.05);

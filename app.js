@@ -3211,6 +3211,7 @@ function formatMarkdown(text) {
         tableRows = [];
       }
       if (line.match(/^\|[\s:-|]*\|$/)) {
+        lines[i] = "";
         continue;
       }
       const cells = line.split("|").slice(1, -1).map(c => c.trim());
