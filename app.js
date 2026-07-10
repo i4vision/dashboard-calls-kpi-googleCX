@@ -3016,6 +3016,9 @@ function setupChatDrawer() {
       state.openaiApiKey = keyVal;
       state.openaiModel = modelVal;
       
+      // Save key persistently to Supabase database
+      saveOpenAIKeyToSupabase(keyVal);
+      
       if (keyVal) {
         if (chatNoKeyWarning) chatNoKeyWarning.style.display = "none";
       } else {
@@ -3039,6 +3042,9 @@ function setupChatDrawer() {
   
   if (chatApiKeyInput) chatApiKeyInput.value = savedKey;
   if (chatModelSelect) chatModelSelect.value = savedModel;
+
+  // Sync OpenAI Key from Supabase on init
+  syncOpenAIKeyWithSupabase();
   
   // Send message on click
   if (btnChatSend) {
@@ -3412,5 +3418,70 @@ When answering:
     loadingBubble.remove();
     console.error("Chat completion request failed:", err);
     appendChatMessage("system-error", `Request Failed: ${err.message}`);
+  }
+}
+
+async function syncOpenAIKeyWithSupabase() {
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/ai_credentials?provider=eq.openai`, {
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+    if (response.ok) {
+      const data = await response.json();
+      if (data && data.length > 0) {
+        const key = data[0].api_key;
+        if (key) {
+          localStorage.setItem("gcs_openai_api_key", key);
+          state.openaiApiKey = key;
+          
+          const chatApiKeyInput = document.getElementById("chatApiKeyInput");
+          if (chatApiKeyInput) {
+            chatApiKeyInput.value = key;
+          }
+          
+          const chatNoKeyWarning = document.getElementById("chatNoKeyWarning");
+          if (chatNoKeyWarning) {
+            chatNoKeyWarning.style.display = "none";
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Could not sync OpenAI credentials from Supabase:", err);
+  }
+}
+
+async function saveOpenAIKeyToSupabase(key) {
+  try {
+    const patchResp = await fetch(`${SUPABASE_URL}/rest/v1/ai_credentials?provider=eq.openai`, {
+      method: "PATCH",
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+        "Content-Type": "application/json",
+        "Prefer": "return=representation"
+      },
+      body: JSON.stringify({ api_key: key, updated_at: new Date().toISOString() })
+    });
+    
+    if (patchResp.ok) {
+      const data = await patchResp.json();
+      if (data.length === 0) {
+        await fetch(`${SUPABASE_URL}/rest/v1/ai_credentials`, {
+          method: "POST",
+          headers: {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ provider: "openai", api_key: key })
+        });
+      }
+    }
+  } catch (err) {
+    console.warn("Could not save OpenAI API Key to Supabase:", err);
   }
 }
