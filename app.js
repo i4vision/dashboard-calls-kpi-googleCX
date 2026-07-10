@@ -2965,7 +2965,6 @@ function setupChatDrawer() {
   const btnChatSettingsToggle = document.getElementById("btnChatSettingsToggle");
   const chatConfigSection = document.getElementById("chatConfigSection");
   
-  const btnChatApiKeyVisibility = document.getElementById("btnChatApiKeyVisibility");
   const chatApiKeyInput = document.getElementById("chatApiKeyInput");
   
   const btnSaveChatConfig = document.getElementById("btnSaveChatConfig");
@@ -2995,31 +2994,27 @@ function setupChatDrawer() {
     });
   }
   
-  // API Key visibility toggle
-  if (btnChatApiKeyVisibility && chatApiKeyInput) {
-    btnChatApiKeyVisibility.addEventListener("click", () => {
-      const isPassword = chatApiKeyInput.type === "password";
-      chatApiKeyInput.type = isPassword ? "text" : "password";
-      btnChatApiKeyVisibility.innerHTML = isPassword ? '<i class="fa-solid fa-eye-slash"></i>' : '<i class="fa-solid fa-eye"></i>';
-    });
-  }
-  
   // Save credentials config
   if (btnSaveChatConfig) {
     btnSaveChatConfig.addEventListener("click", () => {
       const keyVal = chatApiKeyInput.value.trim();
       const modelVal = chatModelSelect.value;
       
-      localStorage.setItem("gcs_openai_api_key", keyVal);
       localStorage.setItem("gcs_openai_model", modelVal);
-      
-      state.openaiApiKey = keyVal;
       state.openaiModel = modelVal;
       
-      // Save key persistently to Supabase database
-      saveOpenAIKeyToSupabase(keyVal);
-      
+      // If user typed a new key, update it securely
       if (keyVal) {
+        localStorage.setItem("gcs_openai_api_key", keyVal);
+        state.openaiApiKey = keyVal;
+        saveOpenAIKeyToSupabase(keyVal);
+        
+        chatApiKeyInput.value = "";
+        chatApiKeyInput.placeholder = "•••••••••••• (Saved in Database)";
+      }
+      
+      const currentKey = state.openaiApiKey || localStorage.getItem("gcs_openai_api_key") || "";
+      if (currentKey) {
         if (chatNoKeyWarning) chatNoKeyWarning.style.display = "none";
       } else {
         if (chatNoKeyWarning) chatNoKeyWarning.style.display = "block";
@@ -3040,7 +3035,14 @@ function setupChatDrawer() {
   state.openaiApiKey = savedKey;
   state.openaiModel = savedModel;
   
-  if (chatApiKeyInput) chatApiKeyInput.value = savedKey;
+  if (chatApiKeyInput) {
+    chatApiKeyInput.value = "";
+    if (savedKey) {
+      chatApiKeyInput.placeholder = "•••••••••••• (Saved in Database)";
+    } else {
+      chatApiKeyInput.placeholder = "Enter OpenAI API Key...";
+    }
+  }
   if (chatModelSelect) chatModelSelect.value = savedModel;
 
   // Sync OpenAI Key from Supabase on init
@@ -3439,7 +3441,8 @@ async function syncOpenAIKeyWithSupabase() {
           
           const chatApiKeyInput = document.getElementById("chatApiKeyInput");
           if (chatApiKeyInput) {
-            chatApiKeyInput.value = key;
+            chatApiKeyInput.value = "";
+            chatApiKeyInput.placeholder = "•••••••••••• (Saved in Database)";
           }
           
           const chatNoKeyWarning = document.getElementById("chatNoKeyWarning");
