@@ -28,7 +28,8 @@ let state = {
   supabaseSettingsEnabled: true,
   gcsTranscriptsMap: {},
   selectedGcsFiles: new Set(),
-  gcsTranscriptObjects: []
+  gcsTranscriptObjects: [],
+  ongoingAnalysis: {}
 };
 
 // Initialize Application
@@ -2303,7 +2304,12 @@ function renderGCSFileList() {
     const { matchedCall, status: fileStatus } = findMatchedCallForGCSFile(file);
     
     let statusBadge = "";
-    if (fileStatus === "analyzed") {
+    const ongoing = state.ongoingAnalysis[file.name];
+    if (ongoing === "pending") {
+      statusBadge = `<span class="gcs-status-badge badge-processing"><i class="fa-solid fa-spinner fa-spin"></i> Processing</span>`;
+    } else if (ongoing === "error") {
+      statusBadge = `<span class="gcs-status-badge badge-error"><i class="fa-solid fa-circle-xmark"></i> Error</span>`;
+    } else if (fileStatus === "analyzed") {
       statusBadge = `<span class="gcs-status-badge badge-analyzed"><i class="fa-solid fa-circle-check"></i> Analyzed</span>`;
     } else if (fileStatus === "transcribed") {
       statusBadge = `<span class="gcs-status-badge badge-transcribed"><i class="fa-solid fa-file-invoice"></i> Transcribed</span>`;
@@ -2311,9 +2317,11 @@ function renderGCSFileList() {
       statusBadge = `<span class="gcs-status-badge badge-pending"><i class="fa-solid fa-circle-notch"></i> Pending</span>`;
     }
 
+    const canReset = fileStatus !== "pending" && ongoing !== "pending";
+
     item.innerHTML = `
       <div class="gcs-checkbox-wrapper" style="margin-right: 0.5rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-        <input type="checkbox" class="gcs-item-checkbox" data-name="${file.name}" ${state.selectedGcsFiles.has(file.name) ? 'checked' : ''} style="cursor: pointer; width: 15px; height: 15px;">
+        <input type="checkbox" class="gcs-item-checkbox" data-name="${file.name}" ${state.selectedGcsFiles.has(file.name) ? 'checked' : ''} style="cursor: pointer; width: 15px; height: 15px;" ${ongoing === "pending" ? 'disabled' : ''}>
       </div>
       <div class="gcs-file-info" style="flex: 1; min-width: 0;">
         <span class="gcs-file-name" title="${displayName}" style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${displayName}</span>
@@ -2321,7 +2329,7 @@ function renderGCSFileList() {
         <div class="gcs-file-status-row" style="margin-top: 0.4rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
           ${statusBadge}
           ${matchedCall ? `<button class="gcs-view-details-btn" title="Open Call Analytics Details"><i class="fa-solid fa-chart-simple"></i> Analytics</button>` : ''}
-          ${fileStatus !== "pending" ? `<button class="gcs-delete-recording-btn" title="Reset recording: Delete transcript and analysis data"><i class="fa-solid fa-trash-can"></i> Reset</button>` : ''}
+          ${canReset ? `<button class="gcs-delete-recording-btn" title="Reset recording: Delete transcript and analysis data"><i class="fa-solid fa-trash-can"></i> Reset</button>` : ''}
         </div>
       </div>
       <div class="gcs-file-play" style="flex-shrink: 0; margin-left: 0.5rem;">
@@ -2512,6 +2520,12 @@ async function triggerBulkCallAnalysisWebhook() {
   
   const webhookUrl = "https://n8n102.i4vision.us/webhook/cdf5e5e5-f8fb-42a6-902d-d5ca4c97d1a9";
   
+  // Set all selected files to pending and re-render sidebar immediately
+  filesToAnalyze.forEach(file => {
+    state.ongoingAnalysis[file.name] = "pending";
+  });
+  renderGCSFileList();
+  
   // Disable checkboxes visually during processing
   document.querySelectorAll(".gcs-item-checkbox").forEach(cb => cb.disabled = true);
   
@@ -2534,21 +2548,56 @@ async function triggerBulkCallAnalysisWebhook() {
         })
       });
       
+      let isSuccess = false;
       if (response.ok || response.status === 200 || response.status === 201) {
+        try {
+          const resData = await response.json();
+          if (resData && (resData.error || resData.status === "error" || resData.success === false)) {
+            isSuccess = false;
+            console.error("n8n returned error for file:", file.name, resData);
+          } else {
+            isSuccess = true;
+          }
+        } catch (jsonErr) {
+          isSuccess = true; // Treated as success if raw response is not JSON
+        }
+      }
+      
+      if (isSuccess) {
         successful++;
         state.selectedGcsFiles.delete(file.name);
+        state.ongoingAnalysis[file.name] = "success";
+      } else {
+        state.ongoingAnalysis[file.name] = "error";
       }
     } catch (err) {
       console.error("Error triggering analysis for file:", file.name, err);
+      state.ongoingAnalysis[file.name] = "error";
     } finally {
       completed++;
       btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Triggering (${completed}/${total})...`;
+      // Update sidebar list items visually as they resolve
+      renderGCSFileList();
     }
   });
   
   await Promise.all(promises);
   
   btn.innerHTML = `<i class="fa-solid fa-circle-check"></i> Triggered ${successful}/${total}`;
+  
+  // Refresh Supabase & GCS tokens/files
+  await fetchCallData();
+  const freshToken = await getGoogleAccessToken();
+  if (freshToken) {
+    await loadGCSFiles(freshToken);
+  }
+  
+  // Clear successful analysis entries from ongoing tracking (leave errors)
+  filesToAnalyze.forEach(file => {
+    if (state.ongoingAnalysis[file.name] === "success") {
+      delete state.ongoingAnalysis[file.name];
+    }
+  });
   
   setTimeout(() => {
     btn.disabled = false;
