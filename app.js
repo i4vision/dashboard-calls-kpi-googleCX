@@ -1684,6 +1684,15 @@ function setupGCSEventListeners() {
   document.getElementById("gcsSearchInput").addEventListener("input", filterGCSFiles);
   document.getElementById("gcsFilterStatus").addEventListener("change", filterGCSFiles);
 
+  // Close GCS Error banner listener
+  const btnCloseGcsErrorBanner = document.getElementById("btnCloseGcsErrorBanner");
+  const gcsAnalysisErrorBanner = document.getElementById("gcsAnalysisErrorBanner");
+  if (btnCloseGcsErrorBanner && gcsAnalysisErrorBanner) {
+    btnCloseGcsErrorBanner.addEventListener("click", () => {
+      gcsAnalysisErrorBanner.style.display = "none";
+    });
+  }
+
   // Bulk selection listener
   const selectAllCheckbox = document.getElementById("gcsSelectAllCheckbox");
   if (selectAllCheckbox) {
@@ -2520,6 +2529,10 @@ async function triggerBulkCallAnalysisWebhook() {
   
   const webhookUrl = "https://n8n102.i4vision.us/webhook/cdf5e5e5-f8fb-42a6-902d-d5ca4c97d1a9";
   
+  // Hide old error banner if visible
+  const gcsAnalysisErrorBanner = document.getElementById("gcsAnalysisErrorBanner");
+  if (gcsAnalysisErrorBanner) gcsAnalysisErrorBanner.style.display = "none";
+  
   // Set all selected files to pending and re-render sidebar immediately
   filesToAnalyze.forEach(file => {
     state.ongoingAnalysis[file.name] = "pending";
@@ -2583,7 +2596,24 @@ async function triggerBulkCallAnalysisWebhook() {
   
   await Promise.all(promises);
   
-  btn.innerHTML = `<i class="fa-solid fa-circle-check"></i> Triggered ${successful}/${total}`;
+  // Resolve feedback timing & messaging based on success/failure
+  let timeoutDuration = 3500;
+  if (successful < total) {
+    timeoutDuration = 10000; // Show failure message on button for 10 seconds
+    btn.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Failed ${total - successful}/${total}`;
+    btn.style.background = "var(--color-negative)";
+    btn.style.borderColor = "var(--color-negative)";
+    
+    if (gcsAnalysisErrorBanner) {
+      const errorText = document.getElementById("gcsAnalysisErrorText");
+      if (errorText) {
+        errorText.textContent = `Analysis failed for ${total - successful} recording(s). Check the red cards below.`;
+      }
+      gcsAnalysisErrorBanner.style.display = "flex";
+    }
+  } else {
+    btn.innerHTML = `<i class="fa-solid fa-circle-check"></i> Triggered ${successful}/${total}`;
+  }
   
   // Refresh Supabase & GCS tokens/files
   await fetchCallData();
@@ -2602,11 +2632,13 @@ async function triggerBulkCallAnalysisWebhook() {
   setTimeout(() => {
     btn.disabled = false;
     btn.innerHTML = originalHtml;
+    btn.style.background = "";
+    btn.style.borderColor = "";
     if (selectAllCheckbox) selectAllCheckbox.disabled = false;
     
     renderGCSFileList();
     updateBulkActionUI();
-  }, 3500);
+  }, timeoutDuration);
 }
 
 function convertToCSV(arr) {

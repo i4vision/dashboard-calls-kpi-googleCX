@@ -575,6 +575,15 @@
           </div>
         </div>
         
+        <!-- GCS Analysis Error Banner -->
+        <div id="gcsAnalysisErrorBanner" class="badge-error" style="display: none; padding: 0.5rem 0.75rem; margin-bottom: 0.25rem; font-size: 0.75rem; border-radius: var(--radius-sm); align-items: center; gap: 0.5rem; line-height: 1.3;">
+          <i class="fa-solid fa-triangle-exclamation" style="font-size: 0.85rem;"></i>
+          <span id="gcsAnalysisErrorText" style="flex: 1;">Analysis failed for some recordings. Please retry.</span>
+          <button id="btnCloseGcsErrorBanner" class="btn-icon" style="font-size: 0.75rem; padding: 0; min-width: auto; height: auto; color: inherit; opacity: 0.8; cursor: pointer; border: none; background: none;">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        
         <div id="gcsFileList" class="gcs-file-list">
           <!-- List of audio files -->
         </div>
