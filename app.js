@@ -2629,38 +2629,51 @@ async function triggerBulkCallAnalysisWebhook() {
   
   await Promise.all(promises);
   
-  // Resolve feedback timing & messaging based on success/failure
-  let timeoutDuration = 3500;
-  if (successful < total) {
-    timeoutDuration = 10000; // Show failure message on button for 10 seconds
-    btn.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Failed ${total - successful}/${total}`;
-    btn.style.background = "var(--color-negative)";
-    btn.style.borderColor = "var(--color-negative)";
-    
-    if (gcsAnalysisErrorBanner) {
-      const errorText = document.getElementById("gcsAnalysisErrorText");
-      if (errorText) {
-        errorText.textContent = `Analysis failed for ${total - successful} recording(s). Check the red cards below.`;
-      }
-      gcsAnalysisErrorBanner.style.display = "flex";
-    }
-  } else {
-    btn.innerHTML = `<i class="fa-solid fa-circle-check"></i> Triggered ${successful}/${total}`;
-  }
-  
-  // Refresh Supabase & GCS tokens/files
+  // Refresh Supabase & GCS tokens/files to reflect database changes synchronously
   await fetchCallData();
   const freshToken = await getGoogleAccessToken();
   if (freshToken) {
     await loadGCSFiles(freshToken);
   }
   
-  // Clear successful analysis entries from ongoing tracking (leave errors)
+  // Validate final states from updated database/GCS records
+  let successfulCount = 0;
   filesToAnalyze.forEach(file => {
-    if (state.ongoingAnalysis[file.name] === "success") {
+    const { status: fileStatus } = findMatchedCallForGCSFile(file);
+    const wasHttpSuccess = state.ongoingAnalysis[file.name] === "success";
+    const isAnalyzedOrTranscribed = fileStatus === "analyzed" || fileStatus === "transcribed";
+    
+    if (wasHttpSuccess && isAnalyzedOrTranscribed) {
+      successfulCount++;
+      state.selectedGcsFiles.delete(file.name);
       delete state.ongoingAnalysis[file.name];
+    } else {
+      state.ongoingAnalysis[file.name] = "error";
     }
   });
+  
+  // Resolve feedback timing & messaging based on success/failure
+  let timeoutDuration = 3500;
+  if (successfulCount < total) {
+    timeoutDuration = 10000; // Show failure message on button for 10 seconds
+    btn.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Failed ${total - successfulCount}/${total}`;
+    btn.style.background = "var(--color-negative)";
+    btn.style.borderColor = "var(--color-negative)";
+    
+    if (gcsAnalysisErrorBanner) {
+      const errorText = document.getElementById("gcsAnalysisErrorText");
+      if (errorText) {
+        errorText.textContent = `Analysis failed for ${total - successfulCount} recording(s). Check the red cards below.`;
+      }
+      gcsAnalysisErrorBanner.style.display = "flex";
+    }
+  } else {
+    btn.innerHTML = `<i class="fa-solid fa-circle-check"></i> Triggered ${successfulCount}/${total}`;
+  }
+  
+  // Re-render sidebar elements immediately to show red/green badge outcomes
+  renderGCSFileList();
+  updateBulkActionUI();
   
   setTimeout(() => {
     btn.disabled = false;
