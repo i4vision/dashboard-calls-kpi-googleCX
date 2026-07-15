@@ -2563,15 +2563,49 @@ async function triggerBulkCallAnalysisWebhook() {
       let isSuccess = false;
       if (response.ok || response.status === 200 || response.status === 201) {
         try {
-          const resData = await response.json();
-          if (resData && (resData.error || resData.status === "error" || resData.success === false)) {
-            isSuccess = false;
-            console.error("n8n returned error for file:", file.name, resData);
+          // Read response as text first to handle both JSON and plain text error payloads safely
+          const rawText = await response.text();
+          let parsedData = null;
+          try {
+            parsedData = JSON.parse(rawText);
+          } catch (e) {}
+
+          if (parsedData) {
+            // Stringify and perform case-insensitive keyword search for errors
+            const stringified = JSON.stringify(parsedData).toLowerCase();
+            const hasErrorKeyword = stringified.includes("error") || 
+                                    stringified.includes("fail") || 
+                                    stringified.includes("exception") || 
+                                    stringified.includes("reject") ||
+                                    stringified.includes("invalid");
+            
+            // Check explicit properties
+            const hasErrorProperty = !!(parsedData.error || 
+                                        parsedData.status === "error" || 
+                                        parsedData.status === "failed" ||
+                                        parsedData.success === false || 
+                                        parsedData.code === 500 || 
+                                        parsedData.code === 400);
+
+            if (hasErrorKeyword || hasErrorProperty) {
+              isSuccess = false;
+              console.error("n8n returned error payload for file:", file.name, parsedData);
+            } else {
+              isSuccess = true;
+            }
           } else {
-            isSuccess = true;
+            // If response is not JSON, check for text warning terms
+            const lowerText = rawText.toLowerCase();
+            if (lowerText.includes("error") || lowerText.includes("fail") || lowerText.includes("exception") || lowerText.includes("reject")) {
+              isSuccess = false;
+              console.error("n8n returned text error for file:", file.name, rawText);
+            } else {
+              isSuccess = true;
+            }
           }
-        } catch (jsonErr) {
-          isSuccess = true; // Treated as success if raw response is not JSON
+        } catch (parseErr) {
+          isSuccess = false;
+          console.error("Could not parse n8n response:", file.name, parseErr);
         }
       }
       
