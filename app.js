@@ -1497,9 +1497,8 @@ async function getGoogleAccessToken() {
       return data.access_token;
     } catch (err) {
       console.error("Auto-refreshing access token using Service Account failed:", err);
-      // Remove service account so we don't loop fail
-      localStorage.removeItem("gcs_service_account");
-      await deleteSettingFromSupabase("gcs_service_account");
+      // Do NOT delete the credentials. Simply return null so the UI shows disconnected temporarily.
+      // This prevents temporary network issues or container restarts from wiping user credentials.
       return null;
     }
   }
