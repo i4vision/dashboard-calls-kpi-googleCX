@@ -49,6 +49,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     state.agentMappings = {};
   }
 
+  // Load local predefined questions as early as possible
+  const localPredefined = localStorage.getItem("gcs_predefined_questions");
+  if (localPredefined) {
+    try {
+      state.predefinedQuestions = JSON.parse(localPredefined);
+    } catch (e) {
+      state.predefinedQuestions = getDefaultPredefinedQuestions();
+    }
+  } else {
+    state.predefinedQuestions = getDefaultPredefinedQuestions();
+  }
+
   initTheme();
   setupTabNavigation();
   setupEventListeners();
@@ -1474,6 +1486,26 @@ async function syncGCSSettingsWithSupabase() {
           state.agentMappings = {};
         }
       }
+
+      if (settings.predefined_questions) {
+        localStorage.setItem("gcs_predefined_questions", settings.predefined_questions);
+        try {
+          state.predefinedQuestions = JSON.parse(settings.predefined_questions);
+        } catch (e) {
+          state.predefinedQuestions = getDefaultPredefinedQuestions();
+        }
+      } else {
+        const local = localStorage.getItem("gcs_predefined_questions");
+        if (local) {
+          try {
+            state.predefinedQuestions = JSON.parse(local);
+          } catch (e) {
+            state.predefinedQuestions = getDefaultPredefinedQuestions();
+          }
+        } else {
+          state.predefinedQuestions = getDefaultPredefinedQuestions();
+        }
+      }
     } else {
       state.supabaseSettingsEnabled = false;
     }
@@ -1492,7 +1524,8 @@ async function saveSettingToSupabase(key, value) {
       gcs_manual_token_flag: "gcs_manual_token_flag",
       gcs_min_call_length: "min_call_length",
       gcs_max_call_length: "max_call_length",
-      agent_mappings: "agent_mappings"
+      agent_mappings: "agent_mappings",
+      predefined_questions: "predefined_questions"
     };
     const colName = colMap[key] || key;
     
@@ -1525,7 +1558,8 @@ async function deleteSettingFromSupabase(key) {
       gcs_manual_token_flag: "gcs_manual_token_flag",
       gcs_min_call_length: "min_call_length",
       gcs_max_call_length: "max_call_length",
-      agent_mappings: "agent_mappings"
+      agent_mappings: "agent_mappings",
+      predefined_questions: "predefined_questions"
     };
     const colName = colMap[key] || key;
     
@@ -2046,6 +2080,7 @@ CREATE TABLE dashboard_settings (
   min_call_length numeric,
   max_call_length numeric,
   agent_mappings text,
+  predefined_questions text,
   CONSTRAINT single_row CHECK (id = 1)
 );
 
@@ -3456,17 +3491,134 @@ function setupChatDrawer() {
     });
   }
   
-  // Bind quick action chips
-  const chips = document.querySelectorAll(".chat-chip");
-  chips.forEach(chip => {
-    chip.addEventListener("click", () => {
-      const prompt = chip.getAttribute("data-prompt");
-      if (chatInput) {
-        chatInput.value = prompt;
-        handleChatSend();
+  const predefinedSelect = document.getElementById("chatPredefinedSelect");
+  
+  // Renders the predefined questions dropdown select
+  function renderPredefinedQuestionsDropdown() {
+    if (!predefinedSelect) return;
+    predefinedSelect.innerHTML = "";
+    
+    // Default placeholder option
+    const defaultOpt = document.createElement("option");
+    defaultOpt.value = "";
+    defaultOpt.textContent = "💡 Choose a predefined question...";
+    predefinedSelect.appendChild(defaultOpt);
+    
+    const questions = state.predefinedQuestions || [];
+    questions.forEach((q, idx) => {
+      const opt = document.createElement("option");
+      opt.value = idx;
+      opt.textContent = q.label;
+      predefinedSelect.appendChild(opt);
+    });
+  }
+
+  // Populate input when selecting a predefined question
+  if (predefinedSelect) {
+    predefinedSelect.addEventListener("change", (e) => {
+      const idx = e.target.value;
+      if (idx !== "") {
+        const question = state.predefinedQuestions[idx];
+        if (question && chatInput) {
+          chatInput.value = question.prompt;
+          chatInput.focus();
+        }
+        // Reset the selector back to the placeholder
+        predefinedSelect.value = "";
       }
     });
-  });
+  }
+
+  // Settings predefined questions list elements
+  const settingsQuestionsList = document.getElementById("chatSettingsQuestionsList");
+  const addQuestionBtn = document.getElementById("btnChatAddQuestion");
+  const newQuestionLabelInput = document.getElementById("inputNewQuestionLabel");
+  const newQuestionPromptInput = document.getElementById("inputNewQuestionPrompt");
+
+  // Render predefined questions list inside config/settings panel
+  function renderSettingsQuestionsList() {
+    if (!settingsQuestionsList) return;
+    settingsQuestionsList.innerHTML = "";
+
+    const questions = state.predefinedQuestions || [];
+    if (questions.length === 0) {
+      settingsQuestionsList.innerHTML = `
+        <div style="text-align: center; color: var(--text-muted); font-size: 0.7rem; padding: 0.5rem 0;">
+          No active predefined questions.
+        </div>
+      `;
+      return;
+    }
+
+    questions.forEach((q, idx) => {
+      const item = document.createElement("div");
+      item.className = "predefined-question-item";
+      item.innerHTML = `
+        <div class="predefined-question-content">
+          <span class="predefined-question-label">${q.label}</span>
+          <span class="predefined-question-prompt">${q.prompt}</span>
+        </div>
+        <button class="btn-delete-mapping btn-delete-question" data-idx="${idx}" title="Delete question" style="margin-top: 2px; flex-shrink: 0;">
+          <i class="fa-solid fa-trash-can"></i>
+        </button>
+      `;
+
+      item.querySelector(".btn-delete-question").addEventListener("click", async (e) => {
+        const targetIdx = Number(e.currentTarget.getAttribute("data-idx"));
+        state.predefinedQuestions.splice(targetIdx, 1);
+        
+        // Save dynamically on deletion
+        const qStr = JSON.stringify(state.predefinedQuestions);
+        localStorage.setItem("gcs_predefined_questions", qStr);
+        try {
+          await saveSettingToSupabase("predefined_questions", qStr);
+        } catch (err) {
+          console.warn("Could not save updated predefined questions to Supabase on delete:", err);
+        }
+        
+        renderSettingsQuestionsList();
+        renderPredefinedQuestionsDropdown();
+      });
+
+      settingsQuestionsList.appendChild(item);
+    });
+  }
+
+  // Bind Add Predefined Question button
+  if (addQuestionBtn) {
+    addQuestionBtn.addEventListener("click", async () => {
+      const label = newQuestionLabelInput.value.trim();
+      const prompt = newQuestionPromptInput.value.trim();
+
+      if (!label || !prompt) {
+        alert("Please enter both a label and the actual prompt text.");
+        return;
+      }
+
+      state.predefinedQuestions = state.predefinedQuestions || [];
+      state.predefinedQuestions.push({ label, prompt });
+
+      // Clear inputs
+      newQuestionLabelInput.value = "";
+      newQuestionPromptInput.value = "";
+
+      // Save dynamically on add
+      const qStr = JSON.stringify(state.predefinedQuestions);
+      localStorage.setItem("gcs_predefined_questions", qStr);
+      try {
+        await saveSettingToSupabase("predefined_questions", qStr);
+      } catch (err) {
+        console.warn("Could not save updated predefined questions to Supabase on add:", err);
+      }
+
+      renderSettingsQuestionsList();
+      renderPredefinedQuestionsDropdown();
+    });
+  }
+
+  // Initial renders
+  renderPredefinedQuestionsDropdown();
+  renderSettingsQuestionsList();
 
   // Table expansion event delegation
   const chatMessageLog = document.getElementById("chatMessageLog");
@@ -3965,4 +4117,12 @@ function startAnalysisPolling() {
       console.warn("Error running analysis background status sync:", err);
     }
   }, 10000); // Poll every 10 seconds
+}
+
+function getDefaultPredefinedQuestions() {
+  return [
+    { label: "Summarize main issues", prompt: "Summarize the main issues mentioned in today's calls." },
+    { label: "Lowest score summary", prompt: "Which agent has the lowest score and what are their next actions?" },
+    { label: "Find risk calls", prompt: "Are there any calls with medium or high risk levels? Detail them." }
+  ];
 }

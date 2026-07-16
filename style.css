@@ -1731,3 +1731,32 @@ select.gcs-input {
   opacity: 1;
   transform: scale(1.1);
 }
+
+/* Predefined questions list items */
+.predefined-question-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 0.4rem 0.5rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 0.74rem;
+  gap: 0.5rem;
+}
+.predefined-question-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1;
+}
+.predefined-question-label {
+  font-weight: 600;
+  color: var(--accent-secondary);
+}
+.predefined-question-prompt {
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+  line-height: 1.3;
+  word-break: break-word;
+}
