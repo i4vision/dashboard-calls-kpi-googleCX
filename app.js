@@ -450,7 +450,6 @@ function renderOverviewCharts() {
   const agentScores = {};
   data.forEach(c => {
     const agent = getAgentName(c);
-    if (agent.startsWith("Agent #")) return; // Exclude anonymous calls from the leaderboard
     
     if (!agentScores[agent]) {
       agentScores[agent] = { total: 0, count: 0 };
