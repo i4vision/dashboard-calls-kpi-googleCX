@@ -37,6 +37,18 @@ let analysisPollingInterval = null;
 
 // Initialize Application
 document.addEventListener("DOMContentLoaded", async () => {
+  // Load local mappings as early as possible on page startup
+  const localMappings = localStorage.getItem("gcs_agent_mappings");
+  if (localMappings) {
+    try {
+      state.agentMappings = JSON.parse(localMappings);
+    } catch (e) {
+      state.agentMappings = {};
+    }
+  } else {
+    state.agentMappings = {};
+  }
+
   initTheme();
   setupTabNavigation();
   setupEventListeners();
@@ -127,6 +139,9 @@ function setupEventListeners() {
 
   // Setup Chat Drawer triggers and keys
   setupChatDrawer();
+
+  // Setup General Settings Drawer triggers and keys
+  setupSettingsDrawer();
 }
 
 // Helper: Debounce search input
@@ -951,11 +966,31 @@ function formatConvName(name) {
   return parts[parts.length - 1] || name;
 }
 
+function getAgentIdFromFilename(audioFileName) {
+  if (!audioFileName) return null;
+  // Strip off path and extension
+  const baseName = audioFileName.split("/").pop().replace(/\.mp3$/i, "").trim();
+  const lastUnderscore = baseName.lastIndexOf("_");
+  if (lastUnderscore === -1) return null;
+  const agentId = baseName.substring(lastUnderscore + 1).trim();
+  return agentId || null;
+}
+
 // Extract Agent Name from Entities or Transcript (falling back to Hashed Deterministic Names if not found)
 function getAgentName(call) {
   if (!call) return "Unknown Agent";
   
-  // Combine transcript and entities for search (case-insensitive)
+  // 1. First, check if we can parse the agent identifier from the MP3 filename
+  const parsedId = getAgentIdFromFilename(call.audio_file_name);
+  if (parsedId) {
+    const mappings = state.agentMappings || {};
+    if (mappings[parsedId]) {
+      return mappings[parsedId];
+    }
+    return `Agent #` + parsedId;
+  }
+  
+  // 2. Fallback: Combine transcript and entities for search (case-insensitive)
   const text = ((call.transcript || "") + " " + (call.entities || "")).toLowerCase();
   
   if (text.includes("marcelo")) {
@@ -1418,6 +1453,27 @@ async function syncGCSSettingsWithSupabase() {
       } else {
         localStorage.removeItem("gcs_max_call_length");
       }
+      
+      if (settings.agent_mappings) {
+        localStorage.setItem("gcs_agent_mappings", settings.agent_mappings);
+        try {
+          state.agentMappings = JSON.parse(settings.agent_mappings);
+        } catch (e) {
+          state.agentMappings = {};
+        }
+      } else {
+        // Fallback to local storage if not in database
+        const local = localStorage.getItem("gcs_agent_mappings");
+        if (local) {
+          try {
+            state.agentMappings = JSON.parse(local);
+          } catch (e) {
+            state.agentMappings = {};
+          }
+        } else {
+          state.agentMappings = {};
+        }
+      }
     } else {
       state.supabaseSettingsEnabled = false;
     }
@@ -1435,7 +1491,8 @@ async function saveSettingToSupabase(key, value) {
       gcs_token_expiry: "gcs_token_expiry",
       gcs_manual_token_flag: "gcs_manual_token_flag",
       gcs_min_call_length: "min_call_length",
-      gcs_max_call_length: "max_call_length"
+      gcs_max_call_length: "max_call_length",
+      agent_mappings: "agent_mappings"
     };
     const colName = colMap[key] || key;
     
@@ -1467,7 +1524,8 @@ async function deleteSettingFromSupabase(key) {
       gcs_token_expiry: "gcs_token_expiry",
       gcs_manual_token_flag: "gcs_manual_token_flag",
       gcs_min_call_length: "min_call_length",
-      gcs_max_call_length: "max_call_length"
+      gcs_max_call_length: "max_call_length",
+      agent_mappings: "agent_mappings"
     };
     const colName = colMap[key] || key;
     
@@ -1987,6 +2045,7 @@ CREATE TABLE dashboard_settings (
   gcs_manual_token_flag text,
   min_call_length numeric,
   max_call_length numeric,
+  agent_mappings text,
   CONSTRAINT single_row CHECK (id = 1)
 );
 
@@ -3138,6 +3197,152 @@ async function triggerBulkCallReset() {
       await loadGCSFiles(freshToken);
     }
   }, 2500);
+}
+
+function setupSettingsDrawer() {
+  const openBtn = document.getElementById("btnOpenSettings");
+  const drawer = document.getElementById("settingsDrawer");
+  const backdrop = document.getElementById("settingsSidebarBackdrop");
+  const closeBtn = document.getElementById("settingsDrawerClose");
+  const mappingsListContainer = document.getElementById("settingsAgentMappingsList");
+  const addBtn = document.getElementById("btnAddAgentMapping");
+  const saveBtn = document.getElementById("btnSaveGeneralSettings");
+  const newAgentIdInput = document.getElementById("inputNewAgentId");
+  const newAgentNameInput = document.getElementById("inputNewAgentName");
+  const statusLabel = document.getElementById("generalSettingsSaveStatus");
+
+  if (!drawer) return;
+
+  function openSettings() {
+    drawer.classList.add("active");
+    backdrop.classList.add("active");
+    drawer.setAttribute("aria-hidden", "false");
+    
+    // Load active mappings from state on open
+    const localMappings = localStorage.getItem("gcs_agent_mappings");
+    if (localMappings) {
+      try {
+        state.agentMappings = JSON.parse(localMappings);
+      } catch (e) {
+        state.agentMappings = {};
+      }
+    } else {
+      state.agentMappings = {};
+    }
+    
+    renderAgentMappingsList();
+  }
+
+  function closeSettings() {
+    drawer.classList.remove("active");
+    backdrop.classList.remove("active");
+    drawer.setAttribute("aria-hidden", "true");
+    if (statusLabel) statusLabel.style.display = "none";
+  }
+
+  if (openBtn) openBtn.addEventListener("click", openSettings);
+  if (closeBtn) closeBtn.addEventListener("click", closeSettings);
+  if (backdrop) backdrop.addEventListener("click", closeSettings);
+
+  // Bind Escape key to close settings
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeSettings();
+  });
+
+  // Render list of active mappings
+  function renderAgentMappingsList() {
+    if (!mappingsListContainer) return;
+    mappingsListContainer.innerHTML = "";
+    
+    const mappings = state.agentMappings || {};
+    const keys = Object.keys(mappings).sort();
+
+    if (keys.length === 0) {
+      mappingsListContainer.innerHTML = `
+        <div style="text-align: center; color: var(--text-muted); font-size: 0.72rem; padding: 1rem 0;">
+          No active agent name mappings.
+        </div>
+      `;
+      return;
+    }
+
+    keys.forEach(id => {
+      const name = mappings[id];
+      const item = document.createElement("div");
+      item.className = "agent-mapping-item";
+      item.innerHTML = `
+        <div style="display: flex; align-items: center;">
+          <span class="agent-mapping-key">${id}</span>
+          <span class="agent-mapping-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+          <span class="agent-mapping-val">${name}</span>
+        </div>
+        <button class="btn-delete-mapping" data-id="${id}" title="Delete mapping">
+          <i class="fa-solid fa-trash-can"></i>
+        </button>
+      `;
+      
+      // Bind delete button
+      item.querySelector(".btn-delete-mapping").addEventListener("click", (e) => {
+        const targetId = e.currentTarget.getAttribute("data-id");
+        delete state.agentMappings[targetId];
+        renderAgentMappingsList();
+      });
+
+      mappingsListContainer.appendChild(item);
+    });
+  }
+
+  // Bind Add Mapping button
+  if (addBtn) {
+    addBtn.addEventListener("click", () => {
+      const id = newAgentIdInput.value.trim();
+      const name = newAgentNameInput.value.trim();
+
+      if (!id || !name) {
+        alert("Please fill in both the Agent ID and the Agent Name.");
+        return;
+      }
+
+      state.agentMappings = state.agentMappings || {};
+      state.agentMappings[id] = name;
+
+      // Clear input fields
+      newAgentIdInput.value = "";
+      newAgentNameInput.value = "";
+
+      renderAgentMappingsList();
+    });
+  }
+
+  // Bind Save Mapping button
+  if (saveBtn) {
+    saveBtn.addEventListener("click", async () => {
+      const mappingsStr = JSON.stringify(state.agentMappings || {});
+      localStorage.setItem("gcs_agent_mappings", mappingsStr);
+
+      // Save to Supabase (catch error if agent_mappings column does not exist yet)
+      try {
+        await saveSettingToSupabase("agent_mappings", mappingsStr);
+      } catch (err) {
+        console.warn("Could not persist agent mappings to database column:", err);
+      }
+
+      // Show success indicator
+      if (statusLabel) {
+        statusLabel.style.display = "block";
+        setTimeout(() => {
+          statusLabel.style.display = "none";
+        }, 3000);
+      }
+
+      // Refresh calls and charts to apply the new names instantly!
+      await fetchCallData();
+      const token = await getGoogleAccessToken();
+      if (token) {
+        await loadGCSFiles(token);
+      }
+    });
+  }
 }
 
 // ==========================================================================
