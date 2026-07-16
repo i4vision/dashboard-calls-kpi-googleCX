@@ -388,7 +388,12 @@
           </div>
           <div class="details-item" style="grid-column: span 2;">
             <span class="details-item-label">MP3 Audio File</span>
-            <span id="drawerAudioFileName" class="details-item-value" style="font-size: 0.85rem; word-break: break-all; font-family: var(--font-mono); color: var(--accent-secondary);">-</span>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.15rem;">
+              <span id="drawerAudioFileName" class="details-item-value" style="font-size: 0.85rem; word-break: break-all; font-family: var(--font-mono); color: var(--accent-secondary); margin: 0;">-</span>
+              <button id="btnDrawerPlayAudio" class="btn-icon" title="Play call recording" style="font-size: 0.8rem; width: 26px; height: 26px; display: none; align-items: center; justify-content: center; background: var(--accent-primary); color: #fff; border-radius: 50%; border: none; cursor: pointer; flex-shrink: 0; padding: 0;">
+                <i class="fa-solid fa-play"></i>
+              </button>
+            </div>
           </div>
           <div class="details-item" style="grid-column: span 2;">
             <span class="details-item-label">STT Processing Time</span>

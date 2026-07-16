@@ -29,8 +29,11 @@ let state = {
   gcsTranscriptsMap: {},
   selectedGcsFiles: new Set(),
   gcsTranscriptObjects: [],
-  ongoingAnalysis: {}
+  ongoingAnalysis: {},
+  analysisStartTimes: {}
 };
+
+let analysisPollingInterval = null;
 
 // Initialize Application
 document.addEventListener("DOMContentLoaded", async () => {
@@ -709,6 +712,28 @@ function openDrawer(call) {
   }
 
   document.getElementById("drawerAudioFileName").textContent = call.audio_file_name || "N/A";
+  
+  const btnDrawerPlayAudio = document.getElementById("btnDrawerPlayAudio");
+  if (btnDrawerPlayAudio) {
+    if (call.audio_file_name) {
+      btnDrawerPlayAudio.style.display = "inline-flex";
+      
+      // Clone button to strip old event listeners
+      const newBtn = btnDrawerPlayAudio.cloneNode(true);
+      btnDrawerPlayAudio.parentNode.replaceChild(newBtn, btnDrawerPlayAudio);
+      
+      newBtn.addEventListener("click", () => {
+        playGCSAudio({ name: GCS_PREFIX + call.audio_file_name });
+      });
+      
+      const audioEl = document.getElementById("gcsAudioElement");
+      const isPlaying = audioEl.src && audioEl.src.includes(encodeURIComponent(GCS_PREFIX + call.audio_file_name)) && !audioEl.paused;
+      newBtn.innerHTML = `<i class="fa-solid ${isPlaying ? 'fa-pause' : 'fa-play'}"></i>`;
+      newBtn.title = isPlaying ? "Pause recording" : "Play recording";
+    } else {
+      btnDrawerPlayAudio.style.display = "none";
+    }
+  }
 
   const sttProcSec = Number(call.stt_processing_seconds);
   if (!isNaN(sttProcSec) && call.stt_processing_seconds !== null && call.stt_processing_seconds !== undefined) {
@@ -1820,18 +1845,36 @@ function setupGCSEventListeners() {
     visualizer.classList.add("playing");
     const activeIcon = document.querySelector(".gcs-file-item.active .gcs-file-play i");
     if (activeIcon) activeIcon.className = "fa-solid fa-pause";
+    
+    const drawerPlayBtn = document.getElementById("btnDrawerPlayAudio");
+    if (drawerPlayBtn && drawerPlayBtn.style.display !== "none") {
+      drawerPlayBtn.innerHTML = '<i class="fa-solid fa-pause"></i>';
+      drawerPlayBtn.title = "Pause recording";
+    }
   });
 
   audio.addEventListener("pause", () => {
     visualizer.classList.remove("playing");
     const activeIcon = document.querySelector(".gcs-file-item.active .gcs-file-play i");
     if (activeIcon) activeIcon.className = "fa-solid fa-play";
+    
+    const drawerPlayBtn = document.getElementById("btnDrawerPlayAudio");
+    if (drawerPlayBtn && drawerPlayBtn.style.display !== "none") {
+      drawerPlayBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
+      drawerPlayBtn.title = "Play recording";
+    }
   });
 
   audio.addEventListener("ended", () => {
     visualizer.classList.remove("playing");
     const activeIcon = document.querySelector(".gcs-file-item.active .gcs-file-play i");
     if (activeIcon) activeIcon.className = "fa-solid fa-play";
+    
+    const drawerPlayBtn = document.getElementById("btnDrawerPlayAudio");
+    if (drawerPlayBtn && drawerPlayBtn.style.display !== "none") {
+      drawerPlayBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
+      drawerPlayBtn.title = "Play recording";
+    }
   });
 }
 
@@ -2532,9 +2575,11 @@ async function triggerBulkCallAnalysisWebhook() {
   const gcsAnalysisErrorBanner = document.getElementById("gcsAnalysisErrorBanner");
   if (gcsAnalysisErrorBanner) gcsAnalysisErrorBanner.style.display = "none";
   
-  // Set all selected files to pending and re-render sidebar immediately
+  // Set all selected files to pending, track start times, and re-render sidebar immediately
+  state.analysisStartTimes = state.analysisStartTimes || {};
   filesToAnalyze.forEach(file => {
     state.ongoingAnalysis[file.name] = "pending";
+    state.analysisStartTimes[file.name] = Date.now();
   });
   renderGCSFileList();
   
@@ -2544,6 +2589,7 @@ async function triggerBulkCallAnalysisWebhook() {
   // Fire webhook requests in parallel
   const promises = filesToAnalyze.map(async (file) => {
     const displayName = file.name.substring(GCS_PREFIX.length);
+    const startFetch = Date.now();
     try {
       const response = await fetch(webhookUrl, {
         method: "POST",
@@ -2610,68 +2656,84 @@ async function triggerBulkCallAnalysisWebhook() {
       }
       
       if (isSuccess) {
-        successful++;
-        state.selectedGcsFiles.delete(file.name);
         state.ongoingAnalysis[file.name] = "success";
+        successful++;
       } else {
         state.ongoingAnalysis[file.name] = "error";
       }
     } catch (err) {
-      console.error("Error triggering analysis for file:", file.name, err);
-      state.ongoingAnalysis[file.name] = "error";
+      const duration = Date.now() - startFetch;
+      // If the fetch took more than 40 seconds before failing/timing out, treat it as a proxy gateway timeout.
+      // We keep it as "pending" so background database polling can resolve it synchronously!
+      if (duration > 40000) {
+        console.warn(`Webhook request for ${file.name} timed out after ${duration}ms. Retaining pending state for polling.`);
+        // Keep status as pending
+      } else {
+        console.error("Error triggering analysis for file:", file.name, err);
+        state.ongoingAnalysis[file.name] = "error";
+      }
     } finally {
       completed++;
       btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Triggering (${completed}/${total})...`;
-      // Update sidebar list items visually as they resolve
       renderGCSFileList();
     }
   });
   
   await Promise.all(promises);
   
-  // Refresh Supabase & GCS tokens/files to reflect database changes synchronously
+  // Refresh Supabase & GCS tokens/files once immediately to reflect any instant webhook completions
   await fetchCallData();
   const freshToken = await getGoogleAccessToken();
   if (freshToken) {
     await loadGCSFiles(freshToken);
   }
   
-  // Validate final states from updated database/GCS records
-  let successfulCount = 0;
-  filesToAnalyze.forEach(file => {
-    const { status: fileStatus } = findMatchedCallForGCSFile(file);
-    const wasHttpSuccess = state.ongoingAnalysis[file.name] === "success";
-    const isAnalyzedOrTranscribed = fileStatus === "analyzed" || fileStatus === "transcribed";
-    
-    if (wasHttpSuccess && isAnalyzedOrTranscribed) {
-      successfulCount++;
-      state.selectedGcsFiles.delete(file.name);
-      delete state.ongoingAnalysis[file.name];
-    } else {
-      state.ongoingAnalysis[file.name] = "error";
+  // Re-enable GCS checkboxes (excluding files that are actively polling)
+  document.querySelectorAll(".gcs-item-checkbox").forEach(cb => {
+    const name = cb.getAttribute("data-name");
+    if (state.ongoingAnalysis[name] !== "pending") {
+      cb.disabled = false;
     }
   });
   
-  // Resolve feedback timing & messaging based on success/failure
-  let timeoutDuration = 3500;
-  if (successfulCount < total) {
-    timeoutDuration = 10000; // Show failure message on button for 10 seconds
-    btn.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Failed ${total - successfulCount}/${total}`;
+  // Start GCS & Supabase polling in background to support 3-minute analysis executions
+  startAnalysisPolling();
+  
+  // Evaluate immediate errors (marked as "error")
+  let immediateErrors = 0;
+  filesToAnalyze.forEach(file => {
+    const ongoing = state.ongoingAnalysis[file.name];
+    const { status: fileStatus } = findMatchedCallForGCSFile(file);
+    const isSuccess = ongoing === "success" || fileStatus === "analyzed" || fileStatus === "transcribed";
+    
+    if (isSuccess) {
+      state.selectedGcsFiles.delete(file.name);
+      delete state.ongoingAnalysis[file.name];
+      if (state.analysisStartTimes) delete state.analysisStartTimes[file.name];
+    } else if (ongoing === "error") {
+      immediateErrors++;
+    }
+  });
+  
+  let timeoutDuration = 2000;
+  if (immediateErrors > 0) {
+    timeoutDuration = 8000; // Show failure message on button for 8 seconds
+    btn.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Failed ${immediateErrors}/${total}`;
     btn.style.background = "var(--color-negative)";
     btn.style.borderColor = "var(--color-negative)";
     
     if (gcsAnalysisErrorBanner) {
       const errorText = document.getElementById("gcsAnalysisErrorText");
       if (errorText) {
-        errorText.textContent = `Analysis failed for ${total - successfulCount} recording(s). Check the red cards below.`;
+        errorText.textContent = `Triggering failed for ${immediateErrors} recording(s). Check the red cards below.`;
       }
       gcsAnalysisErrorBanner.style.display = "flex";
     }
   } else {
-    btn.innerHTML = `<i class="fa-solid fa-circle-check"></i> Triggered ${successfulCount}/${total}`;
+    // If all tasks are successfully polling in background
+    btn.innerHTML = `<i class="fa-solid fa-circle-check"></i> Dispatched ${total} job(s)`;
   }
   
-  // Re-render sidebar elements immediately to show red/green badge outcomes
   renderGCSFileList();
   updateBulkActionUI();
   
@@ -3614,4 +3676,89 @@ async function saveOpenAIKeyToSupabase(key) {
   } catch (err) {
     console.warn("Could not save OpenAI API Key to Supabase:", err);
   }
+}
+
+function startAnalysisPolling() {
+  if (analysisPollingInterval) return;
+
+  analysisPollingInterval = setInterval(async () => {
+    const pendingFiles = Object.keys(state.ongoingAnalysis).filter(
+      name => state.ongoingAnalysis[name] === "pending"
+    );
+
+    if (pendingFiles.length === 0) {
+      clearInterval(analysisPollingInterval);
+      analysisPollingInterval = null;
+      return;
+    }
+
+    try {
+      // 1. Refresh Supabase call data
+      await fetchCallData();
+      
+      // 2. Refresh GCS file list in background
+      const token = await getGoogleAccessToken();
+      if (token) {
+        const [audioItems, transItems, cxTransItems] = await Promise.all([
+          fetchAllGcsObjects(GCS_PREFIX, token),
+          fetchAllGcsObjects("transcripts/", token),
+          fetchAllGcsObjects("cx-transcripts/", token)
+        ]);
+        
+        state.gcsTranscriptObjects = [...transItems, ...cxTransItems];
+        state.gcsTranscriptsMap = {};
+        state.gcsTranscriptObjects.forEach(item => {
+          if (!item.name || !item.name.endsWith(".json")) return;
+          const basename = item.name.split("/").pop();
+          if (basename.includes("_transcript_")) {
+            const parts = basename.split("_transcript_");
+            const audioPrefix = parts[0];
+            const sessionId = parts[1].replace(".json", "");
+            state.gcsTranscriptsMap[audioPrefix] = sessionId;
+            state.gcsTranscriptsMap[audioPrefix.toLowerCase()] = sessionId;
+          }
+        });
+      }
+
+      let hasChanges = false;
+      const now = Date.now();
+
+      pendingFiles.forEach(name => {
+        const fileObj = { name };
+        const { status: fileStatus } = findMatchedCallForGCSFile(fileObj);
+
+        if (fileStatus === "analyzed" || fileStatus === "transcribed") {
+          // Success!
+          delete state.ongoingAnalysis[name];
+          state.selectedGcsFiles.delete(name);
+          if (state.analysisStartTimes) delete state.analysisStartTimes[name];
+          hasChanges = true;
+        } else {
+          // Check for 5-minute timeout
+          const startTime = state.analysisStartTimes?.[name] || now;
+          if (now - startTime > 300000) { // 5 minutes
+            state.ongoingAnalysis[name] = "error";
+            if (state.analysisStartTimes) delete state.analysisStartTimes[name];
+            hasChanges = true;
+
+            const gcsAnalysisErrorBanner = document.getElementById("gcsAnalysisErrorBanner");
+            if (gcsAnalysisErrorBanner) {
+              const errorText = document.getElementById("gcsAnalysisErrorText");
+              if (errorText) {
+                errorText.textContent = "Analysis timed out (exceeded 5 minutes) for some recordings.";
+              }
+              gcsAnalysisErrorBanner.style.display = "flex";
+            }
+          }
+        }
+      });
+
+      if (hasChanges) {
+        renderGCSFileList();
+        updateBulkActionUI();
+      }
+    } catch (err) {
+      console.warn("Error running analysis background status sync:", err);
+    }
+  }, 10000); // Poll every 10 seconds
 }
