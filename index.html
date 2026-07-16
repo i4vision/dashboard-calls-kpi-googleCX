@@ -633,6 +633,23 @@
     </div>
 
     <div class="drawer-body" style="padding: 1rem; overflow-y: auto; display: flex; flex-direction: column; gap: 1.25rem; height: calc(100% - 60px);">
+      <!-- Language Settings Card -->
+      <div class="settings-card" style="padding: 1rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+        <h3 id="settingsLangCardTitle" style="font-size: 0.9rem; font-weight: 600; margin: 0 0 0.5rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.35rem;">
+          <i class="fa-solid fa-language" style="color: var(--accent-secondary);"></i> Language Settings
+        </h3>
+        <p id="settingsLangCardSub" style="font-size: 0.72rem; line-height: 1.4; color: var(--text-secondary); margin: 0 0 1rem;">
+          Choose the display language for the dashboard frontend interface.
+        </p>
+        <div style="margin-bottom: 0.5rem;">
+          <label id="settingsLangCardLabel" class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">INTERFACE LANGUAGE</label>
+          <select id="settingsLangSelect" class="gcs-input" style="width: 100%; height: 32px; padding: 0 0.5rem; font-size: 0.75rem; cursor: pointer; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); outline: none;">
+            <option value="en">English</option>
+            <option value="es">Español</option>
+          </select>
+        </div>
+      </div>
+
       <!-- Agent Name Parser Settings Card -->
       <div class="settings-card" style="padding: 1rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
         <h3 style="font-size: 0.9rem; font-weight: 600; margin: 0 0 0.5rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.35rem;">

@@ -30,8 +30,650 @@ let state = {
   selectedGcsFiles: new Set(),
   gcsTranscriptObjects: [],
   ongoingAnalysis: {},
-  analysisStartTimes: {}
+  analysisStartTimes: {},
+  lang: 'en',
+  predefinedQuestions: [],
+  agentMappings: {}
 };
+
+// ==========================================================================
+// Translation Dictionary & Language Toggle Engine
+// ==========================================================================
+const TRANSLATIONS = {
+  en: {
+    brandName: "i4vision Calls",
+    liveConnected: "Live Supabase Connected",
+    btnExportExcelHeader: '<i class="fa-solid fa-file-excel"></i> Export Excel',
+    btnOpenAudioSidebar: '<i class="fa-solid fa-folder-open"></i> Recordings',
+    btnOpenChat: '<i class="fa-solid fa-comments"></i> Ask AI',
+    btnOpenSettingsTitle: "General Settings",
+    themeToggleTitle: "Toggle Theme",
+    
+    kpiTotalCalls: "Total Calls",
+    kpiAvgScore: "Avg Agent Score",
+    kpiResolution: "Resolution Rate",
+    kpiSilence: "Avg Silence %",
+    kpiCost: "Total Cost",
+    kpiRealTime: '<i class="fa-solid fa-arrow-trend-up"></i> Real-time sync',
+    kpiScale: '<i class="fa-solid fa-star" style="color: var(--color-warning); margin-right: 0.25rem;"></i> Scale 0 to 10',
+    kpiResolvedCalls: "Resolved calls",
+    kpiDeadAir: "Dead-air ratio",
+    kpiAvgCostCall: '<i class="fa-solid fa-coins"></i> Avg cost/call',
+    
+    tabOverview: '<i class="fa-solid fa-chart-pie"></i> Overview Analytics',
+    tabTrends: '<i class="fa-solid fa-chart-line"></i> Temporal Trends',
+    
+    titleSentiment: '<i class="fa-solid fa-face-smile"></i> Sentiment Breakdown',
+    titleCategoryRisk: '<i class="fa-solid fa-triangle-exclamation"></i> Category & Risk Matrix',
+    titleLeaderboard: '<i class="fa-solid fa-ranking-star"></i> Agent Performance Leaderboard',
+    titleAvgScoreCategory: '<i class="fa-solid fa-chart-simple"></i> Average Agent Score by Category',
+    
+    titleTrafficHour: '<i class="fa-solid fa-clock"></i> Traffic by Hour',
+    titleCallsTime: '<i class="fa-solid fa-calendar-day"></i> Calls over Time',
+    titleSentimentTrend: '<i class="fa-solid fa-chart-line"></i> Sentiment Trend',
+    titleResolutionTrend: '<i class="fa-solid fa-square-poll-vertical"></i> Resolution Rate Trend',
+    titleSilenceTrend: '<i class="fa-solid fa-volume-xmark"></i> Average Silence Trend',
+    
+    titleExplorer: '<i class="fa-solid fa-list"></i> Call Records Explorer',
+    resetBtn: '<i class="fa-solid fa-rotate-left"></i> Reset',
+    
+    labelSearch: "Search",
+    labelSearchAudio: "Search Audio File",
+    labelSentiment: "Sentiment",
+    labelRisk: "Risk Level",
+    labelResolution: "Resolution",
+    labelCategory: "Category",
+    labelLength: "Call Length",
+    
+    placeholderSearch: "Search transcripts, audio files, issues, categories...",
+    placeholderSearchAudio: "Search by MP3 name...",
+    
+    optAllSentiments: "All Sentiments",
+    optPositive: "Positive",
+    optNeutral: "Neutral",
+    optNegative: "Negative",
+    optAllRisks: "All Risks",
+    optLow: "Low",
+    optMedium: "Medium",
+    optHigh: "High",
+    optAllStatuses: "All Statuses",
+    optResolved: "Resolved",
+    optUnresolved: "Unresolved",
+    optAllCategories: "All Categories",
+    optAllDurations: "All Durations",
+    optShort: "Short (< 30s)",
+    optMediumDuration: "Medium (30s - 2m)",
+    optLong: "Long (2m - 5m)",
+    optExtended: "Extended (> 5m)",
+    
+    thIdName: "ID & Name",
+    thCategory: "Category",
+    thSentiment: "Sentiment",
+    thRisk: "Risk Level",
+    thResolution: "Resolution",
+    thScore: "Agent Score",
+    thCost: "Cost",
+    thCreatedAt: "Created At",
+    
+    loadingRecords: "Loading call records from Supabase...",
+    noRecordsFound: "No matching records found",
+    tryAdjusting: "Try adjusting your search query or removing filters.",
+    
+    // Details Drawer
+    detailHeaderTitle: "Call Analytics Detail",
+    detailSecPerformance: "Performance & Silence Metrics",
+    detailSecCost: "Cost & Usage Metrics",
+    detailSecSummary: "Executive Summary",
+    detailSecKeyPoints: "Key Points Analyzed",
+    detailSecAction: "Recommended Next Action",
+    detailSecEntities: "Extracted Entities",
+    detailSecTranscript: "Interactive Transcript",
+    
+    detailLabelScore: "Agent Score",
+    detailLabelSilence: "Silence Ratio",
+    detailLabelCost: "Total Cost (USD)",
+    detailLabelAudioDuration: "Audio Duration",
+    detailLabelSTTEngine: "Speech-to-Text (STT) Engine",
+    detailLabelLLMModel: "OpenAI LLM Model",
+    detailLabelAudioFile: "MP3 Audio File",
+    detailLabelSTTTime: "STT Processing Time",
+    detailLabelLLMUsage: "LLM Token Usage",
+    detailLabelBilling: "Billing Status",
+    detailCostBreakdown: '<i class="fa-solid fa-calculator"></i> Cost Breakdown (USD)',
+    detailLabelSummary: "Call Summary",
+    detailLabelIssue: "Customer Issue Identified",
+    
+    // GCS Drawer
+    gcsHeaderTitle: "GCS Call Recordings",
+    gcsSecParams: '<i class="fa-solid fa-sliders" style="color: var(--accent-primary);"></i> Processing Parameters',
+    gcsLabelMinLen: "Min Length (sec)",
+    gcsLabelMaxLen: "Max Length (sec)",
+    gcsLabelEngine: "STT Engine Selection",
+    gcsOptEngineNova: "Chirp-2 (Nova-2 equivalent - Highly Optimized)",
+    gcsOptEngineDefault: "Standard Speech-to-Text (Default model)",
+    gcsOptEngineMedical: "Medical Speech-to-Text (Specialized vocabulary)",
+    gcsLabelBulk: '<i class="fa-solid fa-list-check" style="color: var(--accent-primary);"></i> Bulk Actions & Selection',
+    gcsBtnBulkReset: '<i class="fa-solid fa-rotate-left"></i> Reset Selected Analysis',
+    gcsBtnBulkAnalyze: '<i class="fa-solid fa-wand-magic-sparkles"></i> Analyze Selected',
+    
+    // Ask AI
+    aiHeaderTitle: "AI Analytics Chat",
+    aiNoKeyWarning: 'Please open <strong>Settings <i class="fa-solid fa-gear"></i></strong> above to save your OpenAI API Key before chatting.',
+    aiOpenAIConfigTitle: "OpenAI Connection Config",
+    aiLabelKey: "OPENAI API KEY",
+    aiLabelModel: "LLM MODEL",
+    aiBtnSaveConnect: '<i class="fa-solid fa-floppy-disk"></i> Save & Connect',
+    aiSavedStatus: '<i class="fa-solid fa-circle-check"></i> Connection config saved locally!',
+    aiPredefinedTitle: '<i class="fa-solid fa-list-check" style="color: var(--accent-secondary);"></i> Predefined Questions',
+    aiLabelCustomQ: "Add Custom Question",
+    aiLabelShort: "SHORT LABEL (E.G., Summarize issues)",
+    aiLabelPrompt: "ACTUAL PROMPT TEXT",
+    aiBtnAddQ: '<i class="fa-solid fa-plus"></i> Add Question',
+    aiPlaceholderInput: "Ask a question about the calls...",
+    
+    // General Settings
+    settingsHeaderTitle: "General Settings",
+    settingsLangTitle: '<i class="fa-solid fa-language" style="color: var(--accent-secondary);"></i> Language Settings',
+    settingsLangSub: "Choose the display language for the dashboard frontend interface.",
+    settingsLangLabel: "INTERFACE LANGUAGE",
+    settingsAgentTitle: '<i class="fa-solid fa-users-gear" style="color: var(--accent-secondary);"></i> Agent Name Mapping',
+    settingsAgentSub: "The system extracts the agent identifier from the MP3 filename (e.g. <code>1245</code> from <code>..._1245.mp3</code>). Map these numbers to actual names below.",
+    settingsActiveMappings: "Active Mappings",
+    settingsAddNewMapping: "Add New Mapping",
+    settingsLabelAgentId: "AGENT ID (E.G., 1245)",
+    settingsLabelRealName: "REAL NAME",
+    settingsBtnAddMap: '<i class="fa-solid fa-plus"></i> Add Mapping',
+    settingsBtnSave: '<i class="fa-solid fa-floppy-disk"></i> Save Mappings',
+    settingsSavedStatus: '<i class="fa-solid fa-circle-check"></i> Agent mappings saved successfully!'
+  },
+  es: {
+    brandName: "Llamadas i4vision",
+    liveConnected: "Conectado a Supabase en Vivo",
+    btnExportExcelHeader: '<i class="fa-solid fa-file-excel"></i> Exportar Excel',
+    btnOpenAudioSidebar: '<i class="fa-solid fa-folder-open"></i> Grabaciones',
+    btnOpenChat: '<i class="fa-solid fa-comments"></i> Preguntar a IA',
+    btnOpenSettingsTitle: "Configuración General",
+    themeToggleTitle: "Cambiar Tema",
+    
+    kpiTotalCalls: "Llamadas Totales",
+    kpiAvgScore: "Puntaje Promedio",
+    kpiResolution: "Tasa de Resolución",
+    kpiSilence: "Promedio Silencio %",
+    kpiCost: "Costo Total",
+    kpiRealTime: '<i class="fa-solid fa-arrow-trend-up"></i> Sincronización en vivo',
+    kpiScale: '<i class="fa-solid fa-star" style="color: var(--color-warning); margin-right: 0.25rem;"></i> Escala 0 a 10',
+    kpiResolvedCalls: "Llamadas resueltas",
+    kpiDeadAir: "Proporción de silencio",
+    kpiAvgCostCall: '<i class="fa-solid fa-coins"></i> Costo prom./llamada',
+    
+    tabOverview: '<i class="fa-solid fa-chart-pie"></i> Análisis General',
+    tabTrends: '<i class="fa-solid fa-chart-line"></i> Tendencias Temporales',
+    
+    titleSentiment: '<i class="fa-solid fa-face-smile"></i> Distribución de Sentimiento',
+    titleCategoryRisk: '<i class="fa-solid fa-triangle-exclamation"></i> Matriz de Categoría y Riesgo',
+    titleLeaderboard: '<i class="fa-solid fa-ranking-star"></i> Tabla de Rendimiento de Agentes',
+    titleAvgScoreCategory: '<i class="fa-solid fa-chart-simple"></i> Puntaje Promedio de Agente por Categoría',
+    
+    titleTrafficHour: '<i class="fa-solid fa-clock"></i> Tráfico por Hora',
+    titleCallsTime: '<i class="fa-solid fa-calendar-day"></i> Llamadas en el Tiempo',
+    titleSentimentTrend: '<i class="fa-solid fa-chart-line"></i> Tendencia de Sentimiento',
+    titleResolutionTrend: '<i class="fa-solid fa-square-poll-vertical"></i> Tendencia de Tasa de Resolución',
+    titleSilenceTrend: '<i class="fa-solid fa-volume-xmark"></i> Tendencia de Silencio Promedio',
+    
+    titleExplorer: '<i class="fa-solid fa-list"></i> Explorador de Registro de Llamadas',
+    resetBtn: '<i class="fa-solid fa-rotate-left"></i> Restablecer',
+    
+    labelSearch: "Buscar",
+    labelSearchAudio: "Buscar Archivo de Audio",
+    labelSentiment: "Sentimiento",
+    labelRisk: "Nivel de Riesgo",
+    labelResolution: "Resolución",
+    labelCategory: "Categoría",
+    labelLength: "Duración de Llamada",
+    
+    placeholderSearch: "Buscar transcripciones, audios, problemas, categorías...",
+    placeholderSearchAudio: "Buscar por nombre de MP3...",
+    
+    optAllSentiments: "Todos los Sentimientos",
+    optPositive: "Positivo",
+    optNeutral: "Neutro",
+    optNegative: "Negativo",
+    optAllRisks: "Todos los Riesgos",
+    optLow: "Bajo",
+    optMedium: "Medio",
+    optHigh: "Alto",
+    optAllStatuses: "Todos los Estados",
+    optResolved: "Resuelto",
+    optUnresolved: "No Resuelto",
+    optAllCategories: "Todas las Categorías",
+    optAllDurations: "Todas las Duraciones",
+    optShort: "Corto (< 30s)",
+    optMediumDuration: "Medio (30s - 2m)",
+    optLong: "Largo (2m - 5m)",
+    optExtended: "Extendido (> 5m)",
+    
+    thIdName: "ID y Nombre",
+    thCategory: "Categoría",
+    thSentiment: "Sentimiento",
+    thRisk: "Nivel de Riesgo",
+    thResolution: "Resolución",
+    thScore: "Puntaje Agente",
+    thCost: "Costo",
+    thCreatedAt: "Creado en",
+    
+    loadingRecords: "Cargando registros de llamadas desde Supabase...",
+    noRecordsFound: "No se encontraron registros coincidentes",
+    tryAdjusting: "Intente ajustar su búsqueda o eliminar filtros.",
+    
+    // Details Drawer
+    detailHeaderTitle: "Detalle de Análisis de Llamada",
+    detailSecPerformance: "Métricas de Rendimiento y Silencio",
+    detailSecCost: "Métricas de Costo y Uso",
+    detailSecSummary: "Resumen Ejecutivo",
+    detailSecKeyPoints: "Puntos Clave Analizados",
+    detailSecAction: "Siguiente Acción Recomendada",
+    detailSecEntities: "Entidades Extraídas",
+    detailSecTranscript: "Transcripción Interactiva",
+    
+    detailLabelScore: "Puntaje de Agente",
+    detailLabelSilence: "Proporción de Silencio",
+    detailLabelCost: "Costo Total (USD)",
+    detailLabelAudioDuration: "Duración del Audio",
+    detailLabelSTTEngine: "Motor de Speech-to-Text (STT)",
+    detailLabelLLMModel: "Modelo OpenAI LLM",
+    detailLabelAudioFile: "Archivo de Audio MP3",
+    detailLabelSTTTime: "Tiempo de Procesamiento STT",
+    detailLabelLLMUsage: "Uso de Tokens LLM",
+    detailLabelBilling: "Estado de Facturación",
+    detailCostBreakdown: '<i class="fa-solid fa-calculator"></i> Desglose de Costos (USD)',
+    detailLabelSummary: "Resumen de la Llamada",
+    detailLabelIssue: "Problema del Cliente Identificado",
+    
+    // GCS Drawer
+    gcsHeaderTitle: "Grabaciones de Llamadas en GCS",
+    gcsSecParams: '<i class="fa-solid fa-sliders" style="color: var(--accent-primary);"></i> Parámetros de Procesamiento',
+    gcsLabelMinLen: "Duración Mín. (seg)",
+    gcsLabelMaxLen: "Duración Máx. (seg)",
+    gcsLabelEngine: "Selección del Motor STT",
+    gcsOptEngineNova: "Chirp-2 (equivalente a Nova-2 - Altamente Optimizado)",
+    gcsOptEngineDefault: "Speech-to-Text Estándar (Modelo predeterminado)",
+    gcsOptEngineMedical: "Speech-to-Text Médico (Vocabulario especializado)",
+    gcsLabelBulk: '<i class="fa-solid fa-list-check" style="color: var(--accent-primary);"></i> Acciones por Lote y Selección',
+    gcsBtnBulkReset: '<i class="fa-solid fa-rotate-left"></i> Restablecer Análisis Seleccionados',
+    gcsBtnBulkAnalyze: '<i class="fa-solid fa-wand-magic-sparkles"></i> Analizar Seleccionados',
+    
+    // Ask AI
+    aiHeaderTitle: "Chat de Análisis con IA",
+    aiNoKeyWarning: 'Por favor abra la **Configuración <i class="fa-solid fa-gear"></i>** arriba para guardar su API Key de OpenAI antes de chatear.',
+    aiOpenAIConfigTitle: "Configuración de Conexión OpenAI",
+    aiLabelKey: "API KEY DE OPENAI",
+    aiLabelModel: "MODELO LLM",
+    aiBtnSaveConnect: '<i class="fa-solid fa-floppy-disk"></i> Guardar y Conectar',
+    aiSavedStatus: '<i class="fa-solid fa-circle-check"></i> ¡Configuración de conexión guardada localmente!',
+    aiPredefinedTitle: '<i class="fa-solid fa-list-check" style="color: var(--accent-secondary);"></i> Preguntas Predeterminadas',
+    aiLabelCustomQ: "Agregar Pregunta Personalizada",
+    aiLabelShort: "ETIQUETA CORTA (EJ., Resumir problemas)",
+    aiLabelPrompt: "TEXTO DE PREGUNTA ACTUAL",
+    aiBtnAddQ: '<i class="fa-solid fa-plus"></i> Agregar Pregunta',
+    aiPlaceholderInput: "Haga una pregunta sobre las llamadas...",
+    
+    // General Settings
+    settingsHeaderTitle: "Configuración General",
+    settingsLangTitle: '<i class="fa-solid fa-language" style="color: var(--accent-secondary);"></i> Configuración de Idioma',
+    settingsLangSub: "Seleccione el idioma de visualización de la interfaz del panel.",
+    settingsLangLabel: "IDIOMA DE LA INTERFAZ",
+    settingsAgentTitle: '<i class="fa-solid fa-users-gear" style="color: var(--accent-secondary);"></i> Mapeo de Nombres de Agentes',
+    settingsAgentSub: "El sistema extrae el identificador del agente del archivo MP3 (ej., <code>1245</code> de <code>..._1245.mp3</code>). Mapee estos números a nombres reales a continuación.",
+    settingsActiveMappings: "Mapeos Activos",
+    settingsAddNewMapping: "Agregar Nuevo Mapeo",
+    settingsLabelAgentId: "ID DE AGENTE (EJ., 1245)",
+    settingsLabelRealName: "NOMBRE REAL",
+    settingsBtnAddMap: '<i class="fa-solid fa-plus"></i> Agregar Mapeo',
+    settingsBtnSave: '<i class="fa-solid fa-floppy-disk"></i> Guardar Mapeos',
+    settingsSavedStatus: '<i class="fa-solid fa-circle-check"></i> ¡Mapeos de agentes guardados exitosamente!'
+  }
+};
+
+function updateUILanguage() {
+  const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
+  state.lang = lang;
+  
+  // Set lang attribute on html tag
+  document.documentElement.setAttribute("lang", lang);
+  
+  const dict = TRANSLATIONS[lang] || TRANSLATIONS.en;
+  
+  // 1. Header elements
+  const elBrand = document.querySelector(".brand-name");
+  if (elBrand) elBrand.textContent = dict.brandName;
+  
+  const elSync = document.querySelector(".sync-status span");
+  if (elSync) elSync.textContent = dict.liveConnected;
+  
+  const btnExport = document.getElementById("btnExportExcelHeader");
+  if (btnExport) btnExport.innerHTML = dict.btnExportExcelHeader;
+  
+  const btnOpenAudio = document.getElementById("btnOpenAudioSidebar");
+  if (btnOpenAudio) btnOpenAudio.innerHTML = dict.btnOpenAudioSidebar;
+  
+  const btnOpenChat = document.getElementById("btnOpenChat");
+  if (btnOpenChat) btnOpenChat.innerHTML = dict.btnOpenChat;
+  
+  const btnOpenSettings = document.getElementById("btnOpenSettings");
+  if (btnOpenSettings) btnOpenSettings.setAttribute("title", dict.btnOpenSettingsTitle);
+  
+  const themeToggle = document.getElementById("themeToggle");
+  if (themeToggle) themeToggle.setAttribute("title", dict.themeToggleTitle);
+  
+  // 2. KPI Titles
+  const kpiTitles = document.querySelectorAll(".kpi-title");
+  if (kpiTitles.length >= 5) {
+    kpiTitles[0].textContent = dict.kpiTotalCalls;
+    kpiTitles[1].textContent = dict.kpiAvgScore;
+    kpiTitles[2].textContent = dict.kpiResolution;
+    kpiTitles[3].textContent = dict.kpiSilence;
+    kpiTitles[4].textContent = dict.kpiCost;
+  }
+  
+  // KPI Subtexts
+  const kpiChanges = document.querySelectorAll(".kpi-change");
+  if (kpiChanges.length >= 5) {
+    kpiChanges[0].innerHTML = dict.kpiRealTime;
+    kpiChanges[1].innerHTML = dict.kpiScale;
+    kpiChanges[2].textContent = dict.kpiResolvedCalls;
+    kpiChanges[3].textContent = dict.kpiDeadAir;
+    kpiChanges[4].innerHTML = dict.kpiAvgCostCall;
+  }
+  
+  // 3. Tab Buttons
+  const tabBtns = document.querySelectorAll(".tab-btn");
+  tabBtns.forEach(btn => {
+    const target = btn.getAttribute("data-target");
+    if (target === "overviewCharts") btn.innerHTML = dict.tabOverview;
+    if (target === "trendCharts") btn.innerHTML = dict.tabTrends;
+  });
+  
+  // 4. Chart Headers (need to be careful to select correctly)
+  const chartCards = document.querySelectorAll(".chart-card");
+  chartCards.forEach(card => {
+    const titleEl = card.querySelector(".chart-title");
+    if (!titleEl) return;
+    
+    // We can check what icon/canvas is inside the card
+    const canvas = card.querySelector("canvas");
+    if (!canvas) return;
+    const canvasId = canvas.id;
+    
+    if (canvasId === "chartSentiment") titleEl.innerHTML = dict.titleSentiment;
+    if (canvasId === "chartCategoryRisk") titleEl.innerHTML = dict.titleCategoryRisk;
+    if (canvasId === "chartAgentScore") titleEl.innerHTML = dict.titleLeaderboard;
+    if (canvasId === "chartSilencePerformance") titleEl.innerHTML = dict.titleAvgScoreCategory;
+    
+    if (canvasId === "chartCallsByHour") titleEl.innerHTML = dict.titleTrafficHour;
+    if (canvasId === "chartCallsByDay") titleEl.innerHTML = dict.titleCallsTime;
+    if (canvasId === "chartSentimentTrend") titleEl.innerHTML = dict.titleSentimentTrend;
+    if (canvasId === "chartResolutionTrend") titleEl.innerHTML = dict.titleResolutionTrend;
+    if (canvasId === "chartSilenceTrend") titleEl.innerHTML = dict.titleSilenceTrend;
+  });
+  
+  // Explorer card
+  const explorerCard = document.querySelector(".explorer-card");
+  if (explorerCard) {
+    const titleEl = explorerCard.querySelector(".chart-title");
+    if (titleEl) titleEl.innerHTML = dict.titleExplorer;
+  }
+  
+  const resetBtn = document.getElementById("resetFilters");
+  if (resetBtn) resetBtn.innerHTML = dict.resetBtn;
+  
+  const btnExportTable = document.getElementById("btnExportExcel");
+  if (btnExportTable) btnExportTable.innerHTML = `<i class="fa-solid fa-file-excel"></i> ` + (lang === "es" ? "Exportar Excel" : "Export Excel");
+  
+  // Filter labels
+  const filterGroups = document.querySelectorAll(".filter-strip .filter-group");
+  filterGroups.forEach(fg => {
+    const label = fg.querySelector(".filter-label");
+    if (!label) return;
+    
+    const control = fg.querySelector(".filter-control");
+    if (!control) return;
+    
+    const id = control.id;
+    if (id === "searchBar") {
+      label.textContent = dict.labelSearch;
+      control.setAttribute("placeholder", dict.placeholderSearch);
+    }
+    if (id === "searchAudio") {
+      label.textContent = dict.labelSearchAudio;
+      control.setAttribute("placeholder", dict.placeholderSearchAudio);
+    }
+    if (id === "filterSentiment") {
+      label.textContent = dict.labelSentiment;
+      fg.querySelectorAll("option").forEach(opt => {
+        if (opt.value === "all") opt.textContent = dict.optAllSentiments;
+        if (opt.value === "positive") opt.textContent = dict.optPositive;
+        if (opt.value === "neutral") opt.textContent = dict.optNeutral;
+        if (opt.value === "negative") opt.textContent = dict.optNegative;
+      });
+    }
+    if (id === "filterRisk") {
+      label.textContent = dict.labelRisk;
+      fg.querySelectorAll("option").forEach(opt => {
+        if (opt.value === "all") opt.textContent = dict.optAllRisks;
+        if (opt.value === "low") opt.textContent = dict.optLow;
+        if (opt.value === "medium") opt.textContent = dict.optMedium;
+        if (opt.value === "high") opt.textContent = dict.optHigh;
+      });
+    }
+    if (id === "filterResolution") {
+      label.textContent = dict.labelResolution;
+      fg.querySelectorAll("option").forEach(opt => {
+        if (opt.value === "all") opt.textContent = dict.optAllStatuses;
+        if (opt.value === "resolved") opt.textContent = dict.optResolved;
+        if (opt.value === "unresolved") opt.textContent = dict.optUnresolved;
+      });
+    }
+    if (id === "filterCategory") {
+      label.textContent = dict.labelCategory;
+      const firstOpt = control.querySelector("option[value='all']");
+      if (firstOpt) firstOpt.textContent = dict.optAllCategories;
+    }
+    if (id === "filterDuration") {
+      label.textContent = dict.labelLength;
+      fg.querySelectorAll("option").forEach(opt => {
+        if (opt.value === "all") opt.textContent = dict.optAllDurations;
+        if (opt.value === "0-30") opt.textContent = dict.optShort;
+        if (opt.value === "30-120") opt.textContent = dict.optMediumDuration;
+        if (opt.value === "120-300") opt.textContent = dict.optLong;
+        if (opt.value === "300-999999") opt.textContent = dict.optExtended;
+      });
+    }
+  });
+  
+  // Table headers
+  const tableHeaders = document.querySelectorAll(".call-table th");
+  if (tableHeaders.length >= 8) {
+    tableHeaders[0].textContent = dict.thIdName;
+    tableHeaders[1].textContent = dict.thCategory;
+    tableHeaders[2].textContent = dict.thSentiment;
+    tableHeaders[3].textContent = dict.thRisk;
+    tableHeaders[4].textContent = dict.thResolution;
+    tableHeaders[5].textContent = dict.thScore;
+    tableHeaders[6].textContent = dict.thCost;
+    tableHeaders[7].textContent = dict.thCreatedAt;
+  }
+  
+  // Loader & empty states
+  const tableLoaderMsg = document.querySelector("#tableLoader span");
+  if (tableLoaderMsg) tableLoaderMsg.textContent = dict.loadingRecords;
+  
+  const emptyStateTitle = document.querySelector("#tableEmptyState h3");
+  if (emptyStateTitle) emptyStateTitle.textContent = dict.noRecordsFound;
+  
+  const emptyStateText = document.querySelector("#tableEmptyState p");
+  if (emptyStateText) emptyStateText.textContent = dict.tryAdjusting;
+  
+  // 5. Details Drawer
+  const detailTitle = document.querySelector("#callDrawer .drawer-title");
+  if (detailTitle) detailTitle.textContent = dict.detailHeaderTitle;
+  
+  const detailSecTitles = document.querySelectorAll("#callDrawer .drawer-section-title");
+  if (detailSecTitles.length >= 7) {
+    detailSecTitles[0].textContent = dict.detailSecPerformance;
+    detailSecTitles[1].textContent = dict.detailSecCost;
+    detailSecTitles[2].textContent = dict.detailSecSummary;
+    detailSecTitles[3].textContent = dict.detailSecKeyPoints;
+    detailSecTitles[4].textContent = dict.detailSecAction;
+    detailSecTitles[5].textContent = dict.detailSecEntities;
+    detailSecTitles[6].textContent = dict.detailSecTranscript;
+  }
+  
+  const detailLabels = document.querySelectorAll("#callDrawer .details-item-label");
+  detailLabels.forEach(lbl => {
+    const text = lbl.textContent.trim();
+    if (text.startsWith("Agent Score") || text.startsWith("Puntaje de Agente")) lbl.textContent = dict.detailLabelScore;
+    if (text.startsWith("Silence Ratio") || text.startsWith("Proporción de Silencio")) lbl.textContent = dict.detailLabelSilence;
+    if (text.startsWith("Total Cost") || text.startsWith("Costo Total")) lbl.textContent = dict.detailLabelCost;
+    if (text.startsWith("Audio Duration") || text.startsWith("Duración del Audio")) lbl.textContent = dict.detailLabelAudioDuration;
+    if (text.startsWith("Speech-to-Text") || text.startsWith("Motor de Speech-to-Text")) lbl.textContent = dict.detailLabelSTTEngine;
+    if (text.startsWith("OpenAI LLM") || text.startsWith("Modelo OpenAI LLM")) lbl.textContent = dict.detailLabelLLMModel;
+    if (text.startsWith("MP3 Audio") || text.startsWith("Archivo de Audio")) lbl.textContent = dict.detailLabelAudioFile;
+    if (text.startsWith("STT Processing") || text.startsWith("Tiempo de Procesamiento")) lbl.textContent = dict.detailLabelSTTTime;
+    if (text.startsWith("LLM Token") || text.startsWith("Uso de Tokens")) lbl.textContent = dict.detailLabelLLMUsage;
+    if (text.startsWith("Billing Status") || text.startsWith("Estado de Facturación")) lbl.textContent = dict.detailLabelBilling;
+  });
+  
+  const costBreakdownTitle = document.querySelector(".cost-breakdown-title");
+  if (costBreakdownTitle) costBreakdownTitle.innerHTML = dict.detailCostBreakdown;
+  
+  const costRows = document.querySelectorAll(".cost-breakdown-row span:first-child");
+  costRows.forEach(span => {
+    const text = span.textContent.trim();
+    if (text.startsWith("CX Insights") || text.startsWith("CX Insights")) span.textContent = (lang === "es" ? "Análisis de CX Insights:" : "CX Insights Analysis:");
+    if (text.startsWith("Storage Cost") || text.startsWith("Costo de Almacenamiento")) span.textContent = (lang === "es" ? "Costo de Almacenamiento:" : "Storage Cost:");
+    if (text.startsWith("Speech-to-Text") || text.startsWith("Speech-to-Text")) span.textContent = "Speech-to-Text (STT):";
+    if (text.startsWith("OpenAI API") || text.startsWith("OpenAI API")) span.textContent = "OpenAI API (LLM):";
+  });
+  
+  const costTotalLabel = document.querySelector(".cost-breakdown-total span:first-child");
+  if (costTotalLabel) costTotalLabel.textContent = (lang === "es" ? "Costo Total de Procesamiento:" : "Total Processing Cost:");
+  
+  const summaryLabel = document.querySelector("#callDrawer .drawer-section:nth-of-type(3) .details-item:first-child .details-item-label");
+  if (summaryLabel) summaryLabel.textContent = dict.detailLabelSummary;
+  const issueLabel = document.querySelector("#callDrawer .drawer-section:nth-of-type(3) .details-item:last-child .details-item-label");
+  if (issueLabel) issueLabel.textContent = dict.detailLabelIssue;
+  
+  // 6. GCS Drawer
+  const gcsTitle = document.querySelector("#audioSidebar .drawer-title");
+  if (gcsTitle) gcsTitle.textContent = dict.gcsHeaderTitle;
+  
+  const gcsParamsTitle = document.getElementById("gcsParametersCard");
+  if (gcsParamsTitle) {
+    const tEl = gcsParamsTitle.querySelector("div");
+    if (tEl) tEl.innerHTML = dict.gcsSecParams;
+  }
+  
+  const gcsInputs = document.querySelectorAll("#audioSidebar .gcs-input-label");
+  gcsInputs.forEach(lbl => {
+    const text = lbl.textContent.trim();
+    if (text.startsWith("Min Length") || text.startsWith("Duración Mín")) lbl.textContent = dict.gcsLabelMinLen;
+    if (text.startsWith("Max Length") || text.startsWith("Duración Máx")) lbl.textContent = dict.gcsLabelMaxLen;
+    if (text.startsWith("STT Engine") || text.startsWith("Selección del Motor")) lbl.textContent = dict.gcsLabelEngine;
+  });
+  
+  const engineSelect = document.getElementById("paramSTTEngine");
+  if (engineSelect) {
+    engineSelect.querySelectorAll("option").forEach(opt => {
+      if (opt.value === "nova-2") opt.textContent = dict.gcsOptEngineNova;
+      if (opt.value === "default") opt.textContent = dict.gcsOptEngineDefault;
+      if (opt.value === "medical") opt.textContent = dict.gcsOptEngineMedical;
+    });
+  }
+  
+  const bulkActionsTitle = document.querySelector("#gcsExplorer > div:nth-child(2) div:first-child");
+  if (bulkActionsTitle) bulkActionsTitle.innerHTML = dict.gcsLabelBulk;
+  
+  const bulkResetBtn = document.getElementById("btnBulkResetRecordings");
+  if (bulkResetBtn) bulkResetBtn.innerHTML = dict.gcsBtnBulkReset;
+  
+  const bulkAnalyzeBtn = document.getElementById("btnBulkCallAnalysis");
+  if (bulkAnalyzeBtn) bulkAnalyzeBtn.innerHTML = dict.gcsBtnBulkAnalyze;
+  
+  // 7. Ask AI Drawer
+  const aiTitle = document.querySelector("#chatDrawer .drawer-title");
+  if (aiTitle) aiTitle.textContent = dict.aiHeaderTitle;
+  
+  const aiConfigTitle = document.querySelector("#chatConfigSection div:first-child");
+  if (aiConfigTitle) aiConfigTitle.textContent = dict.aiOpenAIConfigTitle;
+  
+  const aiLabels = document.querySelectorAll("#chatConfigSection label");
+  if (aiLabels.length >= 4) {
+    aiLabels[0].textContent = dict.aiLabelKey;
+    aiLabels[1].textContent = dict.aiLabelModel;
+    aiLabels[2].textContent = dict.aiLabelShort;
+    aiLabels[3].textContent = dict.aiLabelPrompt;
+  }
+  
+  const saveChatConfigBtn = document.getElementById("btnSaveChatConfig");
+  if (saveChatConfigBtn) saveChatConfigBtn.innerHTML = dict.aiBtnSaveConnect;
+  
+  const chatConfigSaveStatus = document.getElementById("chatConfigSaveStatus");
+  if (chatConfigSaveStatus) chatConfigSaveStatus.innerHTML = dict.aiSavedStatus;
+  
+  const predefinedTitle = document.querySelector("#chatConfigSection div[style*='dashed'] div:first-child");
+  if (predefinedTitle) predefinedTitle.innerHTML = dict.aiPredefinedTitle;
+  
+  const addQuestionTitle = document.querySelector("#chatConfigSection div[style*='dashed'] div[style*='dashed'] div:first-child");
+  if (addQuestionTitle) addQuestionTitle.textContent = dict.aiLabelCustomQ;
+  
+  const addQuestionBtn = document.getElementById("btnChatAddQuestion");
+  if (addQuestionBtn) addQuestionBtn.innerHTML = dict.aiBtnAddQ;
+  
+  const chatInput = document.getElementById("chatInput");
+  if (chatInput) chatInput.setAttribute("placeholder", dict.aiPlaceholderInput);
+  
+  // 8. General Settings Drawer
+  const settingsTitle = document.querySelector("#settingsDrawer .drawer-title");
+  if (settingsTitle) settingsTitle.textContent = dict.settingsHeaderTitle;
+  
+  const settingsLangTitleEl = document.getElementById("settingsLangCardTitle");
+  if (settingsLangTitleEl) settingsLangTitleEl.innerHTML = dict.settingsLangTitle;
+  
+  const settingsLangSubEl = document.getElementById("settingsLangCardSub");
+  if (settingsLangSubEl) settingsLangSubEl.textContent = dict.settingsLangSub;
+  
+  const settingsLangLabelEl = document.getElementById("settingsLangCardLabel");
+  if (settingsLangLabelEl) settingsLangLabelEl.textContent = dict.settingsLangLabel;
+  
+  const settingsAgentTitleEl = document.querySelector("#settingsDrawer .settings-card:last-child h3");
+  if (settingsAgentTitleEl) settingsAgentTitleEl.innerHTML = dict.settingsAgentTitle;
+  
+  const settingsAgentSubEl = document.querySelector("#settingsDrawer .settings-card:last-child p");
+  if (settingsAgentSubEl) settingsAgentSubEl.innerHTML = dict.settingsAgentSub;
+  
+  const settingsActiveMappingsEl = document.querySelector("#settingsDrawer .settings-card:last-child div div");
+  if (settingsActiveMappingsEl) settingsActiveMappingsEl.textContent = dict.settingsActiveMappings;
+  
+  const settingsAddNewMappingEl = document.querySelector("#settingsDrawer .settings-card:last-child div[style*='dashed'] div");
+  if (settingsAddNewMappingEl) settingsAddNewMappingEl.textContent = dict.settingsAddNewMapping;
+  
+  const settingsLabels = document.querySelectorAll("#settingsDrawer .settings-card:last-child label");
+  if (settingsLabels.length >= 2) {
+    settingsLabels[0].textContent = dict.settingsLabelAgentId;
+    settingsLabels[1].textContent = dict.settingsLabelRealName;
+  }
+  
+  const addAgentMapBtn = document.getElementById("btnAddAgentMapping");
+  if (addAgentMapBtn) addAgentMapBtn.innerHTML = dict.settingsBtnAddMap;
+  
+  const saveGeneralSettingsBtn = document.getElementById("btnSaveGeneralSettings");
+  if (saveGeneralSettingsBtn) saveGeneralSettingsBtn.innerHTML = dict.settingsBtnSave;
+  
+  const saveGeneralSettingsStatus = document.getElementById("generalSettingsSaveStatus");
+  if (saveGeneralSettingsStatus) saveGeneralSettingsStatus.innerHTML = dict.settingsSavedStatus;
+}
+
+// Redundant state declaration removed
 
 let analysisPollingInterval = null;
 
@@ -60,6 +702,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   } else {
     state.predefinedQuestions = getDefaultPredefinedQuestions();
   }
+
+  // Load local language selection and update UI language
+  state.lang = localStorage.getItem("gcs_lang") || "en";
+  updateUILanguage();
 
   initTheme();
   setupTabNavigation();
@@ -607,7 +1253,12 @@ function renderTable() {
   const emptyState = document.getElementById("tableEmptyState");
   
   tbody.innerHTML = "";
-  countSpan.textContent = `Showing ${state.filteredCalls.length} calls`;
+  const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
+  if (lang === "es") {
+    countSpan.textContent = `Mostrando ${state.filteredCalls.length} llamadas`;
+  } else {
+    countSpan.textContent = `Showing ${state.filteredCalls.length} calls`;
+  }
 
   if (state.filteredCalls.length === 0) {
     emptyState.style.display = "flex";
@@ -687,22 +1338,41 @@ function openDrawer(call) {
   const backdrop = document.getElementById("drawerBackdrop");
   
   // Set Text Contents (Agent name and Call ID)
+  const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
   const assignedAgent = getAgentName(call);
-  document.getElementById("drawerConversationName").innerHTML = `Agent: ${assignedAgent} <span style="display: block; font-size: 0.75rem; opacity: 0.6; font-family: var(--font-mono); font-weight: normal; margin-top: 0.25rem;">Call ID: ${call.conversation_name}</span>`;
+  const agentLabel = lang === "es" ? "Agente" : "Agent";
+  document.getElementById("drawerConversationName").innerHTML = `${agentLabel}: ${assignedAgent} <span style="display: block; font-size: 0.75rem; opacity: 0.6; font-family: var(--font-mono); font-weight: normal; margin-top: 0.25rem;">Call ID: ${call.conversation_name}</span>`;
   document.getElementById("drawerConversationName").title = call.conversation_name;
   
   // Set Badges
   const sentiment = document.getElementById("drawerSentiment");
   sentiment.className = `badge badge-sentiment-${call.sentiment.toLowerCase()}`;
-  sentiment.textContent = call.sentiment;
+  let sentimentText = call.sentiment;
+  if (lang === "es") {
+    if (call.sentiment.toLowerCase() === "positive") sentimentText = "Positivo";
+    else if (call.sentiment.toLowerCase() === "neutral") sentimentText = "Neutro";
+    else if (call.sentiment.toLowerCase() === "negative") sentimentText = "Negativo";
+  }
+  sentiment.textContent = sentimentText;
 
   const risk = document.getElementById("drawerRisk");
   risk.className = `badge badge-risk-${call.risk_level.toLowerCase()}`;
-  risk.textContent = `${call.risk_level} Risk`;
+  let riskText = call.risk_level;
+  if (lang === "es") {
+    if (call.risk_level.toLowerCase() === "low") riskText = "Bajo";
+    else if (call.risk_level.toLowerCase() === "medium") riskText = "Medio";
+    else if (call.risk_level.toLowerCase() === "high") riskText = "Alto";
+  }
+  risk.textContent = lang === "es" ? `Riesgo ${riskText}` : `${riskText} Risk`;
 
   const resolution = document.getElementById("drawerResolution");
   resolution.className = `badge badge-status-${call.resolution_status.toLowerCase()}`;
-  resolution.textContent = call.resolution_status;
+  let resolutionText = call.resolution_status;
+  if (lang === "es") {
+    if (call.resolution_status.toLowerCase() === "resolved") resolutionText = "Resuelto";
+    else if (call.resolution_status.toLowerCase() === "unresolved") resolutionText = "No Resuelto";
+  }
+  resolution.textContent = resolutionText;
 
   const category = document.getElementById("drawerCategory");
   const parentCat = getParentCategory(call.category);
@@ -791,7 +1461,10 @@ function openDrawer(call) {
     hour: '2-digit',
     minute: '2-digit'
   }) : "N/A";
-  document.getElementById("drawerBillingStatus").textContent = `${isEstimated ? 'Estimated' : 'Final'} (${calcAt})`;
+  const billingLabel = isEstimated 
+    ? (lang === "es" ? "Estimada" : "Estimated") 
+    : (lang === "es" ? "Final" : "Final");
+  document.getElementById("drawerBillingStatus").textContent = `${billingLabel} (${calcAt})`;
 
   // Itemized costs
   const sttCost = Number(call.stt_cost_usd);
@@ -805,19 +1478,21 @@ function openDrawer(call) {
   document.getElementById("drawerStorageCost").textContent = !isNaN(storageCost) ? `$${storageCost.toFixed(5)}` : "$0.00000";
 
   // Summary & Issue
-  document.getElementById("drawerSummary").textContent = call.summary || "No summary provided.";
-  document.getElementById("drawerCustomerIssue").textContent = call.customer_issue || "No customer issue reported.";
+  document.getElementById("drawerSummary").textContent = call.summary || (lang === "es" ? "No se proporcionó resumen." : "No summary provided.");
+  document.getElementById("drawerCustomerIssue").textContent = call.customer_issue || (lang === "es" ? "No se reportaron problemas del cliente." : "No customer issue reported.");
 
   // Next Actions
   const nextActionBox = document.getElementById("drawerNextAction");
   if (call.next_action) {
     nextActionBox.style.display = "block";
+    const nextStepLabel = lang === "es" ? "Siguiente Paso" : "Next Step";
+    const followUpLabel = lang === "es" ? "Seguimiento Directo Requerido" : "Direct Follow-up Required";
     nextActionBox.innerHTML = `
       <div style="font-weight: 700; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.35rem; color: var(--color-warning)">
-        <i class="fa-solid fa-arrow-right"></i> Next Step
+        <i class="fa-solid fa-arrow-right"></i> ${nextStepLabel}
       </div>
       <div>${call.next_action}</div>
-      ${call.follow_up_required ? '<div style="margin-top: 0.5rem; font-size: 0.75rem; font-weight: 600; color: var(--color-negative)"><i class="fa-solid fa-flag"></i> Direct Follow-up Required</div>' : ''}
+      ${call.follow_up_required ? `<div style="margin-top: 0.5rem; font-size: 0.75rem; font-weight: 600; color: var(--color-negative)"><i class="fa-solid fa-flag"></i> ${followUpLabel}</div>` : ''}
     `;
   } else {
     nextActionBox.style.display = "none";
@@ -3253,6 +3928,12 @@ function setupSettingsDrawer() {
     backdrop.classList.add("active");
     drawer.setAttribute("aria-hidden", "false");
     
+    // Set language selector value to active state
+    const langSelect = document.getElementById("settingsLangSelect");
+    if (langSelect) {
+      langSelect.value = state.lang || "en";
+    }
+
     // Load active mappings from state on open
     const localMappings = localStorage.getItem("gcs_agent_mappings");
     if (localMappings) {
@@ -3352,6 +4033,16 @@ function setupSettingsDrawer() {
   // Bind Save Mapping button
   if (saveBtn) {
     saveBtn.addEventListener("click", async () => {
+      // 1. Process and save Language Selection
+      const langSelect = document.getElementById("settingsLangSelect");
+      if (langSelect) {
+        const selectedLang = langSelect.value;
+        localStorage.setItem("gcs_lang", selectedLang);
+        state.lang = selectedLang;
+        updateUILanguage();
+      }
+
+      // 2. Process and save Agent Mappings
       const mappingsStr = JSON.stringify(state.agentMappings || {});
       localStorage.setItem("gcs_agent_mappings", mappingsStr);
 
