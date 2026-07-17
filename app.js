@@ -2122,6 +2122,7 @@ async function syncGCSSettingsWithSupabase() {
       const data = await response.json();
       state.supabaseSettingsEnabled = true;
       
+      let settings = {};
       if (data.length === 0) {
         // Create initial settings row
         await fetch(`${SUPABASE_URL}/rest/v1/dashboard_settings`, {
@@ -2133,86 +2134,76 @@ async function syncGCSSettingsWithSupabase() {
           },
           body: JSON.stringify({ id: 1 })
         });
-        return;
-      }
-      
-      const settings = data[0];
-      
-      if (settings.gcs_service_account) {
-        localStorage.setItem("gcs_service_account", settings.gcs_service_account);
       } else {
-        localStorage.removeItem("gcs_service_account");
-      }
-      
-      if (settings.gcs_access_token) {
-        localStorage.setItem("gcs_access_token", settings.gcs_access_token);
-      } else {
-        localStorage.removeItem("gcs_access_token");
-      }
-      
-      if (settings.gcs_token_expiry) {
-        localStorage.setItem("gcs_token_expiry", settings.gcs_token_expiry);
-      } else {
-        localStorage.removeItem("gcs_token_expiry");
-      }
-      
-      if (settings.gcs_manual_token_flag) {
-        localStorage.setItem("gcs_manual_token_flag", settings.gcs_manual_token_flag);
-      } else {
-        localStorage.removeItem("gcs_manual_token_flag");
+        settings = data[0];
       }
 
-      if (settings.min_call_length !== null && settings.min_call_length !== undefined) {
-        localStorage.setItem("gcs_min_call_length", String(settings.min_call_length));
-      } else {
-        localStorage.removeItem("gcs_min_call_length");
-      }
+      const keysToSync = [
+        { localKey: "gcs_service_account", dbCol: "gcs_service_account" },
+        { localKey: "gcs_access_token", dbCol: "gcs_access_token" },
+        { localKey: "gcs_token_expiry", dbCol: "gcs_token_expiry" },
+        { localKey: "gcs_manual_token_flag", dbCol: "gcs_manual_token_flag" },
+        { localKey: "gcs_min_call_length", dbCol: "min_call_length" },
+        { localKey: "gcs_max_call_length", dbCol: "max_call_length" },
+        { localKey: "gcs_agent_mappings", dbCol: "agent_mappings" },
+        { localKey: "gcs_predefined_questions", dbCol: "predefined_questions" }
+      ];
 
-      if (settings.max_call_length !== null && settings.max_call_length !== undefined) {
-        localStorage.setItem("gcs_max_call_length", String(settings.max_call_length));
-      } else {
-        localStorage.removeItem("gcs_max_call_length");
-      }
-      
-      if (settings.agent_mappings) {
-        localStorage.setItem("gcs_agent_mappings", settings.agent_mappings);
+      const updatesToSend = {};
+      let needsUpload = false;
+
+      keysToSync.forEach(k => {
+        const dbVal = settings[k.dbCol];
+        const localVal = localStorage.getItem(k.localKey);
+
+        if (dbVal !== null && dbVal !== undefined && dbVal !== "") {
+          // Database has it, write to local storage
+          localStorage.setItem(k.localKey, String(dbVal));
+        } else if (localVal !== null && localVal !== undefined && localVal !== "") {
+          // Database is missing it, but local storage has it: queue upload to database to self-heal
+          updatesToSend[k.dbCol] = localVal;
+          needsUpload = true;
+        }
+      });
+
+      // Self-heal the database row with local credentials if database is empty/cleared
+      if (needsUpload) {
         try {
-          state.agentMappings = JSON.parse(settings.agent_mappings);
+          await fetch(`${SUPABASE_URL}/rest/v1/dashboard_settings?id=eq.1`, {
+            method: "PATCH",
+            headers: {
+              "apikey": SUPABASE_ANON_KEY,
+              "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(updatesToSend)
+          });
+        } catch (e) {
+          console.warn("Could not self-heal Supabase settings row:", e);
+        }
+      }
+
+      // Populate local state
+      const mappingsRaw = localStorage.getItem("gcs_agent_mappings");
+      if (mappingsRaw) {
+        try {
+          state.agentMappings = JSON.parse(mappingsRaw);
         } catch (e) {
           state.agentMappings = {};
         }
       } else {
-        // Fallback to local storage if not in database
-        const local = localStorage.getItem("gcs_agent_mappings");
-        if (local) {
-          try {
-            state.agentMappings = JSON.parse(local);
-          } catch (e) {
-            state.agentMappings = {};
-          }
-        } else {
-          state.agentMappings = {};
-        }
+        state.agentMappings = {};
       }
 
-      if (settings.predefined_questions) {
-        localStorage.setItem("gcs_predefined_questions", settings.predefined_questions);
+      const predefinedRaw = localStorage.getItem("gcs_predefined_questions");
+      if (predefinedRaw) {
         try {
-          state.predefinedQuestions = JSON.parse(settings.predefined_questions);
+          state.predefinedQuestions = JSON.parse(predefinedRaw);
         } catch (e) {
           state.predefinedQuestions = getDefaultPredefinedQuestions();
         }
       } else {
-        const local = localStorage.getItem("gcs_predefined_questions");
-        if (local) {
-          try {
-            state.predefinedQuestions = JSON.parse(local);
-          } catch (e) {
-            state.predefinedQuestions = getDefaultPredefinedQuestions();
-          }
-        } else {
-          state.predefinedQuestions = getDefaultPredefinedQuestions();
-        }
+        state.predefinedQuestions = getDefaultPredefinedQuestions();
       }
     } else {
       state.supabaseSettingsEnabled = false;
