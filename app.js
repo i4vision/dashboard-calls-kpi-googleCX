@@ -1410,10 +1410,17 @@ function openDrawer(call) {
   document.getElementById("drawerAudioFileName").textContent = call.audio_file_name || "N/A";
   
   const btnDrawerPlayAudio = document.getElementById("btnDrawerPlayAudio");
+  const scrubberContainer = document.getElementById("drawerAudioScrubberContainer");
+  const scrubber = document.getElementById("drawerAudioScrubber");
+  const currentTimeText = document.getElementById("drawerAudioCurrentTime");
+  const durationTimeText = document.getElementById("drawerAudioDurationTime");
+  const audioEl = document.getElementById("gcsAudioElement");
+
   if (btnDrawerPlayAudio) {
     if (call.audio_file_name) {
       btnDrawerPlayAudio.style.display = "inline-flex";
-      
+      if (scrubberContainer) scrubberContainer.style.display = "flex";
+
       // Clone button to strip old event listeners
       const newBtn = btnDrawerPlayAudio.cloneNode(true);
       btnDrawerPlayAudio.parentNode.replaceChild(newBtn, btnDrawerPlayAudio);
@@ -1422,12 +1429,31 @@ function openDrawer(call) {
         playGCSAudio({ name: GCS_PREFIX + call.audio_file_name });
       });
       
-      const audioEl = document.getElementById("gcsAudioElement");
       const isPlaying = audioEl.src && audioEl.src.includes(encodeURIComponent(GCS_PREFIX + call.audio_file_name)) && !audioEl.paused;
       newBtn.innerHTML = `<i class="fa-solid ${isPlaying ? 'fa-pause' : 'fa-play'}"></i>`;
       newBtn.title = isPlaying ? "Pause recording" : "Play recording";
+
+      // Initialize scrubber state
+      const isCurrentAudio = audioEl.src && audioEl.src.includes(encodeURIComponent(GCS_PREFIX + call.audio_file_name));
+      if (isCurrentAudio) {
+        if (currentTimeText) currentTimeText.textContent = formatAudioTime(audioEl.currentTime);
+        if (durationTimeText) durationTimeText.textContent = formatAudioTime(audioEl.duration || 0);
+        if (scrubber) {
+          scrubber.max = Math.floor(audioEl.duration || 0);
+          scrubber.value = Math.floor(audioEl.currentTime);
+        }
+      } else {
+        if (currentTimeText) currentTimeText.textContent = "0:00";
+        const durationSec = Number(call.audio_duration_seconds) || 0;
+        if (durationTimeText) durationTimeText.textContent = formatAudioTime(durationSec);
+        if (scrubber) {
+          scrubber.max = Math.floor(durationSec);
+          scrubber.value = 0;
+        }
+      }
     } else {
       btnDrawerPlayAudio.style.display = "none";
+      if (scrubberContainer) scrubberContainer.style.display = "none";
     }
   }
 
@@ -1640,6 +1666,13 @@ function appendBubble(container, speaker, text, isCustomer) {
 // ==========================================================================
 // Formatting Helpers
 // ==========================================================================
+function formatAudioTime(seconds) {
+  if (isNaN(seconds) || seconds === Infinity) return "0:00";
+  const minutes = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
+}
+
 function formatString(str) {
   if (!str) return "";
   return str
@@ -2641,7 +2674,46 @@ function setupGCSEventListeners() {
       drawerPlayBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
       drawerPlayBtn.title = "Play recording";
     }
+    
+    // Reset scrubber on end
+    const scrubber = document.getElementById("drawerAudioScrubber");
+    const currentTimeText = document.getElementById("drawerAudioCurrentTime");
+    if (scrubber) scrubber.value = 0;
+    if (currentTimeText) currentTimeText.textContent = "0:00";
   });
+
+  // Track playback progress inside Details Drawer scrubber bar
+  audio.addEventListener("timeupdate", () => {
+    const scrubberContainer = document.getElementById("drawerAudioScrubberContainer");
+    const scrubber = document.getElementById("drawerAudioScrubber");
+    const currentTimeText = document.getElementById("drawerAudioCurrentTime");
+    const durationTimeText = document.getElementById("drawerAudioDurationTime");
+    
+    if (scrubberContainer && scrubberContainer.style.display !== "none") {
+      const curTime = audio.currentTime;
+      const duration = audio.duration || 0;
+      
+      if (currentTimeText) currentTimeText.textContent = formatAudioTime(curTime);
+      if (durationTimeText && duration > 0) durationTimeText.textContent = formatAudioTime(duration);
+      
+      if (scrubber && duration > 0) {
+        scrubber.max = Math.floor(duration);
+        scrubber.value = Math.floor(curTime);
+      }
+    }
+  });
+
+  // Seek audio when dragging scrubber range input
+  const scrubber = document.getElementById("drawerAudioScrubber");
+  if (scrubber) {
+    scrubber.addEventListener("input", () => {
+      audio.currentTime = scrubber.value;
+      const currentTimeText = document.getElementById("drawerAudioCurrentTime");
+      if (currentTimeText) {
+        currentTimeText.textContent = formatAudioTime(scrubber.value);
+      }
+    });
+  }
 }
 
 async function renderGCSAuth() {

@@ -397,6 +397,12 @@
                 <i class="fa-solid fa-play"></i>
               </button>
             </div>
+            <!-- Interactive Scrubber Bar -->
+            <div id="drawerAudioScrubberContainer" style="display: none; align-items: center; gap: 0.5rem; margin-top: 0.5rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 0.4rem 0.6rem; border-radius: var(--radius-sm); width: 100%;">
+              <span id="drawerAudioCurrentTime" style="font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-secondary); min-width: 32px;">0:00</span>
+              <input type="range" id="drawerAudioScrubber" min="0" max="100" value="0" style="flex: 1; height: 4px; cursor: pointer; accent-color: var(--accent-primary); outline: none;">
+              <span id="drawerAudioDurationTime" style="font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-secondary); min-width: 32px; text-align: right;">0:00</span>
+            </div>
           </div>
           <div class="details-item" style="grid-column: span 2;">
             <span class="details-item-label">STT Processing Time</span>
