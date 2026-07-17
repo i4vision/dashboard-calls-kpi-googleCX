@@ -1457,6 +1457,23 @@ function openDrawer(call) {
     }
   }
 
+  const btnDrawerDownloadAudio = document.getElementById("btnDrawerDownloadAudio");
+  if (btnDrawerDownloadAudio) {
+    if (call.audio_file_name) {
+      btnDrawerDownloadAudio.style.display = "inline-flex";
+      
+      // Clone button to strip old event listeners
+      const newDlBtn = btnDrawerDownloadAudio.cloneNode(true);
+      btnDrawerDownloadAudio.parentNode.replaceChild(newDlBtn, btnDrawerDownloadAudio);
+      
+      newDlBtn.addEventListener("click", () => {
+        downloadGCSFile({ name: GCS_PREFIX + call.audio_file_name });
+      });
+    } else {
+      btnDrawerDownloadAudio.style.display = "none";
+    }
+  }
+
   const sttProcSec = Number(call.stt_processing_seconds);
   if (!isNaN(sttProcSec) && call.stt_processing_seconds !== null && call.stt_processing_seconds !== undefined) {
     document.getElementById("drawerSTTProcessingSeconds").textContent = `${sttProcSec.toFixed(1)}s`;
@@ -3336,10 +3353,19 @@ async function downloadGCSFile(file) {
   
   // Find download button inside DOM to update its icon to spinner
   const dlBtn = document.querySelector(`.gcs-file-item[data-name="${CSS.escape(file.name)}"] .gcs-download-recording-btn`);
+  const drawerDlBtn = document.getElementById("btnDrawerDownloadAudio");
+  const isDrawerBtnActive = drawerDlBtn && drawerDlBtn.style.display !== "none" && file.name.endsWith(document.getElementById("drawerAudioFileName").textContent);
+
   const originalHtml = dlBtn ? dlBtn.innerHTML : "";
+  const originalDrawerHtml = drawerDlBtn ? drawerDlBtn.innerHTML : "";
+
   if (dlBtn) {
     dlBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${state.lang === 'es' ? 'Descargando' : 'Downloading'}`;
     dlBtn.disabled = true;
+  }
+  if (isDrawerBtnActive) {
+    drawerDlBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i>`;
+    drawerDlBtn.disabled = true;
   }
 
   try {
@@ -3361,6 +3387,10 @@ async function downloadGCSFile(file) {
     if (dlBtn) {
       dlBtn.innerHTML = originalHtml;
       dlBtn.disabled = false;
+    }
+    if (drawerDlBtn) {
+      drawerDlBtn.innerHTML = originalDrawerHtml;
+      drawerDlBtn.disabled = false;
     }
   }
 }
