@@ -127,7 +127,7 @@ const TRANSLATIONS = {
     detailSecKeyPoints: "Key Points Analyzed",
     detailSecAction: "Recommended Next Action",
     detailSecEntities: "Extracted Entities",
-    detailSecTranscript: "Interactive Transcript",
+    detailSecTranscript: "Call Transcript",
     
     detailLabelScore: "Agent Score",
     detailLabelSilence: "Silence Ratio",
@@ -273,7 +273,7 @@ const TRANSLATIONS = {
     detailSecKeyPoints: "Puntos Clave Analizados",
     detailSecAction: "Siguiente Acción Recomendada",
     detailSecEntities: "Entidades Extraídas",
-    detailSecTranscript: "Transcripción Interactiva",
+    detailSecTranscript: "Transcripción de la Llamada",
     
     detailLabelScore: "Puntaje de Agente",
     detailLabelSilence: "Proporción de Silencio",
@@ -1612,55 +1612,27 @@ function closeDrawer() {
   }
 }
 
-// Alternating Chat Bubbles Transcript Renderer
+// Call Transcript Renderer
 function renderTranscript(text) {
   const container = document.getElementById("drawerTranscript");
   container.innerHTML = "";
 
+  const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
   if (!text) {
-    container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.9rem; text-align: center; padding: 1rem;">No transcript transcript available.</div>';
+    container.innerHTML = `<div style="color: var(--text-muted); font-size: 0.9rem; text-align: center; padding: 1rem;">${lang === 'es' ? 'No hay transcripción disponible.' : 'No transcript available.'}</div>`;
     return;
   }
 
-  // Regex splitting by sentences
-  const sentences = text.match(/[^.!?]+[.!?]+(\s|$)/g);
-  
-  if (!sentences || sentences.length === 0) {
-    // Fallback if match fails: render whole text in one bubble
-    appendBubble(container, "Customer", text, true);
-    return;
-  }
+  const textBlock = document.createElement("div");
+  textBlock.className = "transcript-text-block";
+  textBlock.style.fontSize = "0.88rem";
+  textBlock.style.lineHeight = "1.6";
+  textBlock.style.color = "var(--text-primary)";
+  textBlock.style.whiteSpace = "pre-wrap";
+  textBlock.style.padding = "0.25rem";
+  textBlock.textContent = text.trim();
 
-  // We alternate sentences between Customer and Agent
-  // Andrea starts in the sample (Hello. Hey my name is Andrea...), so Customer starts.
-  let isCustomer = true;
-  
-  sentences.forEach((sentence) => {
-    const trimmed = sentence.trim();
-    if (trimmed.length > 0) {
-      appendBubble(container, isCustomer ? "Customer" : "Agent", trimmed, isCustomer);
-      isCustomer = !isCustomer; // Alternate
-    }
-  });
-}
-
-function appendBubble(container, speaker, text, isCustomer) {
-  const bubbleContainer = document.createElement("div");
-  bubbleContainer.className = `chat-bubble-container ${isCustomer ? 'customer' : 'agent'}`;
-
-  const speakerLabel = document.createElement("span");
-  speakerLabel.className = "chat-speaker";
-  speakerLabel.innerHTML = isCustomer 
-    ? `<i class="fa-solid fa-circle-user"></i> Customer` 
-    : `<i class="fa-solid fa-headset"></i> Support Agent`;
-
-  const bubble = document.createElement("div");
-  bubble.className = `chat-bubble ${isCustomer ? 'customer' : 'agent'}`;
-  bubble.textContent = text;
-
-  bubbleContainer.appendChild(speakerLabel);
-  bubbleContainer.appendChild(bubble);
-  container.appendChild(bubbleContainer);
+  container.appendChild(textBlock);
 }
 
 // ==========================================================================
