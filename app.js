@@ -3183,6 +3183,7 @@ function renderGCSFileList() {
         <div class="gcs-file-status-row" style="margin-top: 0.4rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
           ${statusBadge}
           ${matchedCall ? `<button class="gcs-view-details-btn" title="Open Call Analytics Details"><i class="fa-solid fa-chart-simple"></i> Analytics</button>` : ''}
+          <button class="gcs-download-recording-btn" title="Download MP3 recording"><i class="fa-solid fa-cloud-arrow-down"></i> ${state.lang === 'es' ? 'Descargar' : 'Download'}</button>
           ${canReset ? `<button class="gcs-delete-recording-btn" title="Reset recording: Delete transcript and analysis data"><i class="fa-solid fa-trash-can"></i> Reset</button>` : ''}
         </div>
       </div>
@@ -3255,6 +3256,15 @@ function renderGCSFileList() {
       });
     }
 
+    // Bind GCS item download click
+    const downloadBtn = item.querySelector(".gcs-download-recording-btn");
+    if (downloadBtn) {
+      downloadBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        downloadGCSFile(file);
+      });
+    }
+
     container.appendChild(item);
   });
 
@@ -3312,6 +3322,47 @@ async function playGCSAudio(file) {
     const icon = activeEl ? activeEl.querySelector(".gcs-file-play i") : null;
     if (icon) icon.className = "fa-solid fa-play";
   });
+}
+
+async function downloadGCSFile(file) {
+  const token = await getGoogleAccessToken();
+  if (!token) {
+    logoutGoogle();
+    return;
+  }
+  
+  const displayName = file.name.substring(GCS_PREFIX.length);
+  const mediaUrl = `https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o/${encodeURIComponent(file.name)}?alt=media&access_token=${token}`;
+  
+  // Find download button inside DOM to update its icon to spinner
+  const dlBtn = document.querySelector(`.gcs-file-item[data-name="${CSS.escape(file.name)}"] .gcs-download-recording-btn`);
+  const originalHtml = dlBtn ? dlBtn.innerHTML : "";
+  if (dlBtn) {
+    dlBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${state.lang === 'es' ? 'Descargando' : 'Downloading'}`;
+    dlBtn.disabled = true;
+  }
+
+  try {
+    const response = await fetch(mediaUrl);
+    if (!response.ok) throw new Error("Failed to fetch file from storage");
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = displayName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error("Download failed:", error);
+    alert(state.lang === 'es' ? "No se pudo descargar la grabación. Por favor intente de nuevo." : "Could not download the recording. Please try again.");
+  } finally {
+    if (dlBtn) {
+      dlBtn.innerHTML = originalHtml;
+      dlBtn.disabled = false;
+    }
+  }
 }
 
 function updateBulkActionUI() {
