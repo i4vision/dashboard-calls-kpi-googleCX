@@ -1610,7 +1610,7 @@ function openDrawer(call) {
   }
 
   // Interactive Transcript Dialog
-  renderTranscript(call.transcript);
+  renderTranscript(call);
 
   // Open Drawer
   drawer.classList.add("active");
@@ -1630,26 +1630,110 @@ function closeDrawer() {
 }
 
 // Call Transcript Renderer
-function renderTranscript(text) {
+function renderTranscript(call) {
   const container = document.getElementById("drawerTranscript");
   container.innerHTML = "";
 
   const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
-  if (!text) {
+  if (!call || (!call.transcript && !call.segments)) {
     container.innerHTML = `<div style="color: var(--text-muted); font-size: 0.9rem; text-align: center; padding: 1rem;">${lang === 'es' ? 'No hay transcripción disponible.' : 'No transcript available.'}</div>`;
     return;
   }
 
-  const textBlock = document.createElement("div");
-  textBlock.className = "transcript-text-block";
-  textBlock.style.fontSize = "0.88rem";
-  textBlock.style.lineHeight = "1.6";
-  textBlock.style.color = "var(--text-primary)";
-  textBlock.style.whiteSpace = "pre-wrap";
-  textBlock.style.padding = "0.25rem";
-  textBlock.textContent = text.trim();
+  // Parse segments if it is a JSON string or an array
+  let segments = null;
+  if (call.segments) {
+    if (typeof call.segments === 'string') {
+      try {
+        segments = JSON.parse(call.segments);
+      } catch (e) {
+        console.warn("Could not parse segments string:", e);
+      }
+    } else if (Array.isArray(call.segments)) {
+      segments = call.segments;
+    }
+  }
 
-  container.appendChild(textBlock);
+  if (segments && segments.length > 0) {
+    // Determine the agent speaker tag. Usually SPEAKER_00 or the first non-null speaker.
+    let agentSpeaker = null;
+    for (let i = 0; i < segments.length; i++) {
+      if (segments[i].speaker) {
+        agentSpeaker = segments[i].speaker;
+        break;
+      }
+    }
+
+    const agentName = getAgentName(call) || (lang === 'es' ? 'Agente de Soporte' : 'Support Agent');
+
+    segments.forEach(seg => {
+      if (!seg.text || !seg.text.trim()) return;
+
+      const isAgent = seg.speaker === agentSpeaker;
+      const speakerName = isAgent ? agentName : (lang === 'es' ? 'Cliente' : 'Customer');
+      
+      const bubbleContainer = document.createElement("div");
+      bubbleContainer.className = `chat-bubble-container ${isAgent ? 'agent' : 'customer'}`;
+      
+      const speakerLabel = document.createElement("span");
+      speakerLabel.className = "chat-speaker";
+      speakerLabel.innerHTML = isAgent 
+        ? `<i class="fa-solid fa-headset"></i> ${speakerName}` 
+        : `<i class="fa-solid fa-circle-user"></i> ${speakerName}`;
+      
+      const bubble = document.createElement("div");
+      bubble.className = `chat-bubble ${isAgent ? 'agent' : 'customer'}`;
+      
+      const textSpan = document.createElement("span");
+      textSpan.textContent = seg.text.trim();
+      bubble.appendChild(textSpan);
+
+      // Add timestamp seeker
+      if (seg.start !== undefined && seg.start !== null) {
+        const timeStr = ` <span style="font-size: 0.68rem; opacity: 0.5; margin-left: 0.35rem; font-family: monospace;">[${formatAudioTime(seg.start)}]</span>`;
+        const timeSpan = document.createElement("span");
+        timeSpan.innerHTML = timeStr;
+        bubble.appendChild(timeSpan);
+        
+        // Setup click playhead seeking
+        bubble.style.cursor = "pointer";
+        bubble.title = lang === 'es' ? "Haga clic para reproducir este segmento" : "Click to play this segment";
+        bubble.addEventListener("click", () => {
+          const audioEl = document.getElementById("gcsAudioElement");
+          const isCurrentAudio = audioEl.src && audioEl.src.includes(encodeURIComponent(GCS_PREFIX + call.audio_file_name));
+          if (isCurrentAudio) {
+            audioEl.currentTime = seg.start;
+            if (audioEl.paused) {
+              audioEl.play().catch(err => console.error("Error seeking audio play:", err));
+            }
+          } else {
+            // Load and play the GCS audio first
+            playGCSAudio({ name: GCS_PREFIX + call.audio_file_name }).then(() => {
+              setTimeout(() => {
+                audioEl.currentTime = seg.start;
+              }, 400);
+            });
+          }
+        });
+      }
+      
+      bubbleContainer.appendChild(speakerLabel);
+      bubbleContainer.appendChild(bubble);
+      container.appendChild(bubbleContainer);
+    });
+  } else if (call.transcript) {
+    // Fallback: render the entire transcript text block as pre-wrap
+    const textBlock = document.createElement("div");
+    textBlock.className = "transcript-text-block";
+    textBlock.style.fontSize = "0.88rem";
+    textBlock.style.lineHeight = "1.6";
+    textBlock.style.color = "var(--text-primary)";
+    textBlock.style.whiteSpace = "pre-wrap";
+    textBlock.style.padding = "0.25rem";
+    textBlock.textContent = call.transcript.trim();
+
+    container.appendChild(textBlock);
+  }
 }
 
 // ==========================================================================
@@ -1688,6 +1772,11 @@ function getAgentIdFromFilename(audioFileName) {
 // Extract Agent Name from Entities or Transcript (falling back to Hashed Deterministic Names if not found)
 function getAgentName(call) {
   if (!call) return "Unknown Agent";
+
+  // 0. Use the new Supabase agent column if populated
+  if (call.agent && call.agent.trim()) {
+    return call.agent.trim();
+  }
   
   // 1. First, check if we can parse the agent identifier from the MP3 filename
   const parsedId = getAgentIdFromFilename(call.audio_file_name);
