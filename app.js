@@ -888,13 +888,13 @@ function showTableError(message) {
 // Populate Category Dropdown Dynamically
 function populateCategoryDropdown() {
   const select = document.getElementById("filterCategory");
-  // Keep the first default option
-  select.innerHTML = '<option value="all">All Categories</option>';
+  const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
+  select.innerHTML = `<option value="all">${lang === 'es' ? 'Todas las Categorías' : 'All Categories'}</option>`;
   
   state.categories.forEach(cat => {
     const opt = document.createElement("option");
     opt.value = cat;
-    opt.textContent = formatString(cat);
+    opt.textContent = getLocalizedCategory(cat);
     select.appendChild(opt);
   });
 }
@@ -928,13 +928,13 @@ function applyFilters() {
       (call.audio_file_name && call.audio_file_name.toLowerCase().includes(audioSearchQuery));
 
     // Sentiment Filter
-    const sentimentMatch = sentimentFilter === "all" || call.sentiment === sentimentFilter;
+    const sentimentMatch = sentimentFilter === "all" || getNormalizedSentiment(call.sentiment) === sentimentFilter;
 
     // Risk Filter
-    const riskMatch = riskFilter === "all" || call.risk_level === riskFilter;
+    const riskMatch = riskFilter === "all" || getNormalizedRisk(call.risk_level) === riskFilter;
 
     // Resolution Filter
-    const resolutionMatch = resolutionFilter === "all" || call.resolution_status === resolutionFilter;
+    const resolutionMatch = resolutionFilter === "all" || getNormalizedResolution(call.resolution_status) === resolutionFilter;
 
     // Category Filter
     const categoryMatch = categoryFilter === "all" || getParentCategory(call.category) === categoryFilter;
@@ -1004,10 +1004,15 @@ function updateKPIs() {
   document.getElementById("kpiAvgScore").textContent = avgScore.toFixed(1);
 
   // 2. Resolution Rate
-  const resolvedCount = state.filteredCalls.filter(c => c.resolution_status === "resolved").length;
+  const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
+  const resolvedCount = state.filteredCalls.filter(c => getNormalizedResolution(c.resolution_status) === "resolved").length;
   const resolutionRate = (resolvedCount / count) * 100;
   document.getElementById("kpiResolutionRate").textContent = `${resolutionRate.toFixed(1)}%`;
-  document.getElementById("kpiResolutionSubtext").innerHTML = `<i class="fa-solid fa-check"></i> ${resolvedCount} of ${count} resolved`;
+  
+  const subtextStr = lang === "es" 
+    ? `<i class="fa-solid fa-check"></i> ${resolvedCount} de ${count} resueltas`
+    : `<i class="fa-solid fa-check"></i> ${resolvedCount} of ${count} resolved`;
+  document.getElementById("kpiResolutionSubtext").innerHTML = subtextStr;
 
   // 3. Average Silence Percentage
   const silencePercentages = state.filteredCalls.map(c => Number(c.silence_percentage)).filter(p => !isNaN(p));
@@ -1039,21 +1044,28 @@ function renderOverviewCharts() {
   // ---------------------------------------------------------
   // 1. Sentiment Breakdown Chart (Doughnut)
   // ---------------------------------------------------------
-  const sentimentCounts = { positive: 0, neutral: 0, negative: 0 };
+  const sentimentCounts = { positive: 0, neutral: 0, negative: 0, mixed: 0 };
   data.forEach(c => {
-    if (c.sentiment && sentimentCounts[c.sentiment.toLowerCase()] !== undefined) {
-      sentimentCounts[c.sentiment.toLowerCase()]++;
+    const sNorm = getNormalizedSentiment(c.sentiment);
+    if (sentimentCounts[sNorm] !== undefined) {
+      sentimentCounts[sNorm]++;
     }
   });
+
+  const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
+  const labelPositive = lang === "es" ? "Positivo" : "Positive";
+  const labelNeutral = lang === "es" ? "Neutral" : "Neutral";
+  const labelNegative = lang === "es" ? "Negativo" : "Negative";
+  const labelMixed = lang === "es" ? "Mixto" : "Mixed";
 
   if (state.charts.sentiment) state.charts.sentiment.destroy();
   state.charts.sentiment = new Chart(document.getElementById("chartSentiment").getContext("2d"), {
     type: "doughnut",
     data: {
-      labels: ["Positive", "Neutral", "Negative"],
+      labels: [labelPositive, labelNeutral, labelNegative, labelMixed],
       datasets: [{
-        data: [sentimentCounts.positive, sentimentCounts.neutral, sentimentCounts.negative],
-        backgroundColor: ["#10b981", "#6b7280", "#f43f5e"],
+        data: [sentimentCounts.positive, sentimentCounts.neutral, sentimentCounts.negative, sentimentCounts.mixed],
+        backgroundColor: ["#10b981", "#6b7280", "#f43f5e", "#f59e0b"],
         borderWidth: 2,
         borderColor: getThemeColor('--bg-secondary') || '#111827'
       }]
@@ -1080,12 +1092,16 @@ function renderOverviewCharts() {
 
   cats.forEach(cat => {
     const catCalls = data.filter(c => getParentCategory(c.category) === cat);
-    lowRiskData.push(catCalls.filter(c => c.risk_level === "low").length);
-    medRiskData.push(catCalls.filter(c => c.risk_level === "medium").length);
-    highRiskData.push(catCalls.filter(c => c.risk_level === "high").length);
+    lowRiskData.push(catCalls.filter(c => getNormalizedRisk(c.risk_level) === "low").length);
+    medRiskData.push(catCalls.filter(c => getNormalizedRisk(c.risk_level) === "medium").length);
+    highRiskData.push(catCalls.filter(c => getNormalizedRisk(c.risk_level) === "high").length);
   });
 
-  const catLabelsFormatted = cats;
+  const catLabelsFormatted = cats.map(c => getLocalizedCategory(c));
+
+  const labelLowRisk = lang === "es" ? "Riesgo Bajo" : "Low Risk";
+  const labelMedRisk = lang === "es" ? "Riesgo Medio" : "Medium Risk";
+  const labelHighRisk = lang === "es" ? "Riesgo Alto" : "High Risk";
 
   if (state.charts.categoryRisk) state.charts.categoryRisk.destroy();
   state.charts.categoryRisk = new Chart(document.getElementById("chartCategoryRisk").getContext("2d"), {
@@ -1093,9 +1109,9 @@ function renderOverviewCharts() {
     data: {
       labels: catLabelsFormatted,
       datasets: [
-        { label: "Low Risk", data: lowRiskData, backgroundColor: "#10b981" },
-        { label: "Medium Risk", data: medRiskData, backgroundColor: "#f59e0b" },
-        { label: "High Risk", data: highRiskData, backgroundColor: "#f43f5e" }
+        { label: labelLowRisk, data: lowRiskData, backgroundColor: "#10b981" },
+        { label: labelMedRisk, data: medRiskData, backgroundColor: "#f59e0b" },
+        { label: labelHighRisk, data: highRiskData, backgroundColor: "#f43f5e" }
       ]
     },
     options: {
@@ -1212,7 +1228,8 @@ function renderOverviewCharts() {
     return item.count > 0 ? (item.total / item.count) : 0;
   });
 
-  const formattedCats = categoriesList;
+  const formattedCats = categoriesList.map(cat => getLocalizedCategory(cat));
+  const scoreLabel = lang === "es" ? "Puntaje Promedio (0-10)" : "Average Score (0-10)";
 
   if (state.charts.silencePerformance) state.charts.silencePerformance.destroy();
   state.charts.silencePerformance = new Chart(document.getElementById("chartSilencePerformance").getContext("2d"), {
@@ -1220,7 +1237,7 @@ function renderOverviewCharts() {
     data: {
       labels: formattedCats,
       datasets: [{
-        label: "Average Score (0-10)",
+        label: scoreLabel,
         data: avgScores,
         backgroundColor: "rgba(59, 130, 246, 0.85)",
         borderColor: "#3b82f6",
@@ -1283,22 +1300,22 @@ function renderTable() {
     const displayName = `${agentName} <span style="font-family: var(--font-mono); font-size: 0.75rem; opacity: 0.6; display: block; margin-top: 0.25rem;">ID: #${shortId}</span>`;
     
     // Category representation
-    const category = formatString(call.category || "General");
+    const category = getLocalizedCategory(getParentCategory(call.category));
 
     // Sentiment badge
-    const sentiment = call.sentiment || "neutral";
-    const sentimentClass = `badge-sentiment-${sentiment.toLowerCase()}`;
-    const sentimentHtml = `<span class="badge ${sentimentClass}">${sentiment}</span>`;
+    const sentimentNorm = getNormalizedSentiment(call.sentiment);
+    const sentimentClass = `badge-sentiment-${sentimentNorm}`;
+    const sentimentHtml = `<span class="badge ${sentimentClass}">${getLocalizedSentiment(call.sentiment)}</span>`;
 
     // Risk badge
-    const risk = call.risk_level || "low";
-    const riskClass = `badge-risk-${risk.toLowerCase()}`;
-    const riskHtml = `<span class="badge ${riskClass}">${risk}</span>`;
+    const riskNorm = getNormalizedRisk(call.risk_level);
+    const riskClass = `badge-risk-${riskNorm}`;
+    const riskHtml = `<span class="badge ${riskClass}">${getLocalizedRisk(call.risk_level)}</span>`;
 
     // Resolution badge
-    const res = call.resolution_status || "unresolved";
-    const resClass = `badge-status-${res.toLowerCase()}`;
-    const resHtml = `<span class="badge ${resClass}">${res}</span>`;
+    const resNorm = getNormalizedResolution(call.resolution_status);
+    const resClass = `badge-status-${resNorm}`;
+    const resHtml = `<span class="badge ${resClass}">${getLocalizedResolution(call.resolution_status)}</span>`;
 
     // Agent score pill representation
     const scoreNum = Number(call.agent_score);
@@ -1353,38 +1370,26 @@ function openDrawer(call) {
   
   // Set Badges
   const sentiment = document.getElementById("drawerSentiment");
-  sentiment.className = `badge badge-sentiment-${call.sentiment.toLowerCase()}`;
-  let sentimentText = call.sentiment;
-  if (lang === "es") {
-    if (call.sentiment.toLowerCase() === "positive") sentimentText = "Positivo";
-    else if (call.sentiment.toLowerCase() === "neutral") sentimentText = "Neutro";
-    else if (call.sentiment.toLowerCase() === "negative") sentimentText = "Negativo";
-  }
-  sentiment.textContent = sentimentText;
+  const sentimentNorm = getNormalizedSentiment(call.sentiment);
+  sentiment.className = `badge badge-sentiment-${sentimentNorm}`;
+  sentiment.textContent = getLocalizedSentiment(call.sentiment);
 
   const risk = document.getElementById("drawerRisk");
-  risk.className = `badge badge-risk-${call.risk_level.toLowerCase()}`;
-  let riskText = call.risk_level;
-  if (lang === "es") {
-    if (call.risk_level.toLowerCase() === "low") riskText = "Bajo";
-    else if (call.risk_level.toLowerCase() === "medium") riskText = "Medio";
-    else if (call.risk_level.toLowerCase() === "high") riskText = "Alto";
-  }
-  risk.textContent = lang === "es" ? `Riesgo ${riskText}` : `${riskText} Risk`;
+  const riskNorm = getNormalizedRisk(call.risk_level);
+  risk.className = `badge badge-risk-${riskNorm}`;
+  const localizedRiskText = getLocalizedRisk(call.risk_level);
+  risk.textContent = lang === "es" ? `Riesgo ${localizedRiskText}` : `${localizedRiskText} Risk`;
 
   const resolution = document.getElementById("drawerResolution");
-  resolution.className = `badge badge-status-${call.resolution_status.toLowerCase()}`;
-  let resolutionText = call.resolution_status;
-  if (lang === "es") {
-    if (call.resolution_status.toLowerCase() === "resolved") resolutionText = "Resuelto";
-    else if (call.resolution_status.toLowerCase() === "unresolved") resolutionText = "No Resuelto";
-  }
-  resolution.textContent = resolutionText;
+  const resNorm = getNormalizedResolution(call.resolution_status);
+  resolution.className = `badge badge-status-${resNorm}`;
+  resolution.textContent = getLocalizedResolution(call.resolution_status);
 
   const category = document.getElementById("drawerCategory");
   const parentCat = getParentCategory(call.category);
+  const localizedParent = getLocalizedCategory(parentCat);
   const rawCat = call.category ? formatString(call.category) : "General";
-  category.textContent = `${parentCat} (${rawCat})`;
+  category.textContent = `${localizedParent} (${rawCat})`;
 
   // Performance stats
   const drawerScoreNum = Number(call.agent_score);
@@ -1844,46 +1849,129 @@ function getFallbackAgentName(conversationName) {
   return (lang === 'es' ? 'Agente #' : 'Agent #') + lastFour;
 }
 
-// Map unique AI-generated categories into 6 clean, high-level parent categories
+// Map categories into 8 clean, high-level parent categories: venta, seguimiento, consulta, soporte, reclamo, retención, información, otro
 function getParentCategory(rawCategory) {
-  if (!rawCategory) return "General Inquiry";
-  const cat = rawCategory.toLowerCase();
+  if (!rawCategory) return "otro";
+  const cat = rawCategory.toLowerCase().trim();
   
-  if (cat.includes("technical") || cat.includes("it support") || cat.includes("license") || 
-      cat.includes("lock") || cat.includes("wifi") || cat.includes("internet") || 
-      cat.includes("app") || cat.includes("activation") || cat.includes("access") || 
-      cat.includes("security") || cat.includes("door")) {
-    return "Technical & IT Support";
+  if (cat.includes("venta") || cat.includes("sales") || cat.includes("sale") || cat.includes("marketing") || cat.includes("comprar")) {
+    return "venta";
   }
-  
-  if (cat.includes("billing") || cat.includes("payment") || cat.includes("pricing") || 
-      cat.includes("charge") || cat.includes("credit") || cat.includes("dispute") || 
-      cat.includes("invoice") || cat.includes("cost")) {
-    return "Billing & Payments";
+  if (cat.includes("seguimiento") || cat.includes("follow-up") || cat.includes("followup") || cat.includes("scheduling") || cat.includes("logistics") || cat.includes("delivery") || cat.includes("entrega") || cat.includes("agenda") || cat.includes("cita")) {
+    return "seguimiento";
   }
-
-  if (cat.includes("maintenance") || cat.includes("plumbing") || cat.includes("property") || 
-      cat.includes("inspection") || cat.includes("certification") || cat.includes("vehicle") || 
-      cat.includes("cleaning") || cat.includes("trash") || cat.includes("noise") || 
-      cat.includes("outage") || cat.includes("abandoned")) {
-    return "Maintenance & Property";
+  if (cat.includes("consulta") || cat.includes("inquiry") || cat.includes("booking") || cat.includes("reservation") || cat.includes("reserva") || cat.includes("pregunt") || cat.includes("duda")) {
+    return "consulta";
   }
-
-  if (cat.includes("scheduling") || cat.includes("appointment") || cat.includes("logistics") || 
-      cat.includes("shipment") || cat.includes("order") || cat.includes("status") || 
-      cat.includes("delivery") || cat.includes("flight")) {
-    return "Scheduling & Logistics";
+  if (cat.includes("soporte") || cat.includes("support") || cat.includes("technical") || cat.includes("it support") || cat.includes("maintenance") || cat.includes("plumbing") || cat.includes("wifi") || cat.includes("mantenimiento") || cat.includes("daño") || cat.includes("averia")) {
+    return "soporte";
+  }
+  if (cat.includes("reclamo") || cat.includes("complaint") || cat.includes("dispute") || cat.includes("dissatisfaction") || cat.includes("queja") || cat.includes("inconformidad")) {
+    return "reclamo";
+  }
+  if (cat.includes("retención") || cat.includes("retencion") || cat.includes("retention") || cat.includes("cancel") || cat.includes("devolucion") || cat.includes("reembolso") || cat.includes("refund")) {
+    return "retención";
+  }
+  if (cat.includes("información") || cat.includes("informacion") || cat.includes("information") || cat.includes("billing") || cat.includes("payment") || cat.includes("pricing") || cat.includes("factura") || cat.includes("pago") || cat.includes("precio") || cat.includes("costo")) {
+    return "información";
   }
   
-  if (cat.includes("booking") || cat.includes("reservation") || cat.includes("refund") || 
-      cat.includes("check-in") || cat.includes("cancellation") || cat.includes("dissatisfaction") || 
-      cat.includes("complaint") || cat.includes("retention") || cat.includes("greeting") || 
-      cat.includes("inquiry") || cat.includes("customer service") || cat.includes("customer support") || 
-      cat.includes("communication") || cat.includes("engagement") || cat.includes("handling")) {
-    return "Customer Service & Booking";
-  }
+  return "otro";
+}
 
-  return "General Inquiry";
+// Normalizers to convert English or Spanish database values into standard lowercase English tags
+function getNormalizedSentiment(sentimentVal) {
+  if (!sentimentVal) return "neutral";
+  const val = sentimentVal.toLowerCase().trim();
+  if (val.includes("positiv") || val === "positive") return "positive";
+  if (val.includes("negativ") || val === "negative") return "negative";
+  if (val.includes("mixt") || val === "mixed") return "mixed";
+  return "neutral";
+}
+
+function getNormalizedRisk(riskVal) {
+  if (!riskVal) return "low";
+  const val = riskVal.toLowerCase().trim();
+  if (val === "high" || val === "alto") return "high";
+  if (val === "medium" || val === "medio") return "medium";
+  return "low";
+}
+
+function getNormalizedResolution(resVal) {
+  if (!resVal) return "unknown";
+  const val = resVal.toLowerCase().trim();
+  if (val === "resolved" || val === "resuelto") return "resolved";
+  if (val === "unresolved" || val === "no_resuelto" || val === "no resuelto") return "unresolved";
+  if (val === "partially_resolved" || val === "parcialmente_resuelto" || val === "parcialmente resuelto") return "partially_resolved";
+  return "unknown";
+}
+
+// Localized Display Formatters (support bilingual EN/ES)
+function getLocalizedSentiment(sentimentVal) {
+  const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
+  if (!sentimentVal) return "";
+  const val = sentimentVal.toLowerCase().trim();
+  const dict = {
+    positive: { en: "Positive", es: "Positivo" },
+    positivo: { en: "Positive", es: "Positivo" },
+    neutral: { en: "Neutral", es: "Neutral" },
+    negative: { en: "Negative", es: "Negativo" },
+    negativo: { en: "Negative", es: "Negativo" },
+    mixed: { en: "Mixed", es: "Mixto" },
+    mixto: { en: "Mixed", es: "Mixto" }
+  };
+  return (dict[val] && dict[val][lang]) || sentimentVal;
+}
+
+function getLocalizedRisk(riskVal) {
+  const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
+  if (!riskVal) return "";
+  const val = riskVal.toLowerCase().trim();
+  const dict = {
+    low: { en: "Low", es: "Bajo" },
+    bajo: { en: "Low", es: "Bajo" },
+    medium: { en: "Medium", es: "Medio" },
+    medio: { en: "Medium", es: "Medio" },
+    high: { en: "High", es: "Alto" },
+    alto: { en: "High", es: "Alto" }
+  };
+  return (dict[val] && dict[val][lang]) || riskVal;
+}
+
+function getLocalizedResolution(resVal) {
+  const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
+  if (!resVal) return "";
+  const val = resVal.toLowerCase().trim();
+  const dict = {
+    resolved: { en: "Resolved", es: "Resuelto" },
+    resuelto: { en: "Resolved", es: "Resuelto" },
+    unresolved: { en: "Unresolved", es: "No Resuelto" },
+    no_resuelto: { en: "Unresolved", es: "No Resuelto" },
+    partially_resolved: { en: "Partially Resolved", es: "Parcialmente Resuelto" },
+    parcialmente_resuelto: { en: "Partially Resolved", es: "Parcialmente Resuelto" },
+    unknown: { en: "Unknown", es: "Desconocido" },
+    desconocido: { en: "Unknown", es: "Desconocido" }
+  };
+  return (dict[val] && dict[val][lang]) || resVal;
+}
+
+function getLocalizedCategory(catVal) {
+  const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
+  if (!catVal) return lang === "es" ? "Otro" : "Other";
+  const val = catVal.toLowerCase().trim();
+  const dict = {
+    venta: { en: "Sales", es: "Venta" },
+    seguimiento: { en: "Follow-up", es: "Seguimiento" },
+    consulta: { en: "Inquiry", es: "Consulta" },
+    soporte: { en: "Support", es: "Soporte" },
+    reclamo: { en: "Complaint", es: "Reclamo" },
+    retención: { en: "Retention", es: "Retención" },
+    retencion: { en: "Retention", es: "Retención" },
+    información: { en: "Information", es: "Información" },
+    informacion: { en: "Information", es: "Información" },
+    otro: { en: "Other", es: "Otro" }
+  };
+  return (dict[val] && dict[val][lang]) || catVal;
 }
 
 // ==========================================================================
@@ -2037,11 +2125,15 @@ function renderTrendCharts() {
   }));
 
   const sentimentValues = data.map(c => {
-    const s = c.sentiment ? c.sentiment.toLowerCase() : 'neutral';
+    const s = getNormalizedSentiment(c.sentiment);
     if (s === 'positive') return 1;
     if (s === 'negative') return -1;
     return 0;
   });
+
+  const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
+  const sentimentLabel = lang === "es" ? "Valor de Sentimiento" : "Sentiment Value";
+  const resolutionLabel = lang === "es" ? "Tasa de Resolución Acumulada (%)" : "Cumulative Resolution Rate (%)";
 
   if (state.charts.sentimentTrend) state.charts.sentimentTrend.destroy();
   state.charts.sentimentTrend = new Chart(document.getElementById("chartSentimentTrend").getContext("2d"), {
@@ -2049,7 +2141,7 @@ function renderTrendCharts() {
     data: {
       labels: timeLabels,
       datasets: [{
-        label: "Sentiment Value",
+        label: sentimentLabel,
         data: sentimentValues,
         borderColor: "#3b82f6",
         backgroundColor: "rgba(59, 130, 246, 0.05)",
@@ -2082,9 +2174,9 @@ function renderTrendCharts() {
             color: textColor,
             font: { family: "Inter", weight: 'bold' },
             callback: function(value) {
-              if (value === 1) return "Positive";
-              if (value === 0) return "Neutral";
-              if (value === -1) return "Negative";
+              if (value === 1) return lang === "es" ? "Positivo" : "Positive";
+              if (value === 0) return lang === "es" ? "Neutral" : "Neutral";
+              if (value === -1) return lang === "es" ? "Negativo" : "Negative";
               return "";
             }
           }
@@ -2099,7 +2191,7 @@ function renderTrendCharts() {
   // 4. Resolution Rate Trend
   let runningResolved = 0;
   const resolutionRates = data.map((c, idx) => {
-    if (c.resolution_status === 'resolved') {
+    if (getNormalizedResolution(c.resolution_status) === 'resolved') {
       runningResolved++;
     }
     return (runningResolved / (idx + 1)) * 100;
@@ -2111,7 +2203,7 @@ function renderTrendCharts() {
     data: {
       labels: timeLabels,
       datasets: [{
-        label: "Cumulative Resolution Rate (%)",
+        label: resolutionLabel,
         data: resolutionRates,
         borderColor: "#8b5cf6",
         backgroundColor: "rgba(139, 92, 246, 0.1)",
