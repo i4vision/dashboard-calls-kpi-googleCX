@@ -10,6 +10,7 @@ const SUPABASE_ANON_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBh
 let state = {
   allCalls: [],
   filteredCalls: [],
+  activeCall: null,
   categories: [],
   charts: {
     sentiment: null,
@@ -671,6 +672,11 @@ function updateUILanguage() {
   
   const saveGeneralSettingsStatus = document.getElementById("generalSettingsSaveStatus");
   if (saveGeneralSettingsStatus) saveGeneralSettingsStatus.innerHTML = dict.settingsSavedStatus;
+
+  // Refresh Call Details Drawer if it's currently open
+  if (state.activeCall) {
+    openDrawer(state.activeCall);
+  }
 }
 
 // Redundant state declaration removed
@@ -1334,6 +1340,7 @@ function renderTable() {
 // Call Details Drawer Logic
 // ==========================================================================
 function openDrawer(call) {
+  state.activeCall = call;
   const drawer = document.getElementById("callDrawer");
   const backdrop = document.getElementById("drawerBackdrop");
   
@@ -1619,6 +1626,7 @@ function openDrawer(call) {
 }
 
 function closeDrawer() {
+  state.activeCall = null;
   const drawer = document.getElementById("callDrawer");
   const backdrop = document.getElementById("drawerBackdrop");
   
@@ -1789,7 +1797,9 @@ function getAgentIdFromFilename(audioFileName) {
 
 // Extract Agent Name from Entities or Transcript (falling back to Hashed Deterministic Names if not found)
 function getAgentName(call) {
-  if (!call) return "Unknown Agent";
+  const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
+  const unknownLabel = lang === 'es' ? 'Agente Desconocido' : 'Unknown Agent';
+  if (!call) return unknownLabel;
 
   // 0. Use the new Supabase agent column if populated
   if (call.agent && call.agent.trim()) {
@@ -1803,7 +1813,7 @@ function getAgentName(call) {
     if (mappings[parsedId]) {
       return mappings[parsedId];
     }
-    return `Agent #` + parsedId;
+    return (lang === 'es' ? 'Agente #' : 'Agent #') + parsedId;
   }
   
   // 2. Fallback: Combine transcript and entities for search (case-insensitive)
@@ -1827,10 +1837,11 @@ function getAgentName(call) {
 }
 
 function getFallbackAgentName(conversationName) {
-  if (!conversationName) return "Unknown Agent";
+  const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
+  if (!conversationName) return lang === 'es' ? 'Agente Desconocido' : 'Unknown Agent';
   const shortId = formatConvName(conversationName);
   const lastFour = shortId.slice(-4);
-  return `Agent #${lastFour}`;
+  return (lang === 'es' ? 'Agente #' : 'Agent #') + lastFour;
 }
 
 // Map unique AI-generated categories into 6 clean, high-level parent categories
