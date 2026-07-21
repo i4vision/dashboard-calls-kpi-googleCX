@@ -1655,12 +1655,30 @@ function renderTranscript(call) {
   }
 
   if (segments && segments.length > 0) {
-    // Determine the agent speaker tag. Usually SPEAKER_00 or the first non-null speaker.
+    // Determine the agent speaker tag. The agent is always the one who speaks the most (highest cumulative character count).
+    const speakerTally = {};
+    segments.forEach(seg => {
+      if (seg.speaker && seg.text) {
+        speakerTally[seg.speaker] = (speakerTally[seg.speaker] || 0) + seg.text.trim().length;
+      }
+    });
+
     let agentSpeaker = null;
-    for (let i = 0; i < segments.length; i++) {
-      if (segments[i].speaker) {
-        agentSpeaker = segments[i].speaker;
-        break;
+    let maxContentLength = 0;
+    Object.keys(speakerTally).forEach(speaker => {
+      if (speakerTally[speaker] > maxContentLength) {
+        maxContentLength = speakerTally[speaker];
+        agentSpeaker = speaker;
+      }
+    });
+
+    // Fallback if tally is empty
+    if (!agentSpeaker) {
+      for (let i = 0; i < segments.length; i++) {
+        if (segments[i].speaker) {
+          agentSpeaker = segments[i].speaker;
+          break;
+        }
       }
     }
 
