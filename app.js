@@ -2810,6 +2810,9 @@ function setupGCSEventListeners() {
     openai: [
       { value: "whisper-1", label: "whisper-1 (Recommended)" }
     ],
+    gemini: [
+      { value: "gemini-3.5-flash", label: "gemini-3.5-flash" }
+    ],
     local: [
       { value: "local_whisper", label: "local_whisper" },
       { value: "parakeet", label: "parakeet" },
