@@ -1654,17 +1654,80 @@ function renderTranscript(call) {
   }
 
   // Parse segments if it is a JSON string or an array
-  let segments = null;
+  let rawSegments = null;
   if (call.segments) {
     if (typeof call.segments === 'string') {
       try {
-        segments = JSON.parse(call.segments);
+        rawSegments = JSON.parse(call.segments);
       } catch (e) {
         console.warn("Could not parse segments string:", e);
       }
     } else if (Array.isArray(call.segments)) {
-      segments = call.segments;
+      rawSegments = call.segments;
     }
+  }
+
+  let segments = [];
+  if (Array.isArray(rawSegments)) {
+    rawSegments.forEach((item, idx) => {
+      // 1. Google STT alternatives structure mapping
+      if (item.alternatives && Array.isArray(item.alternatives) && item.alternatives.length > 0) {
+        const alt = item.alternatives[0];
+        const text = alt.transcript || "";
+        
+        let speakerVal = null;
+        if (alt.words && Array.isArray(alt.words) && alt.words.length > 0) {
+          const firstWord = alt.words[0];
+          if (firstWord.speakerTag !== undefined && firstWord.speakerTag !== null) {
+            speakerVal = `SPEAKER_0${firstWord.speakerTag}`;
+          }
+        }
+        if (!speakerVal && item.channelTag !== undefined && item.channelTag !== null) {
+          speakerVal = `SPEAKER_0${item.channelTag}`;
+        }
+        if (!speakerVal) {
+          speakerVal = "SPEAKER_00";
+        }
+
+        let startSec = 0;
+        let endSec = 0;
+        if (alt.words && Array.isArray(alt.words) && alt.words.length > 0) {
+          const firstWord = alt.words[0];
+          const lastWord = alt.words[alt.words.length - 1];
+          if (firstWord.startOffset) {
+            startSec = parseFloat(firstWord.startOffset.toString().replace("s", ""));
+          }
+          if (lastWord.endOffset) {
+            endSec = parseFloat(lastWord.endOffset.toString().replace("s", ""));
+          }
+        }
+        if (!endSec && item.resultEndOffset) {
+          endSec = parseFloat(item.resultEndOffset.toString().replace("s", ""));
+        }
+        if (!startSec && idx > 0 && segments[idx - 1]) {
+          startSec = segments[idx - 1].end;
+        }
+
+        segments.push({
+          id: idx,
+          start: isNaN(startSec) ? 0 : startSec,
+          end: isNaN(endSec) ? 0 : endSec,
+          text: text,
+          speaker: speakerVal
+        });
+      } else {
+        // 2. Standard format or fallback
+        const startVal = item.start !== undefined ? parseFloat(item.start.toString().replace("s", "")) : 0;
+        const endVal = item.end !== undefined ? parseFloat(item.end.toString().replace("s", "")) : 0;
+        segments.push({
+          id: item.id !== undefined ? item.id : idx,
+          start: isNaN(startVal) ? 0 : startVal,
+          end: isNaN(endVal) ? 0 : endVal,
+          text: item.text || "",
+          speaker: item.speaker || null
+        });
+      }
+    });
   }
 
   if (segments && segments.length > 0) {
