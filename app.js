@@ -1448,7 +1448,8 @@ function openDrawer(call) {
   const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
   const assignedAgent = getAgentName(call);
   const agentLabel = lang === "es" ? "Agente" : "Agent";
-  document.getElementById("drawerConversationName").innerHTML = `${agentLabel}: ${assignedAgent} <span style="display: block; font-size: 0.75rem; opacity: 0.6; font-family: var(--font-mono); font-weight: normal; margin-top: 0.25rem;">Call ID: ${call.conversation_name}</span>`;
+  const displayId = formatConvName(call.conversation_name);
+  document.getElementById("drawerConversationName").innerHTML = `${agentLabel}: ${assignedAgent} <span style="display: block; font-size: 0.75rem; opacity: 0.6; font-family: var(--font-mono); font-weight: normal; margin-top: 0.25rem;">Call ID: ${displayId}</span>`;
   document.getElementById("drawerConversationName").title = call.conversation_name;
   
   // Set Badges
@@ -2107,7 +2108,11 @@ function formatString(str) {
 function formatConvName(name) {
   if (!name) return "Unknown Call";
   const parts = name.split("/");
-  return parts[parts.length - 1] || name;
+  let lastPart = parts[parts.length - 1] || name;
+  if (lastPart.length > 20) {
+    return lastPart.substring(0, 12) + "..." + lastPart.substring(lastPart.length - 8);
+  }
+  return lastPart;
 }
 
 function getAgentIdFromFilename(audioFileName) {
