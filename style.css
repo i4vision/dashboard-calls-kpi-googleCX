@@ -533,6 +533,13 @@ h1, h2, h3, h4, h5, h6 {
   border-color: rgba(244, 63, 94, 0.3);
 }
 
+.badge-sentiment-mixed,
+.badge-sentiment-mixto {
+  background: rgba(139, 92, 246, 0.15);
+  color: var(--accent-secondary);
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
 .badge-risk-low {
   background: var(--color-positive-glow);
   color: var(--color-positive);
