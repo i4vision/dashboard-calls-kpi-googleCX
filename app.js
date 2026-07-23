@@ -4582,6 +4582,10 @@ function setupSettingsDrawer() {
     }
     
     renderAgentMappingsList();
+    
+    if (typeof loadCustomKpis === "function") {
+      loadCustomKpis();
+    }
   }
 
   function closeSettings() {
@@ -4704,6 +4708,211 @@ function setupSettingsDrawer() {
       }
     });
   }
+
+  // 3. Custom Call KPIs logic
+  const listKpiContainer = document.getElementById("settingsCustomKpisList");
+  const addKpiBtn = document.getElementById("btnAddCustomKpi");
+  const saveKpiBtn = document.getElementById("btnSaveCustomKpiSettings");
+  const newKpiNameInput = document.getElementById("inputNewKpiName");
+  const newKpiDescInput = document.getElementById("inputNewKpiDesc");
+  const newKpiTypeSelect = document.getElementById("selectNewKpiType");
+  const saveKpiStatusLabel = document.getElementById("customKpiSettingsSaveStatus");
+
+  function generateKpiCode(kpis) {
+    if (!kpis || kpis.length === 0) return "// Add KPI parameters to see snippet";
+    let lines = kpis.map(kpi => {
+      const name = kpi.name;
+      if (kpi.type === "array") {
+        return `  ${name}: parsed.${name} ?? []`;
+      }
+      if (kpi.type === "object") {
+        return `  ${name}: parsed.${name} ?? {}`;
+      }
+      if (kpi.type === "number") {
+        return `  ${name}: Number(parsed.${name} ?? 0)`;
+      }
+      if (kpi.type === "boolean") {
+        return `  ${name}: Boolean(parsed.${name} ?? false)`;
+      }
+      // String default
+      return `  ${name}: String(\n    parsed.${name} ?? 'neutral'\n  )`;
+    });
+    return `{\n${lines.join(",\n")}\n}`;
+  }
+
+  function renderCustomKpisList() {
+    if (!listKpiContainer) return;
+    listKpiContainer.innerHTML = "";
+
+    const kpis = state.customKpis || [];
+    if (kpis.length === 0) {
+      listKpiContainer.innerHTML = `
+        <div style="text-align: center; color: var(--text-muted); font-size: 0.72rem; padding: 1rem 0;">
+          No custom call KPIs defined.
+        </div>
+      `;
+      const codeContainer = document.getElementById("kpiGeneratedCode");
+      if (codeContainer) codeContainer.textContent = "// Add KPI parameters to see snippet";
+      return;
+    }
+
+    kpis.forEach((kpi, index) => {
+      const item = document.createElement("div");
+      item.className = "agent-mapping-item";
+      item.style.cssText = "display: flex; justify-content: space-between; align-items: center; background: rgba(255, 255, 255, 0.02); padding: 0.4rem 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);";
+      item.innerHTML = `
+        <div style="display: flex; flex-direction: column; gap: 0.15rem;">
+          <div style="display: flex; align-items: center; gap: 0.35rem;">
+            <span style="font-weight: 600; font-size: 0.78rem; color: var(--text-primary); font-family: var(--font-mono);">${kpi.name}</span>
+            <span class="badge" style="font-size: 0.65rem; padding: 0.05rem 0.25rem; text-transform: uppercase; background: rgba(139, 92, 246, 0.1); color: var(--accent-primary); border-color: rgba(139, 92, 246, 0.2);">${kpi.type}</span>
+          </div>
+          <div style="font-size: 0.65rem; color: var(--text-secondary); line-height: 1.2;">${kpi.description || "No description"}</div>
+        </div>
+        <button class="btn-delete-kpi" data-index="${index}" title="Delete KPI parameter" style="background: none; border: none; color: var(--color-negative); cursor: pointer; padding: 0.25rem; transition: color 0.15s ease;">
+          <i class="fa-solid fa-trash-can" style="font-size: 0.8rem;"></i>
+        </button>
+      `;
+
+      item.querySelector(".btn-delete-kpi").addEventListener("click", (e) => {
+        const idx = parseInt(e.currentTarget.getAttribute("data-index"), 10);
+        state.customKpis.splice(idx, 1);
+        renderCustomKpisList();
+      });
+
+      listKpiContainer.appendChild(item);
+    });
+
+    const codeContainer = document.getElementById("kpiGeneratedCode");
+    if (codeContainer) {
+      codeContainer.textContent = generateKpiCode(kpis);
+    }
+  }
+
+  // Load custom KPIs from Supabase global_settings or localStorage on open
+  async function loadCustomKpis() {
+    try {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=eq.custom_kpis`, {
+        headers: {
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.length > 0) {
+          const val = data[0].setting_value;
+          if (val) {
+            const kpis = typeof val === 'string' ? JSON.parse(val) : val;
+            state.customKpis = Array.isArray(kpis) ? kpis : [];
+            localStorage.setItem("gcs_custom_kpis", JSON.stringify(state.customKpis));
+            renderCustomKpisList();
+            return;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Could not load custom KPIs from global_settings:", err);
+    }
+    
+    // Fallback
+    const localKpis = localStorage.getItem("gcs_custom_kpis");
+    if (localKpis) {
+      try {
+        state.customKpis = JSON.parse(localKpis);
+      } catch (e) {
+        state.customKpis = [];
+      }
+    } else {
+      state.customKpis = [];
+    }
+    renderCustomKpisList();
+  }
+
+  // Bind Add KPI parameter
+  if (addKpiBtn) {
+    addKpiBtn.addEventListener("click", () => {
+      let name = newKpiNameInput.value.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+      const desc = newKpiDescInput.value.trim();
+      const type = newKpiTypeSelect.value;
+
+      if (!name) {
+        alert("Please enter a valid parameter name.");
+        return;
+      }
+
+      state.customKpis = state.customKpis || [];
+      const exists = state.customKpis.some(kpi => kpi.name === name);
+      if (exists) {
+        alert("A KPI parameter with this name already exists.");
+        return;
+      }
+
+      state.customKpis.push({ name, description: desc, type });
+      newKpiNameInput.value = "";
+      newKpiDescInput.value = "";
+      renderCustomKpisList();
+    });
+  }
+
+  // Bind Save KPI Settings button
+  if (saveKpiBtn) {
+    saveKpiBtn.addEventListener("click", async () => {
+      const kpis = state.customKpis || [];
+      const kpisStr = JSON.stringify(kpis);
+      localStorage.setItem("gcs_custom_kpis", kpisStr);
+
+      try {
+        // Check if setting row exists in global_settings
+        const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=eq.custom_kpis`, {
+          headers: {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        });
+        
+        if (checkRes.ok) {
+          const existing = await checkRes.json();
+          if (existing.length > 0) {
+            await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=eq.custom_kpis`, {
+              method: "PATCH",
+              headers: {
+                "apikey": SUPABASE_ANON_KEY,
+                "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({ setting_value: kpisStr })
+            });
+          } else {
+            await fetch(`${SUPABASE_URL}/rest/v1/global_settings`, {
+              method: "POST",
+              headers: {
+                "apikey": SUPABASE_ANON_KEY,
+                "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                setting_key: "custom_kpis",
+                setting_value: kpisStr
+              })
+            });
+          }
+        }
+      } catch (err) {
+        console.warn("Could not save custom KPIs to global_settings table:", err);
+      }
+
+      if (saveKpiStatusLabel) {
+        saveKpiStatusLabel.style.display = "block";
+        setTimeout(() => {
+          saveKpiStatusLabel.style.display = "none";
+        }, 3000);
+      }
+    });
+  }
+
+  // Auto-load on open
+  window.loadCustomKpis = loadCustomKpis; // expose to parent scope if needed
+  loadCustomKpis();
 }
 
 // ==========================================================================
