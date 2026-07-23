@@ -1233,19 +1233,6 @@ function renderOverviewCharts() {
       responsive: true,
       maintainAspectRatio: false,
       indexAxis: 'y', // Horizontal bars
-      onClick: (event, elements, chart) => {
-        const xAxis = chart.scales.x;
-        if (event.x >= xAxis.left && event.x <= xAxis.right) {
-          if (event.y >= xAxis.top - 10) {
-            const clickedValue = xAxis.getValueForPixel(event.x);
-            const scoreVal = Math.round(clickedValue);
-            if (scoreVal >= 0 && scoreVal <= 10) {
-              state.scoreThresholdFilter = scoreVal;
-              applyFilters();
-            }
-          }
-        }
-      },
       scales: {
         x: {
           min: 0,
@@ -1263,6 +1250,33 @@ function renderOverviewCharts() {
       }
     }
   });
+
+  // Bind native click event listener to the canvas to bypass Chart.js inner area restrictions and capture clicks on ticks/labels
+  const canvas = document.getElementById("chartAgentScore");
+  if (canvas && !canvas.dataset.clickBound) {
+    canvas.dataset.clickBound = "true";
+    canvas.addEventListener("click", (e) => {
+      const chart = state.charts.agentScore;
+      if (!chart) return;
+      
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      
+      const xAxis = chart.scales.x;
+      if (xAxis && x >= xAxis.left && x <= xAxis.right) {
+        // Ticks and labels are drawn at the bottom axis region (below xAxis.top - 15px)
+        if (y >= xAxis.top - 15) {
+          const clickedValue = xAxis.getValueForPixel(x);
+          const scoreVal = Math.round(clickedValue);
+          if (scoreVal >= 0 && scoreVal <= 10) {
+            state.scoreThresholdFilter = scoreVal;
+            applyFilters();
+          }
+        }
+      }
+    });
+  }
 
   // ---------------------------------------------------------
   // 4. Average Agent Score by Category (Bar)
