@@ -125,6 +125,7 @@ const TRANSLATIONS = {
     detailSecAction: "Recommended Next Action",
     detailSecEntities: "Extracted Entities",
     detailSecIntents: "Extracted Intents",
+    detailSecCustomKpis: "Custom Call KPIs",
     detailSecTranscript: "Call Transcript",
     
     detailLabelScore: "Agent Score",
@@ -268,6 +269,7 @@ const TRANSLATIONS = {
     detailSecAction: "Siguiente Acción Recomendada",
     detailSecEntities: "Entidades Extraídas",
     detailSecIntents: "Intenciones Extraídas",
+    detailSecCustomKpis: "KPIs de Llamada Personalizados",
     detailSecTranscript: "Transcripción de la Llamada",
     
     detailLabelScore: "Puntaje de Agente",
@@ -519,6 +521,7 @@ function updateUILanguage() {
     else if (txt.includes("action") || txt.includes("acción")) title.textContent = dict.detailSecAction;
     else if (txt.includes("entities") || txt.includes("entidades")) title.textContent = dict.detailSecEntities;
     else if (txt.includes("intents") || txt.includes("intenciones")) title.textContent = dict.detailSecIntents;
+    else if (txt.includes("custom call kpis") || txt.includes("kpis de llamada personalizados") || txt.includes("kpis de llamada")) title.textContent = dict.detailSecCustomKpis;
     else if (txt.includes("transcript") || txt.includes("transcripción")) title.textContent = dict.detailSecTranscript;
   });
   
@@ -1806,6 +1809,74 @@ function openDrawer(call) {
   
   const googleCXIntCount = renderIntentTags("drawerGoogleCXIntents", call.intents, "No Google Cloud CX intents extracted.");
   document.getElementById("drawerGoogleCXAnnotationCount").textContent = call.annotation_count !== null && call.annotation_count !== undefined ? call.annotation_count : googleCXIntCount;
+
+  // Render Custom Call KPIs
+  const kpisSection = document.getElementById("drawerCustomKpisSection");
+  const kpisContainer = document.getElementById("drawerCustomKpisContainer");
+  if (kpisSection && kpisContainer) {
+    kpisContainer.innerHTML = "";
+    let rawKpis = call.kpis;
+    if (typeof rawKpis === "string") {
+      try {
+        rawKpis = JSON.parse(rawKpis);
+      } catch (e) {
+        rawKpis = null;
+      }
+    }
+
+    let kpiObj = null;
+    if (Array.isArray(rawKpis) && rawKpis.length > 0) {
+      kpiObj = rawKpis[0];
+    } else if (rawKpis && typeof rawKpis === "object" && !Array.isArray(rawKpis)) {
+      kpiObj = rawKpis;
+    }
+
+    if (kpiObj && Object.keys(kpiObj).length > 0) {
+      kpisSection.style.display = "block";
+      Object.keys(kpiObj).forEach(key => {
+        const val = kpiObj[key];
+        const row = document.createElement("div");
+        row.style.cssText = "display: flex; flex-direction: column; gap: 0.2rem; padding: 0.5rem; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: var(--radius-sm);";
+
+        const formattedKey = key
+          .replace(/_/g, " ")
+          .replace(/\b\w/g, c => c.toUpperCase());
+
+        let valueHtml = "";
+        if (typeof val === "boolean") {
+          const badgeClass = val ? "badge-status-resolved" : "badge-status-no_resuelto";
+          const badgeText = val ? (state.lang === "es" ? "Sí" : "True") : (state.lang === "es" ? "No" : "False");
+          valueHtml = `<span class="badge ${badgeClass}" style="width: fit-content; font-size: 0.68rem; padding: 0.1rem 0.45rem;">${badgeText}</span>`;
+        } else if (Array.isArray(val)) {
+          if (val.length > 0) {
+            const tags = val.map(item => {
+              const str = typeof item === "object" ? JSON.stringify(item) : String(item);
+              return `<span class="tag tag-other" style="font-size: 0.68rem; margin: 0.1rem; padding: 0.15rem 0.35rem; display: inline-flex; align-items: center; gap: 0.25rem; background: rgba(255, 255, 255, 0.04); border-color: rgba(255,255,255,0.1);"><i class="fa-solid fa-circle-dot" style="font-size: 0.5rem; opacity: 0.5;"></i> ${str}</span>`;
+            }).join("");
+            valueHtml = `<div style="display: flex; flex-wrap: wrap; gap: 0.2rem; margin-top: 0.2rem;">${tags}</div>`;
+          } else {
+            valueHtml = `<span style="color: var(--text-muted); font-size: 0.8rem;">[] (Empty Array)</span>`;
+          }
+        } else if (val && typeof val === "object") {
+          valueHtml = `<pre style="margin: 0; background: rgba(0,0,0,0.2); padding: 0.35rem; border-radius: var(--radius-sm); font-size: 0.72rem; overflow-x: auto; color: var(--text-secondary);">${JSON.stringify(val, null, 2)}</pre>`;
+        } else {
+          if (val === null || val === undefined) {
+            valueHtml = `<span style="color: var(--text-muted); font-size: 0.8rem;">null</span>`;
+          } else {
+            valueHtml = `<span style="font-size: 0.82rem; color: var(--text-primary); font-weight: 500;">${val}</span>`;
+          }
+        }
+
+        row.innerHTML = `
+          <div style="font-size: 0.68rem; text-transform: uppercase; font-weight: 600; color: var(--text-secondary); letter-spacing: 0.03em;">${formattedKey}</div>
+          <div style="margin-top: 0.15rem;">${valueHtml}</div>
+        `;
+        kpisContainer.appendChild(row);
+      });
+    } else {
+      kpisSection.style.display = "none";
+    }
+  }
 
   // Interactive Transcript Dialog
   renderTranscript(call);
