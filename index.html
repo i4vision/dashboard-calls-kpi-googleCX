@@ -579,6 +579,14 @@
               </select>
             </div>
           </div>
+          <!-- Google CX Option (Only visible when STT Provider is Gemini) -->
+          <div id="googleCxToggleContainer" style="margin-top: 0.75rem; display: none;">
+            <label class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem; display: block;">RUN GOOGLE CLOUD CX ANALYSIS?</label>
+            <select id="googleCxAnalyzeSelect" class="gcs-input" style="width: 100%; height: 32px; padding: 0 0.5rem; font-size: 0.75rem; cursor: pointer;">
+              <option value="off">Off (Recommended for Gemini only)</option>
+              <option value="on">On (Run both for comparison)</option>
+            </select>
+          </div>
         </div>
 
         <!-- GCS Search & Status Filter Controls -->

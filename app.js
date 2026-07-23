@@ -3048,6 +3048,7 @@ function setupGCSEventListeners() {
 
   const sttProviderSelect = document.getElementById("sttProviderSelect");
   const sttModelSelect = document.getElementById("sttModelSelect");
+  const googleCxAnalyzeSelect = document.getElementById("googleCxAnalyzeSelect");
 
   function updateSTTModelsList() {
     if (!sttProviderSelect || !sttModelSelect) return;
@@ -3064,6 +3065,12 @@ function setupGCSEventListeners() {
     
     localStorage.setItem("gcs_stt_provider", provider);
     localStorage.setItem("gcs_stt_model", sttModelSelect.value);
+    
+    // Update Google CX toggle visibility
+    const cxContainer = document.getElementById("googleCxToggleContainer");
+    if (cxContainer) {
+      cxContainer.style.display = (provider === "gemini") ? "block" : "none";
+    }
   }
 
   if (sttProviderSelect && sttModelSelect) {
@@ -3071,6 +3078,15 @@ function setupGCSEventListeners() {
     sttModelSelect.addEventListener("change", () => {
       localStorage.setItem("gcs_stt_model", sttModelSelect.value);
     });
+
+    if (googleCxAnalyzeSelect) {
+      googleCxAnalyzeSelect.addEventListener("change", () => {
+        localStorage.setItem("gcs_google_cx_enabled", googleCxAnalyzeSelect.value);
+      });
+      // Load saved value
+      const savedGoogleCx = localStorage.getItem("gcs_google_cx_enabled") || "off";
+      googleCxAnalyzeSelect.value = savedGoogleCx;
+    }
 
     // Load saved settings
     const savedProvider = localStorage.getItem("gcs_stt_provider") || "google";
@@ -3945,6 +3961,8 @@ async function triggerBulkCallAnalysisWebhook() {
   
   const sttProvider = document.getElementById("sttProviderSelect") ? document.getElementById("sttProviderSelect").value : "google";
   const sttModel = document.getElementById("sttModelSelect") ? document.getElementById("sttModelSelect").value : "chirp";
+  const googleCxSelect = document.getElementById("googleCxAnalyzeSelect");
+  const googleCxEnabled = (sttProvider === "gemini" && googleCxSelect) ? (googleCxSelect.value === "on") : false;
   
   btn.disabled = true;
   if (selectAllCheckbox) selectAllCheckbox.disabled = true;
@@ -3988,7 +4006,9 @@ async function triggerBulkCallAnalysisWebhook() {
           file_name: displayName,
           gcs_path: file.name,
           stt_provider: sttProvider,
-          stt_model: sttModel
+          stt_model: sttModel,
+          google_cx_enabled: googleCxEnabled,
+          google_cx_analysis: googleCxEnabled ? "on" : "off"
         })
       });
       
