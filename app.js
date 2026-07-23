@@ -1686,7 +1686,7 @@ function openDrawer(call) {
           }
           result.push({ name: item, type: type });
         } else if (item && typeof item === 'object') {
-          const name = item.entity || item.name || item.value || JSON.stringify(item);
+          const name = item.text || item.entity || item.name || item.value || JSON.stringify(item);
           const type = item.type || item.category || "OTHER";
           result.push({ name: name, type: type });
         }
@@ -1723,7 +1723,7 @@ function openDrawer(call) {
         if (typeof item === 'string') {
           result.push(item);
         } else if (item && typeof item === 'object') {
-          const name = item.intent || item.name || item.value || JSON.stringify(item);
+          const name = item.text || item.intent || item.name || item.value || JSON.stringify(item);
           result.push(name);
         }
       });
