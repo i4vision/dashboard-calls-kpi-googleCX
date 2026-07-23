@@ -16,12 +16,10 @@ let state = {
     sentiment: null,
     categoryRisk: null,
     agentScore: null,
-    silencePerformance: null,
     callsHour: null,
     callsDay: null,
     sentimentTrend: null,
-    resolutionTrend: null,
-    silenceTrend: null
+    resolutionTrend: null
   },
   activeTheme: 'dark',
   gcsFiles: [],
@@ -54,12 +52,10 @@ const TRANSLATIONS = {
     kpiTotalCalls: "Total Calls",
     kpiAvgScore: "Avg Agent Score",
     kpiResolution: "Resolution Rate",
-    kpiSilence: "Avg Silence %",
     kpiCost: "Total Cost",
     kpiRealTime: '<i class="fa-solid fa-arrow-trend-up"></i> Real-time sync',
     kpiScale: '<i class="fa-solid fa-star" style="color: var(--color-warning); margin-right: 0.25rem;"></i> Scale 0 to 10',
     kpiResolvedCalls: "Resolved calls",
-    kpiDeadAir: "Dead-air ratio",
     kpiAvgCostCall: '<i class="fa-solid fa-coins"></i> Avg cost/call',
     
     tabOverview: '<i class="fa-solid fa-chart-pie"></i> Overview Analytics',
@@ -74,7 +70,6 @@ const TRANSLATIONS = {
     titleCallsTime: '<i class="fa-solid fa-calendar-day"></i> Calls over Time',
     titleSentimentTrend: '<i class="fa-solid fa-chart-line"></i> Sentiment Trend',
     titleResolutionTrend: '<i class="fa-solid fa-square-poll-vertical"></i> Resolution Rate Trend',
-    titleSilenceTrend: '<i class="fa-solid fa-volume-xmark"></i> Average Silence Trend',
     
     titleExplorer: '<i class="fa-solid fa-list"></i> Call Records Explorer',
     resetBtn: '<i class="fa-solid fa-rotate-left"></i> Reset',
@@ -123,7 +118,7 @@ const TRANSLATIONS = {
     
     // Details Drawer
     detailHeaderTitle: "Call Analytics Detail",
-    detailSecPerformance: "Performance & Silence Metrics",
+    detailSecPerformance: "Performance Metrics",
     detailSecCost: "Cost & Usage Metrics",
     detailSecSummary: "Executive Summary",
     detailSecKeyPoints: "Key Points Analyzed",
@@ -132,7 +127,6 @@ const TRANSLATIONS = {
     detailSecTranscript: "Call Transcript",
     
     detailLabelScore: "Agent Score",
-    detailLabelSilence: "Silence Ratio",
     detailLabelCost: "Total Cost (USD)",
     detailLabelAudioDuration: "Audio Duration",
     detailLabelSTTEngine: "Speech-to-Text (STT) Engine",
@@ -200,12 +194,10 @@ const TRANSLATIONS = {
     kpiTotalCalls: "Llamadas Totales",
     kpiAvgScore: "Puntaje Promedio",
     kpiResolution: "Tasa de Resolución",
-    kpiSilence: "Promedio Silencio %",
     kpiCost: "Costo Total",
     kpiRealTime: '<i class="fa-solid fa-arrow-trend-up"></i> Sincronización en vivo',
     kpiScale: '<i class="fa-solid fa-star" style="color: var(--color-warning); margin-right: 0.25rem;"></i> Escala 0 a 10',
     kpiResolvedCalls: "Llamadas resueltas",
-    kpiDeadAir: "Proporción de silencio",
     kpiAvgCostCall: '<i class="fa-solid fa-coins"></i> Costo prom./llamada',
     
     tabOverview: '<i class="fa-solid fa-chart-pie"></i> Análisis General',
@@ -220,7 +212,6 @@ const TRANSLATIONS = {
     titleCallsTime: '<i class="fa-solid fa-calendar-day"></i> Llamadas en el Tiempo',
     titleSentimentTrend: '<i class="fa-solid fa-chart-line"></i> Tendencia de Sentimiento',
     titleResolutionTrend: '<i class="fa-solid fa-square-poll-vertical"></i> Tendencia de Tasa de Resolución',
-    titleSilenceTrend: '<i class="fa-solid fa-volume-xmark"></i> Tendencia de Silencio Promedio',
     
     titleExplorer: '<i class="fa-solid fa-list"></i> Explorador de Registro de Llamadas',
     resetBtn: '<i class="fa-solid fa-rotate-left"></i> Restablecer',
@@ -269,7 +260,7 @@ const TRANSLATIONS = {
     
     // Details Drawer
     detailHeaderTitle: "Detalle de Análisis de Llamada",
-    detailSecPerformance: "Métricas de Rendimiento y Silencio",
+    detailSecPerformance: "Métricas de Rendimiento",
     detailSecCost: "Métricas de Costo y Uso",
     detailSecSummary: "Resumen Ejecutivo",
     detailSecKeyPoints: "Puntos Clave Analizados",
@@ -278,7 +269,6 @@ const TRANSLATIONS = {
     detailSecTranscript: "Transcripción de la Llamada",
     
     detailLabelScore: "Puntaje de Agente",
-    detailLabelSilence: "Proporción de Silencio",
     detailLabelCost: "Costo Total (USD)",
     detailLabelAudioDuration: "Duración del Audio",
     detailLabelSTTEngine: "Motor de Speech-to-Text (STT)",
@@ -369,22 +359,20 @@ function updateUILanguage() {
   
   // 2. KPI Titles
   const kpiTitles = document.querySelectorAll(".kpi-title");
-  if (kpiTitles.length >= 5) {
+  if (kpiTitles.length >= 4) {
     kpiTitles[0].textContent = dict.kpiTotalCalls;
     kpiTitles[1].textContent = dict.kpiAvgScore;
     kpiTitles[2].textContent = dict.kpiResolution;
-    kpiTitles[3].textContent = dict.kpiSilence;
-    kpiTitles[4].textContent = dict.kpiCost;
+    kpiTitles[3].textContent = dict.kpiCost;
   }
   
   // KPI Subtexts
   const kpiChanges = document.querySelectorAll(".kpi-change");
-  if (kpiChanges.length >= 5) {
+  if (kpiChanges.length >= 4) {
     kpiChanges[0].innerHTML = dict.kpiRealTime;
     kpiChanges[1].innerHTML = dict.kpiScale;
     kpiChanges[2].textContent = dict.kpiResolvedCalls;
-    kpiChanges[3].textContent = dict.kpiDeadAir;
-    kpiChanges[4].innerHTML = dict.kpiAvgCostCall;
+    kpiChanges[3].innerHTML = dict.kpiAvgCostCall;
   }
   
   // 3. Tab Buttons
@@ -1038,7 +1026,6 @@ function updateKPIs() {
   if (count === 0) {
     document.getElementById("kpiAvgScore").textContent = "N/A";
     document.getElementById("kpiResolutionRate").textContent = "N/A";
-    document.getElementById("kpiSilencePercentage").textContent = "N/A";
     document.getElementById("kpiTotalCost").textContent = "N/A";
     return;
   }
@@ -1058,11 +1045,6 @@ function updateKPIs() {
     ? `<i class="fa-solid fa-check"></i> ${resolvedCount} de ${count} resueltas`
     : `<i class="fa-solid fa-check"></i> ${resolvedCount} of ${count} resolved`;
   document.getElementById("kpiResolutionSubtext").innerHTML = subtextStr;
-
-  // 3. Average Silence Percentage
-  const silencePercentages = state.filteredCalls.map(c => Number(c.silence_percentage)).filter(p => !isNaN(p));
-  const avgSilence = (silencePercentages.reduce((acc, curr) => acc + curr, 0) / silencePercentages.length) * 100;
-  document.getElementById("kpiSilencePercentage").textContent = `${avgSilence.toFixed(1)}%`;
 
   // 4. Total and Average Processing Cost
   const validCosts = state.filteredCalls.map(c => Number(c.total_cost_usd)).filter(p => !isNaN(p));
@@ -1488,9 +1470,6 @@ function openDrawer(call) {
   // Performance stats
   const drawerScoreNum = Number(call.agent_score);
   document.getElementById("drawerScore").textContent = !isNaN(drawerScoreNum) ? `${drawerScoreNum.toFixed(1)} / 10` : "N/A";
-  const silenceSecs = call.silence_seconds || "0s";
-  const silencePercentage = (Number(call.silence_percentage) * 100).toFixed(1);
-  document.getElementById("drawerSilence").textContent = `${silenceSecs} (${silencePercentage}%)`;
 
   // Cost & Usage stats
   const totalCost = Number(call.total_cost_usd);
@@ -2470,45 +2449,7 @@ function renderTrendCharts() {
     }
   });
 
-  // 5. Average Silence Trend
-  const silencePercentages = data.map(c => Number(c.silence_percentage) * 100);
 
-  if (state.charts.silenceTrend) state.charts.silenceTrend.destroy();
-  state.charts.silenceTrend = new Chart(document.getElementById("chartSilenceTrend").getContext("2d"), {
-    type: "line",
-    data: {
-      labels: timeLabels,
-      datasets: [{
-        label: "Silence Percentage (%)",
-        data: silencePercentages,
-        borderColor: "#f43f5e",
-        backgroundColor: "rgba(244, 63, 94, 0.05)",
-        borderWidth: 2.5,
-        tension: 0.35,
-        pointBackgroundColor: "#f43f5e",
-        pointRadius: 3
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        x: {
-          grid: { display: false },
-          ticks: { color: mutedColor, font: { family: "Inter", size: 9 } }
-        },
-        y: {
-          grid: { color: gridColor },
-          min: 0,
-          max: 100,
-          ticks: { color: mutedColor, font: { family: "Inter" } }
-        }
-      },
-      plugins: {
-        legend: { display: false }
-      }
-    }
-  });
 }
 
 // ==========================================================================
@@ -4085,13 +4026,12 @@ function convertToCSV(arr) {
   const headers = [
     "Call ID", "Audio Filename", "Agent Name", "Duration (Min)", 
     "Sentiment", "Risk Level", "Resolution Status", "Agent Score (0-10)", 
-    "Silence (Seconds)", "Silence (%)", "Total Cost (USD)", "Category", 
+    "Total Cost (USD)", "Category", 
     "STT Provider", "STT Model", "STT Minutes", "STT Cost (USD)", "Total Processing Cost (USD)", "Created At"
   ];
   
   const rows = arr.map(c => {
     const agentName = getAgentName(c);
-    const silencePct = c.silence_percentage ? (Number(c.silence_percentage) * 100).toFixed(1) + "%" : "0.0%";
     const score = c.agent_score ? Number(c.agent_score).toFixed(1) : "N/A";
     
     return [
@@ -4103,8 +4043,6 @@ function convertToCSV(arr) {
       c.risk_level || "",
       c.resolution_status || "",
       score,
-      c.silence_seconds || "",
-      silencePct,
       c.total_cost_usd || "",
       c.category || "",
       c.stt_provider || "",
@@ -5024,8 +4962,8 @@ function compileOKFCallsContext() {
   
   let md = "## CURATED CALL METADATA (OKF CORE)\n";
   md += `Showing top ${limitedCalls.length} calls matching current active filters:\n\n`;
-  md += "| Call ID | Agent | Date | Category | Sentiment | Risk | Score | Silence % | Cost (USD) | Summary |\n";
-  md += "|---|---|---|---|---|---|---|---|---|---|\n";
+  md += "| Call ID | Agent | Date | Category | Sentiment | Risk | Score | Cost (USD) | Summary |\n";
+  md += "|---|---|---|---|---|---|---|---|---|\n";
   
   limitedCalls.forEach(call => {
     let id = call.conversation_name || "N/A";
@@ -5038,11 +4976,10 @@ function compileOKFCallsContext() {
     const sent = call.sentiment || "N/A";
     const risk = call.risk_level || "N/A";
     const score = call.agent_score !== null && call.agent_score !== undefined ? `${call.agent_score}/10` : "N/A";
-    const silence = call.silence_percentage !== null && call.silence_percentage !== undefined ? `${(Number(call.silence_percentage) * 100).toFixed(0)}%` : "N/A";
     const cost = call.total_cost_usd !== null && call.total_cost_usd !== undefined ? `$${Number(call.total_cost_usd).toFixed(3)}` : "N/A";
     const sum = call.summary ? call.summary.replace(/\n/g, " ").substring(0, 100) + "..." : "No summary";
     
-    md += `| ${id} | ${agent} | ${date} | ${cat} | ${sent} | ${risk} | ${score} | ${silence} | ${cost} | ${sum} |\n`;
+    md += `| ${id} | ${agent} | ${date} | ${cat} | ${sent} | ${risk} | ${score} | ${cost} | ${sum} |\n`;
   });
   
   return md;
@@ -5173,7 +5110,7 @@ async function handleChatSend() {
     
     const systemPrompt = `You are the Call Center Analytics AI Assistant. Your job is to answer questions about the call analytics database.
 You are equipped with a hybrid analytics stack:
-1. CURATED METADATA (OKF): A clean Markdown table containing structural metadata of the calls (IDs, scores, sentiments, silence %, categories, summaries).
+1. CURATED METADATA (OKF): A clean Markdown table containing structural metadata of the calls (IDs, scores, sentiments, categories, summaries).
 2. TRANSCRIPT SNIPPETS (RAG): A selection of the top matching call transcripts based on the user's query context.
 
 When answering:

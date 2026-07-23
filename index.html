@@ -86,17 +86,7 @@
         </div>
       </div>
 
-      <!-- KPI 4: Avg Silence -->
-      <div class="kpi-card">
-        <div class="kpi-details">
-          <span class="kpi-title">Avg Silence %</span>
-          <span id="kpiSilencePercentage" class="kpi-value">-</span>
-          <span class="kpi-change down" id="kpiSilenceSubtext">Dead-air ratio</span>
-        </div>
-        <div class="kpi-icon-wrapper">
-          <i class="fa-solid fa-volume-xmark"></i>
-        </div>
-      </div>
+
 
       <!-- KPI 5: Total Cost -->
       <div class="kpi-card">
@@ -202,15 +192,7 @@
         </div>
       </div>
 
-      <!-- Trend 5: Average Silence Trend -->
-      <div class="chart-card" style="grid-column: span 2;">
-        <div class="chart-header">
-          <h2 class="chart-title"><i class="fa-solid fa-volume-xmark"></i> Average Silence Trend</h2>
-        </div>
-        <div class="chart-body" style="min-height: 320px;">
-          <canvas id="chartSilenceTrend"></canvas>
-        </div>
-      </div>
+
     </section>
 
     <!-- Call Explorer Table -->
@@ -357,15 +339,11 @@
 
       <!-- Quick Stats Grid -->
       <div class="drawer-section">
-        <h3 class="drawer-section-title">Performance & Silence Metrics</h3>
+        <h3 class="drawer-section-title">Performance Metrics</h3>
         <div class="details-grid">
           <div class="details-item">
             <span class="details-item-label">Agent Score</span>
             <span id="drawerScore" class="details-item-value">2 / 5</span>
-          </div>
-          <div class="details-item">
-            <span class="details-item-label">Silence Ratio</span>
-            <span id="drawerSilence" class="details-item-value">27s (43%)</span>
           </div>
         </div>
       </div>
