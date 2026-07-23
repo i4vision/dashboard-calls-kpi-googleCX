@@ -558,6 +558,18 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--accent-secondary);
 }
 
+.badge-status-partially_resolved,
+.badge-status-partially-resolved {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--color-warning);
+}
+
+.badge-status-unknown,
+.badge-status-desconocido {
+  background: rgba(107, 114, 128, 0.15);
+  color: var(--text-muted);
+}
+
 .star-rating {
   color: var(--color-warning);
   letter-spacing: 2px;
