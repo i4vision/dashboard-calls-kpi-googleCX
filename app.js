@@ -34,7 +34,8 @@ let state = {
   analysisStartTimes: {},
   lang: 'en',
   predefinedQuestions: [],
-  agentMappings: {}
+  agentMappings: {},
+  scoreThresholdFilter: null
 };
 
 // ==========================================================================
@@ -952,10 +953,51 @@ function applyFilters() {
       }
     }
 
-    return searchMatch && audioSearchMatch && sentimentMatch && riskMatch && resolutionMatch && categoryMatch && durationMatch;
+    // Score threshold filter (agents with average performance score below threshold)
+    let scoreMatch = true;
+    if (state.scoreThresholdFilter !== null && state.scoreThresholdFilter !== undefined) {
+      const agent = getAgentName(call);
+      const avgScore = getAgentAverageScore(agent);
+      scoreMatch = avgScore < state.scoreThresholdFilter;
+    }
+
+    return searchMatch && audioSearchMatch && sentimentMatch && riskMatch && resolutionMatch && categoryMatch && durationMatch && scoreMatch;
   });
 
+  renderActiveFilterBadges();
   updateDashboardUI();
+}
+
+function getAgentAverageScore(agentName) {
+  if (!state.allCalls) return 0;
+  const agentCalls = state.allCalls.filter(c => getAgentName(c) === agentName);
+  const scores = agentCalls.map(c => Number(c.agent_score)).filter(s => !isNaN(s));
+  if (scores.length === 0) return 0;
+  return scores.reduce((a, b) => a + b, 0) / scores.length;
+}
+
+function renderActiveFilterBadges() {
+  const container = document.getElementById("activeFilterBadges");
+  if (!container) return;
+  container.innerHTML = "";
+
+  if (state.scoreThresholdFilter !== null && state.scoreThresholdFilter !== undefined) {
+    const badge = document.createElement("span");
+    badge.className = "badge";
+    badge.style.cssText = "background: rgba(244, 63, 94, 0.12); color: #f43f5e; border-color: rgba(244, 63, 94, 0.25); display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 500; font-size: 0.75rem; padding: 0.25rem 0.50rem; border-radius: var(--radius-sm); cursor: pointer; border: 1px solid;";
+    
+    const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
+    const label = lang === "es" 
+      ? `Promedio Agente < ${state.scoreThresholdFilter}`
+      : `Agent Avg Score < ${state.scoreThresholdFilter}`;
+      
+    badge.innerHTML = `${label} <i class="fa-solid fa-xmark" style="font-size: 0.85rem; margin-left: 0.25rem;"></i>`;
+    badge.addEventListener("click", () => {
+      state.scoreThresholdFilter = null;
+      applyFilters();
+    });
+    container.appendChild(badge);
+  }
 }
 
 function resetFilters() {
@@ -966,8 +1008,10 @@ function resetFilters() {
   document.getElementById("filterResolution").value = "all";
   document.getElementById("filterCategory").value = "all";
   document.getElementById("filterDuration").value = "all";
+  state.scoreThresholdFilter = null;
   
   state.filteredCalls = [...state.allCalls];
+  renderActiveFilterBadges();
   updateDashboardUI();
 }
 
@@ -1189,6 +1233,19 @@ function renderOverviewCharts() {
       responsive: true,
       maintainAspectRatio: false,
       indexAxis: 'y', // Horizontal bars
+      onClick: (event, elements, chart) => {
+        const xAxis = chart.scales.x;
+        if (event.x >= xAxis.left && event.x <= xAxis.right) {
+          if (event.y >= xAxis.top - 10) {
+            const clickedValue = xAxis.getValueForPixel(event.x);
+            const scoreVal = Math.round(clickedValue);
+            if (scoreVal >= 0 && scoreVal <= 10) {
+              state.scoreThresholdFilter = scoreVal;
+              applyFilters();
+            }
+          }
+        }
+      },
       scales: {
         x: {
           min: 0,
