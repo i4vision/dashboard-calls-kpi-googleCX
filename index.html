@@ -460,7 +460,45 @@
       <!-- Entities tagged -->
       <div class="drawer-section">
         <h3 class="drawer-section-title">Extracted Entities</h3>
-        <div id="drawerEntities" class="tags-cloud">
+        
+        <!-- Gemini Entities (Primary) -->
+        <div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent-primary); font-weight: 700; margin-bottom: 0.4rem; display: flex; align-items: center; justify-content: space-between; width: 100%;">
+          <span><i class="fa-solid fa-gemini"></i> Gemini Entities</span>
+          <span id="drawerGeminiEntityCount" class="badge" style="font-size: 0.65rem; padding: 0.1rem 0.35rem; background: rgba(139, 92, 246, 0.15); color: var(--accent-primary); border-color: rgba(139, 92, 246, 0.3); font-weight: 600;">0</span>
+        </div>
+        <div id="drawerGeminiEntities" class="tags-cloud" style="margin-bottom: 0.75rem;">
+          <!-- Tags cloud -->
+        </div>
+        
+        <!-- Google CX Entities (Comparison) -->
+        <div style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 600; margin-bottom: 0.4rem; display: flex; align-items: center; justify-content: space-between; width: 100%;">
+          <span><i class="fa-brands fa-google"></i> Google Cloud CX Entities</span>
+          <span id="drawerGoogleCXEntityCount" class="badge" style="font-size: 0.6rem; padding: 0.1rem 0.3rem; background: rgba(255,255,255,0.05); color: var(--text-secondary); border-color: rgba(255,255,255,0.1); font-weight: 500;">0</span>
+        </div>
+        <div id="drawerGoogleCXEntities" class="tags-cloud" style="opacity: 0.75; transform: scale(0.95); transform-origin: left top;">
+          <!-- Tags cloud -->
+        </div>
+      </div>
+
+      <!-- Intents -->
+      <div class="drawer-section">
+        <h3 class="drawer-section-title">Extracted Intents</h3>
+        
+        <!-- Gemini Intents (Primary) -->
+        <div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent-primary); font-weight: 700; margin-bottom: 0.4rem; display: flex; align-items: center; justify-content: space-between; width: 100%;">
+          <span><i class="fa-solid fa-gemini"></i> Gemini Intents</span>
+          <span id="drawerGeminiAnnotationCount" class="badge" style="font-size: 0.65rem; padding: 0.1rem 0.35rem; background: rgba(139, 92, 246, 0.15); color: var(--accent-primary); border-color: rgba(139, 92, 246, 0.3); font-weight: 600;">0</span>
+        </div>
+        <div id="drawerGeminiIntents" class="tags-cloud" style="margin-bottom: 0.75rem;">
+          <!-- Tags cloud -->
+        </div>
+        
+        <!-- Google CX Intents (Comparison) -->
+        <div style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 600; margin-bottom: 0.4rem; display: flex; align-items: center; justify-content: space-between; width: 100%;">
+          <span><i class="fa-brands fa-google"></i> Google Cloud CX Intents</span>
+          <span id="drawerGoogleCXAnnotationCount" class="badge" style="font-size: 0.6rem; padding: 0.1rem 0.3rem; background: rgba(255,255,255,0.05); color: var(--text-secondary); border-color: rgba(255,255,255,0.1); font-weight: 500;">0</span>
+        </div>
+        <div id="drawerGoogleCXIntents" class="tags-cloud" style="opacity: 0.75; transform: scale(0.95); transform-origin: left top;">
           <!-- Tags cloud -->
         </div>
       </div>

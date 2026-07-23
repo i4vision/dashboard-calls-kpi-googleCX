@@ -124,6 +124,7 @@ const TRANSLATIONS = {
     detailSecKeyPoints: "Key Points Analyzed",
     detailSecAction: "Recommended Next Action",
     detailSecEntities: "Extracted Entities",
+    detailSecIntents: "Extracted Intents",
     detailSecTranscript: "Call Transcript",
     
     detailLabelScore: "Agent Score",
@@ -266,6 +267,7 @@ const TRANSLATIONS = {
     detailSecKeyPoints: "Puntos Clave Analizados",
     detailSecAction: "Siguiente Acción Recomendada",
     detailSecEntities: "Entidades Extraídas",
+    detailSecIntents: "Intenciones Extraídas",
     detailSecTranscript: "Transcripción de la Llamada",
     
     detailLabelScore: "Puntaje de Agente",
@@ -508,15 +510,17 @@ function updateUILanguage() {
   if (detailTitle) detailTitle.textContent = dict.detailHeaderTitle;
   
   const detailSecTitles = document.querySelectorAll("#callDrawer .drawer-section-title");
-  if (detailSecTitles.length >= 7) {
-    detailSecTitles[0].textContent = dict.detailSecPerformance;
-    detailSecTitles[1].textContent = dict.detailSecCost;
-    detailSecTitles[2].textContent = dict.detailSecSummary;
-    detailSecTitles[3].textContent = dict.detailSecKeyPoints;
-    detailSecTitles[4].textContent = dict.detailSecAction;
-    detailSecTitles[5].textContent = dict.detailSecEntities;
-    detailSecTitles[6].textContent = dict.detailSecTranscript;
-  }
+  detailSecTitles.forEach(title => {
+    const txt = title.textContent.trim().toLowerCase();
+    if (txt.includes("performance") || txt.includes("rendimiento")) title.textContent = dict.detailSecPerformance;
+    else if (txt.includes("cost") || txt.includes("costo")) title.textContent = dict.detailSecCost;
+    else if (txt.includes("summary") || txt.includes("resumen")) title.textContent = dict.detailSecSummary;
+    else if (txt.includes("points") || txt.includes("puntos")) title.textContent = dict.detailSecKeyPoints;
+    else if (txt.includes("action") || txt.includes("acción")) title.textContent = dict.detailSecAction;
+    else if (txt.includes("entities") || txt.includes("entidades")) title.textContent = dict.detailSecEntities;
+    else if (txt.includes("intents") || txt.includes("intenciones")) title.textContent = dict.detailSecIntents;
+    else if (txt.includes("transcript") || txt.includes("transcripción")) title.textContent = dict.detailSecTranscript;
+  });
   
   const detailLabels = document.querySelectorAll("#callDrawer .details-item-label");
   detailLabels.forEach(lbl => {
@@ -1653,46 +1657,155 @@ function openDrawer(call) {
   }
 
   // Entities Tag Cloud
-  const entitiesCloud = document.getElementById("drawerEntities");
-  entitiesCloud.innerHTML = "";
-  
-  let entityList = [];
-  let typeList = [];
-  
-  if (call.entities) {
-    entityList = call.entities.split(",").map(e => e.trim());
-  }
-  if (call.entity_types) {
-    typeList = call.entity_types.split(",").map(t => t.trim());
+  // Parsers and renders for Entities & Intents comparison
+  function parseEntities(entitiesField, typesField) {
+    let result = [];
+    if (!entitiesField) return result;
+    
+    if (typeof entitiesField === 'string') {
+      const entityList = entitiesField.split(",").map(e => e.trim()).filter(Boolean);
+      const typeList = typeof typesField === 'string' ? typesField.split(",").map(t => t.trim()) : [];
+      entityList.forEach((ent, idx) => {
+        result.push({
+          name: ent,
+          type: typeList[idx] || "OTHER"
+        });
+      });
+      return result;
+    }
+    
+    if (Array.isArray(entitiesField)) {
+      entitiesField.forEach((item, idx) => {
+        if (typeof item === 'string') {
+          let type = "OTHER";
+          if (Array.isArray(typesField)) {
+            type = typesField[idx] || "OTHER";
+          } else if (typeof typesField === 'string') {
+            const typeList = typesField.split(",").map(t => t.trim());
+            type = typeList[idx] || "OTHER";
+          }
+          result.push({ name: item, type: type });
+        } else if (item && typeof item === 'object') {
+          const name = item.entity || item.name || item.value || JSON.stringify(item);
+          const type = item.type || item.category || "OTHER";
+          result.push({ name: name, type: type });
+        }
+      });
+      return result;
+    }
+    
+    if (typeof entitiesField === 'object') {
+      Object.keys(entitiesField).forEach(key => {
+        const val = entitiesField[key];
+        if (Array.isArray(val)) {
+          val.forEach(item => {
+            result.push({ name: String(item), type: key });
+          });
+        } else {
+          result.push({ name: String(val), type: key });
+        }
+      });
+    }
+    
+    return result;
   }
 
-  if (entityList.length > 0) {
-    entityList.forEach((ent, idx) => {
-      const type = typeList[idx] || "OTHER";
-      const tag = document.createElement("span");
-      
-      let typeClass = "tag-other";
-      let icon = "fa-tag";
-      
-      const typeLower = type.toLowerCase();
-      if (typeLower.includes("person")) {
-        typeClass = "tag-person";
-        icon = "fa-user";
-      } else if (typeLower.includes("location")) {
-        typeClass = "tag-location";
-        icon = "fa-location-dot";
-      } else if (typeLower.includes("org")) {
-        typeClass = "tag-org";
-        icon = "fa-building";
-      }
-
-      tag.className = `tag ${typeClass}`;
-      tag.innerHTML = `<i class="fa-solid ${icon}" style="font-size: 0.75rem;"></i> ${ent} <span style="font-size: 0.65rem; opacity: 0.6; margin-left: 0.25rem;">${type}</span>`;
-      entitiesCloud.appendChild(tag);
-    });
-  } else {
-    entitiesCloud.innerHTML = '<span style="color: var(--text-muted); font-size: 0.9rem;">No entities extracted.</span>';
+  function parseCustomIntents(intentsField) {
+    let result = [];
+    if (!intentsField) return result;
+    
+    if (typeof intentsField === 'string') {
+      return intentsField.split(",").map(i => i.trim()).filter(Boolean);
+    }
+    
+    if (Array.isArray(intentsField)) {
+      intentsField.forEach(item => {
+        if (typeof item === 'string') {
+          result.push(item);
+        } else if (item && typeof item === 'object') {
+          const name = item.intent || item.name || item.value || JSON.stringify(item);
+          result.push(name);
+        }
+      });
+      return result;
+    }
+    
+    if (typeof intentsField === 'object') {
+      Object.keys(intentsField).forEach(key => {
+        result.push(`${key}: ${JSON.stringify(intentsField[key])}`);
+      });
+    }
+    
+    return result;
   }
+
+  function renderEntityTags(containerId, entitiesField, typesField, placeholder) {
+    const container = document.getElementById(containerId);
+    if (!container) return 0;
+    container.innerHTML = "";
+    
+    const parsed = parseEntities(entitiesField, typesField);
+    if (parsed.length > 0) {
+      parsed.forEach(item => {
+        const tag = document.createElement("span");
+        let typeClass = "tag-other";
+        let icon = "fa-tag";
+        
+        const typeLower = (item.type || "").toLowerCase();
+        if (typeLower.includes("person")) {
+          typeClass = "tag-person";
+          icon = "fa-user";
+        } else if (typeLower.includes("location")) {
+          typeClass = "tag-location";
+          icon = "fa-location-dot";
+        } else if (typeLower.includes("org")) {
+          typeClass = "tag-org";
+          icon = "fa-building";
+        }
+        
+        tag.className = `tag ${typeClass}`;
+        tag.innerHTML = `<i class="fa-solid ${icon}" style="font-size: 0.75rem;"></i> ${item.name} <span style="font-size: 0.65rem; opacity: 0.6; margin-left: 0.25rem;">${item.type}</span>`;
+        container.appendChild(tag);
+      });
+    } else {
+      container.innerHTML = `<span style="color: var(--text-muted); font-size: 0.85rem;">${placeholder}</span>`;
+    }
+    return parsed.length;
+  }
+
+  function renderIntentTags(containerId, intentsField, placeholder) {
+    const container = document.getElementById(containerId);
+    if (!container) return 0;
+    container.innerHTML = "";
+    
+    const parsed = parseCustomIntents(intentsField);
+    if (parsed.length > 0) {
+      parsed.forEach(item => {
+        const tag = document.createElement("span");
+        tag.className = "tag tag-other";
+        tag.style.cssText = "background: rgba(139, 92, 246, 0.12); color: var(--accent-secondary); border-color: rgba(139, 92, 246, 0.25);";
+        tag.innerHTML = `<i class="fa-solid fa-bullseye" style="font-size: 0.75rem;"></i> ${item}`;
+        container.appendChild(tag);
+      });
+    } else {
+      container.innerHTML = `<span style="color: var(--text-muted); font-size: 0.85rem;">${placeholder}</span>`;
+    }
+    return parsed.length;
+  }
+
+  // Render entities comparison
+  const geminiEntCount = renderEntityTags("drawerGeminiEntities", call.gemini_entities, call.gemini_entity_types, "No Gemini entities extracted.");
+  document.getElementById("drawerGeminiEntityCount").textContent = call.gemini_entity_count !== null && call.gemini_entity_count !== undefined ? call.gemini_entity_count : geminiEntCount;
+  
+  const googleCXEntCount = renderEntityTags("drawerGoogleCXEntities", call.entities, call.entity_types, "No Google Cloud CX entities extracted.");
+  document.getElementById("drawerGoogleCXEntityCount").textContent = call.entity_count !== null && call.entity_count !== undefined ? call.entity_count : googleCXEntCount;
+
+  // Render intents comparison
+  const geminiIntCount = renderIntentTags("drawerGeminiIntents", call.gemini_intents, "No Gemini intents extracted.");
+  document.getElementById("drawerGeminiAnnotationCount").textContent = call.gemini_annotation_count !== null && call.gemini_annotation_count !== undefined ? call.gemini_annotation_count : geminiIntCount;
+  
+  const googleCXIntCount = renderIntentTags("drawerGoogleCXIntents", call.intents, "No Google Cloud CX intents extracted.");
+  document.getElementById("drawerGoogleCXAnnotationCount").textContent = call.annotation_count !== null && call.annotation_count !== undefined ? call.annotation_count : googleCXIntCount;
 
   // Interactive Transcript Dialog
   renderTranscript(call);
