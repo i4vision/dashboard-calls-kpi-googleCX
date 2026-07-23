@@ -841,6 +841,7 @@ async function fetchCallData() {
 
     const data = await response.json();
     state.allCalls = data;
+    state.canonicalAgents = null; // Reset cache to force recalculation of canonical agent names
     state.filteredCalls = [...data];
     
     // Extract unique parent categories
@@ -1863,11 +1864,90 @@ function getAgentIdFromFilename(audioFileName) {
   return agentId || null;
 }
 
+// Compute canonical names for each agent ID based on the loaded calls data
+function computeCanonicalAgents(calls) {
+  state.canonicalAgents = {};
+  if (!calls || !Array.isArray(calls)) return;
+
+  const agentIdNames = {};
+
+  calls.forEach(call => {
+    const parsedId = getAgentIdFromFilename(call.audio_file_name);
+    if (!parsedId) return;
+
+    if (!agentIdNames[parsedId]) {
+      agentIdNames[parsedId] = [];
+    }
+
+    // Candidate 1: Supabase agent column
+    if (call.agent && call.agent.trim()) {
+      agentIdNames[parsedId].push(call.agent.trim());
+    }
+
+    // Candidate 2: Transcript/Entities search fallbacks
+    const text = ((call.transcript || "") + " " + (call.entities || "")).toLowerCase();
+    if (text.includes("marcelo")) {
+      agentIdNames[parsedId].push("Marcelo");
+    } else if (text.includes("andrea")) {
+      agentIdNames[parsedId].push("Andrea");
+    } else if (text.includes("geordi") || text.includes("yordy") || text.includes("jordy")) {
+      agentIdNames[parsedId].push("Yordy");
+    } else if (text.includes("carol") || text.includes("cruise")) {
+      agentIdNames[parsedId].push("Carol");
+    }
+  });
+
+  const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
+  const mappings = state.agentMappings || {};
+
+  Object.keys(agentIdNames).forEach(agentId => {
+    // 1. Manually mapped name takes priority
+    if (mappings[agentId]) {
+      state.canonicalAgents[agentId] = mappings[agentId];
+      return;
+    }
+
+    const candidates = agentIdNames[agentId];
+    if (candidates.length === 0) {
+      state.canonicalAgents[agentId] = (lang === 'es' ? 'Agente #' : 'Agent #') + agentId;
+      return;
+    }
+
+    // 2. Find the most common name candidate
+    const frequency = {};
+    let maxFreq = 0;
+    let bestCandidate = candidates[0];
+
+    candidates.forEach(name => {
+      const normalizedName = name.replace(/\.$/, "").trim();
+      frequency[normalizedName] = (frequency[normalizedName] || 0) + 1;
+      if (frequency[normalizedName] > maxFreq) {
+        maxFreq = frequency[normalizedName];
+        bestCandidate = normalizedName;
+      }
+    });
+
+    state.canonicalAgents[agentId] = bestCandidate;
+  });
+}
+
 // Extract Agent Name from Entities or Transcript (falling back to Hashed Deterministic Names if not found)
 function getAgentName(call) {
   const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
   const unknownLabel = lang === 'es' ? 'Agente Desconocido' : 'Unknown Agent';
   if (!call) return unknownLabel;
+
+  const parsedId = getAgentIdFromFilename(call.audio_file_name);
+  
+  // If we have an agent ID, check our canonical agents map first
+  if (parsedId) {
+    if (!state.canonicalAgents) {
+      computeCanonicalAgents(state.allCalls || [call]);
+    }
+    if (state.canonicalAgents && state.canonicalAgents[parsedId]) {
+      return state.canonicalAgents[parsedId];
+    }
+  }
 
   // 0. Use the new Supabase agent column if populated
   if (call.agent && call.agent.trim()) {
@@ -1875,7 +1955,6 @@ function getAgentName(call) {
   }
   
   // 1. First, check if we can parse the agent identifier from the MP3 filename
-  const parsedId = getAgentIdFromFilename(call.audio_file_name);
   if (parsedId) {
     const mappings = state.agentMappings || {};
     if (mappings[parsedId]) {
