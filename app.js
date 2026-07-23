@@ -4718,26 +4718,21 @@ function setupSettingsDrawer() {
   const newKpiTypeSelect = document.getElementById("selectNewKpiType");
   const saveKpiStatusLabel = document.getElementById("customKpiSettingsSaveStatus");
 
-  function generateKpiCode(kpis) {
-    if (!kpis || kpis.length === 0) return "// Add KPI parameters to see snippet";
-    let lines = kpis.map(kpi => {
-      const name = kpi.name;
-      if (kpi.type === "array") {
-        return `  ${name}: parsed.${name} ?? []`;
-      }
-      if (kpi.type === "object") {
-        return `  ${name}: parsed.${name} ?? {}`;
-      }
-      if (kpi.type === "number") {
-        return `  ${name}: Number(parsed.${name} ?? 0)`;
-      }
-      if (kpi.type === "boolean") {
-        return `  ${name}: Boolean(parsed.${name} ?? false)`;
-      }
-      // String default
-      return `  ${name}: String(\n    parsed.${name} ?? 'neutral'\n  )`;
-    });
-    return `{\n${lines.join(",\n")}\n}`;
+  function getSingleKpiValue(name, type) {
+    if (type === "array") {
+      return `${name}: parsed.${name} ?? []`;
+    }
+    if (type === "object") {
+      return `${name}: parsed.${name} ?? {}`;
+    }
+    if (type === "number") {
+      return `${name}: Number(parsed.${name} ?? 0)`;
+    }
+    if (type === "boolean") {
+      return `${name}: Boolean(parsed.${name} ?? false)`;
+    }
+    // String default
+    return `${name}: String(parsed.${name} ?? 'neutral')`;
   }
 
   function renderCustomKpisList() {
@@ -4751,8 +4746,6 @@ function setupSettingsDrawer() {
           No custom call KPIs defined.
         </div>
       `;
-      const codeContainer = document.getElementById("kpiGeneratedCode");
-      if (codeContainer) codeContainer.textContent = "// Add KPI parameters to see snippet";
       return;
     }
 
@@ -4781,11 +4774,6 @@ function setupSettingsDrawer() {
 
       listKpiContainer.appendChild(item);
     });
-
-    const codeContainer = document.getElementById("kpiGeneratedCode");
-    if (codeContainer) {
-      codeContainer.textContent = generateKpiCode(kpis);
-    }
   }
 
   // Load custom KPIs from Supabase global_settings or localStorage on open
@@ -4847,7 +4835,8 @@ function setupSettingsDrawer() {
         return;
       }
 
-      state.customKpis.push({ name, description: desc, type });
+      const valStr = getSingleKpiValue(name, type);
+      state.customKpis.push({ name, description: desc, type, value: valStr });
       newKpiNameInput.value = "";
       newKpiDescInput.value = "";
       renderCustomKpisList();
