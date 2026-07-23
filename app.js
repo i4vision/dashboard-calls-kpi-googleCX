@@ -953,12 +953,12 @@ function applyFilters() {
       }
     }
 
-    // Score threshold filter (agents with average performance score below threshold)
+    // Score threshold filter (agents with average performance score <= threshold)
     let scoreMatch = true;
     if (state.scoreThresholdFilter !== null && state.scoreThresholdFilter !== undefined) {
       const agent = getAgentName(call);
       const avgScore = getAgentAverageScore(agent);
-      scoreMatch = avgScore < state.scoreThresholdFilter;
+      scoreMatch = avgScore <= state.scoreThresholdFilter;
     }
 
     return searchMatch && audioSearchMatch && sentimentMatch && riskMatch && resolutionMatch && categoryMatch && durationMatch && scoreMatch;
@@ -988,8 +988,8 @@ function renderActiveFilterBadges() {
     
     const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
     const label = lang === "es" 
-      ? `Promedio Agente < ${state.scoreThresholdFilter}`
-      : `Agent Avg Score < ${state.scoreThresholdFilter}`;
+      ? `Promedio Agente <= ${state.scoreThresholdFilter}`
+      : `Agent Avg Score <= ${state.scoreThresholdFilter}`;
       
     badge.innerHTML = `${label} <i class="fa-solid fa-xmark" style="font-size: 0.85rem; margin-left: 0.25rem;"></i>`;
     badge.addEventListener("click", () => {
@@ -1255,6 +1255,7 @@ function renderOverviewCharts() {
   const canvas = document.getElementById("chartAgentScore");
   if (canvas && !canvas.dataset.clickBound) {
     canvas.dataset.clickBound = "true";
+    
     canvas.addEventListener("click", (e) => {
       const chart = state.charts.agentScore;
       if (!chart) return;
@@ -1270,10 +1271,31 @@ function renderOverviewCharts() {
           const clickedValue = xAxis.getValueForPixel(x);
           const scoreVal = Math.round(clickedValue);
           if (scoreVal >= 0 && scoreVal <= 10) {
-            state.scoreThresholdFilter = scoreVal;
+            // When 10 is clicked, it should reset the filter
+            if (scoreVal === 10) {
+              state.scoreThresholdFilter = null;
+            } else {
+              state.scoreThresholdFilter = scoreVal;
+            }
             applyFilters();
           }
         }
+      }
+    });
+
+    canvas.addEventListener("mousemove", (e) => {
+      const chart = state.charts.agentScore;
+      if (!chart) return;
+      
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      
+      const xAxis = chart.scales.x;
+      if (xAxis && x >= xAxis.left && x <= xAxis.right && y >= xAxis.top - 15) {
+        canvas.style.cursor = "pointer";
+      } else {
+        canvas.style.cursor = "default";
       }
     });
   }
