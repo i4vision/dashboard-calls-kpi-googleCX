@@ -639,19 +639,19 @@ function updateUILanguage() {
   const settingsLangLabelEl = document.getElementById("settingsLangCardLabel");
   if (settingsLangLabelEl) settingsLangLabelEl.textContent = dict.settingsLangLabel;
   
-  const settingsAgentTitleEl = document.querySelector("#settingsDrawer .settings-card:last-child h3");
+  const settingsAgentTitleEl = document.querySelector("#settingsAgentMappingCard h3");
   if (settingsAgentTitleEl) settingsAgentTitleEl.innerHTML = dict.settingsAgentTitle;
   
-  const settingsAgentSubEl = document.querySelector("#settingsDrawer .settings-card:last-child p");
+  const settingsAgentSubEl = document.querySelector("#settingsAgentMappingCard p");
   if (settingsAgentSubEl) settingsAgentSubEl.innerHTML = dict.settingsAgentSub;
   
-  const settingsActiveMappingsEl = document.querySelector("#settingsDrawer .settings-card:last-child div div");
+  const settingsActiveMappingsEl = document.querySelector("#settingsAgentMappingCard div div");
   if (settingsActiveMappingsEl) settingsActiveMappingsEl.textContent = dict.settingsActiveMappings;
   
-  const settingsAddNewMappingEl = document.querySelector("#settingsDrawer .settings-card:last-child div[style*='dashed'] div");
+  const settingsAddNewMappingEl = document.querySelector("#settingsAgentMappingCard div[style*='dashed'] div");
   if (settingsAddNewMappingEl) settingsAddNewMappingEl.textContent = dict.settingsAddNewMapping;
   
-  const settingsLabels = document.querySelectorAll("#settingsDrawer .settings-card:last-child label");
+  const settingsLabels = document.querySelectorAll("#settingsAgentMappingCard label");
   if (settingsLabels.length >= 2) {
     settingsLabels[0].textContent = dict.settingsLabelAgentId;
     settingsLabels[1].textContent = dict.settingsLabelRealName;
