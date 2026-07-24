@@ -5479,7 +5479,30 @@ function retrieveTranscriptsForQuery(query) {
 
   const scoredCalls = state.allCalls.map(call => {
     let score = 0;
-    const textToSearch = ((call.transcript || "") + " " + (call.summary || "")).toLowerCase();
+    
+    // Accumulate all searchable text content including transcripts, summaries, entities, intents, and custom KPIs
+    let entitiesText = "";
+    if (call.gemini_entities) {
+      entitiesText += " " + (typeof call.gemini_entities === "string" ? call.gemini_entities : JSON.stringify(call.gemini_entities));
+    }
+    if (call.entities) {
+      entitiesText += " " + (typeof call.entities === "string" ? call.entities : JSON.stringify(call.entities));
+    }
+    
+    let intentsText = "";
+    if (call.gemini_intents) {
+      intentsText += " " + (typeof call.gemini_intents === "string" ? call.gemini_intents : JSON.stringify(call.gemini_intents));
+    }
+    if (call.intents) {
+      intentsText += " " + (typeof call.intents === "string" ? call.intents : JSON.stringify(call.intents));
+    }
+
+    let kpiText = "";
+    if (call.kpis) {
+      kpiText += " " + (typeof call.kpis === "string" ? call.kpis : JSON.stringify(call.kpis));
+    }
+
+    const textToSearch = ((call.transcript || "") + " " + (call.summary || "") + entitiesText + intentsText + kpiText).toLowerCase();
     
     queryTerms.forEach(term => {
       let index = textToSearch.indexOf(term);
@@ -5517,8 +5540,8 @@ function compileOKFCallsContext() {
   
   let md = "## CURATED CALL METADATA (OKF CORE)\n";
   md += `Showing top ${limitedCalls.length} calls matching current active filters:\n\n`;
-  md += "| Call ID | Agent | Date | Category | Sentiment | Risk | Score | Cost (USD) | Summary |\n";
-  md += "|---|---|---|---|---|---|---|---|---|\n";
+  md += "| Call ID | Agent | Date | Category | Sentiment | Risk | Score | Cost (USD) | Custom KPIs | Summary |\n";
+  md += "|---|---|---|---|---|---|---|---|---|---|\n";
   
   limitedCalls.forEach(call => {
     let id = call.conversation_name || "N/A";
@@ -5532,9 +5555,32 @@ function compileOKFCallsContext() {
     const risk = call.risk_level || "N/A";
     const score = call.agent_score !== null && call.agent_score !== undefined ? `${call.agent_score}/10` : "N/A";
     const cost = call.total_cost_usd !== null && call.total_cost_usd !== undefined ? `$${Number(call.total_cost_usd).toFixed(3)}` : "N/A";
+    
+    // Parse custom KPIs list to present in context table
+    let kpisStr = "N/A";
+    if (call.kpis) {
+      let parsedKpis = call.kpis;
+      if (typeof parsedKpis === "string") {
+        try {
+          parsedKpis = JSON.parse(parsedKpis);
+        } catch (e) {
+          parsedKpis = null;
+        }
+      }
+      let kpiObj = null;
+      if (Array.isArray(parsedKpis) && parsedKpis.length > 0) {
+        kpiObj = parsedKpis[0];
+      } else if (parsedKpis && typeof parsedKpis === "object" && !Array.isArray(parsedKpis)) {
+        kpiObj = parsedKpis;
+      }
+      if (kpiObj && Object.keys(kpiObj).length > 0) {
+        kpisStr = Object.entries(kpiObj).map(([k, v]) => `${k}:${JSON.stringify(v)}`).join(", ");
+      }
+    }
+    
     const sum = call.summary ? call.summary.replace(/\n/g, " ").substring(0, 100) + "..." : "No summary";
     
-    md += `| ${id} | ${agent} | ${date} | ${cat} | ${sent} | ${risk} | ${score} | ${cost} | ${sum} |\n`;
+    md += `| ${id} | ${agent} | ${date} | ${cat} | ${sent} | ${risk} | ${score} | ${cost} | ${kpisStr} | ${sum} |\n`;
   });
   
   return md;
