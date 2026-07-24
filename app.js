@@ -153,6 +153,8 @@ const TRANSLATIONS = {
     gcsLabelBulk: '<i class="fa-solid fa-list-check" style="color: var(--accent-primary);"></i> Bulk Actions & Selection',
     gcsBtnBulkReset: '<i class="fa-solid fa-rotate-left"></i> Reset Selected Analysis',
     gcsBtnBulkAnalyze: '<i class="fa-solid fa-wand-magic-sparkles"></i> Analyze Selected',
+    gcsLabelSelectQuantity: "SELECT QUANTITY:",
+    gcsBtnApplySelectQuantity: "Apply Selection",
     
     // Ask AI
     aiHeaderTitle: "AI Analytics Chat",
@@ -302,6 +304,8 @@ const TRANSLATIONS = {
     gcsLabelBulk: '<i class="fa-solid fa-list-check" style="color: var(--accent-primary);"></i> Acciones por Lote y Selección',
     gcsBtnBulkReset: '<i class="fa-solid fa-rotate-left"></i> Restablecer Análisis Seleccionados',
     gcsBtnBulkAnalyze: '<i class="fa-solid fa-wand-magic-sparkles"></i> Analizar Seleccionados',
+    gcsLabelSelectQuantity: "SELECCIONAR CANTIDAD:",
+    gcsBtnApplySelectQuantity: "Aplicar Selección",
     
     // Ask AI
     aiHeaderTitle: "Chat de Análisis con IA",
@@ -605,6 +609,12 @@ function updateUILanguage() {
   
   const bulkAnalyzeBtn = document.getElementById("btnBulkCallAnalysis");
   if (bulkAnalyzeBtn) bulkAnalyzeBtn.innerHTML = dict.gcsBtnBulkAnalyze;
+
+  const selectQtyText = document.getElementById("labelSelectQuantityText");
+  if (selectQtyText) selectQtyText.textContent = dict.gcsLabelSelectQuantity;
+
+  const selectQtyBtnText = document.getElementById("labelSelectQuantityBtnText");
+  if (selectQtyBtnText) selectQtyBtnText.textContent = dict.gcsBtnApplySelectQuantity;
   
   // 7. Ask AI Drawer
   const aiTitle = document.querySelector("#chatDrawer .drawer-title");
@@ -3138,6 +3148,37 @@ function setupGCSEventListeners() {
           state.selectedGcsFiles.delete(file.name);
         });
       }
+      renderGCSFileList();
+      updateBulkActionUI();
+    });
+  }
+
+  // Selection quantity listener
+  const btnApplySelectQuantity = document.getElementById("btnApplySelectQuantity");
+  const inputSelectQuantity = document.getElementById("inputSelectQuantity");
+  if (btnApplySelectQuantity && inputSelectQuantity) {
+    btnApplySelectQuantity.addEventListener("click", () => {
+      const val = parseInt(inputSelectQuantity.value, 10);
+      if (isNaN(val) || val <= 0) {
+        alert(state.lang === "es" ? "Por favor ingrese una cantidad válida de llamadas para seleccionar." : "Please enter a valid quantity of calls to select.");
+        return;
+      }
+      
+      const files = state.filteredGcsFiles || [];
+      if (files.length === 0) {
+        alert(state.lang === "es" ? "No hay grabaciones disponibles para seleccionar." : "No recordings available to select.");
+        return;
+      }
+      
+      // Uncheck all files first
+      state.selectedGcsFiles.clear();
+      
+      // Select the first N files from state.filteredGcsFiles
+      const count = Math.min(val, files.length);
+      for (let i = 0; i < count; i++) {
+        state.selectedGcsFiles.add(files[i].name);
+      }
+      
       renderGCSFileList();
       updateBulkActionUI();
     });
