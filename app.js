@@ -1147,6 +1147,8 @@ function updateKPIs() {
     document.getElementById("kpiAvgScore").textContent = "N/A";
     document.getElementById("kpiResolutionRate").textContent = "N/A";
     document.getElementById("kpiTotalCost").textContent = "N/A";
+    const cpmEl = document.getElementById("kpiCostPerMinute");
+    if (cpmEl) cpmEl.textContent = "";
     return;
   }
 
@@ -1171,7 +1173,34 @@ function updateKPIs() {
   const totalCostVal = validCosts.reduce((acc, curr) => acc + curr, 0);
   const avgCostVal = validCosts.length > 0 ? (totalCostVal / validCosts.length) : 0;
 
+  // Calculate cost per minute (total processing cost divided by total duration of analyzed calls)
+  const callsWithCosts = state.filteredCalls.filter(c => !isNaN(Number(c.total_cost_usd)) && Number(c.total_cost_usd) > 0);
+  let totalDurationSec = 0;
+  callsWithCosts.forEach(c => {
+    const sec = Number(c.audio_duration_seconds);
+    if (!isNaN(sec) && sec > 0) {
+      totalDurationSec += sec;
+    }
+  });
+
+  // Fallback to all filtered calls duration if there are no calls with specific positive costs
+  if (totalDurationSec === 0) {
+    state.filteredCalls.forEach(c => {
+      const sec = Number(c.audio_duration_seconds);
+      if (!isNaN(sec) && sec > 0) {
+        totalDurationSec += sec;
+      }
+    });
+  }
+
+  const costPerMinVal = totalDurationSec > 0 ? (totalCostVal / (totalDurationSec / 60)) : 0;
+
   document.getElementById("kpiTotalCost").textContent = `$${totalCostVal.toFixed(3)}`;
+  
+  const cpmEl = document.getElementById("kpiCostPerMinute");
+  if (cpmEl) {
+    cpmEl.textContent = `($${costPerMinVal.toFixed(3)}/min)`;
+  }
   document.getElementById("kpiAvgCostSubtext").innerHTML = `<i class="fa-solid fa-coins"></i> Avg: $${avgCostVal.toFixed(4)}/call`;
 }
 

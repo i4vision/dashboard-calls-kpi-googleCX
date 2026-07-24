@@ -92,7 +92,10 @@
       <div class="kpi-card">
         <div class="kpi-details">
           <span class="kpi-title">Total Cost</span>
-          <span id="kpiTotalCost" class="kpi-value">-</span>
+          <div style="display: flex; align-items: baseline; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.2rem;">
+            <span id="kpiTotalCost" class="kpi-value">-</span>
+            <span id="kpiCostPerMinute" style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted);"></span>
+          </div>
           <span class="kpi-change up" id="kpiAvgCostSubtext"><i class="fa-solid fa-coins"></i> Avg cost/call</span>
         </div>
         <div class="kpi-icon-wrapper">
