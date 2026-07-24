@@ -174,6 +174,11 @@ const TRANSLATIONS = {
     settingsLangTitle: '<i class="fa-solid fa-language" style="color: var(--accent-secondary);"></i> Language Settings',
     settingsLangSub: "Choose the display language for the dashboard frontend interface.",
     settingsLangLabel: "INTERFACE LANGUAGE",
+    settingsAgentRulesTitle: '<i class="fa-solid fa-scroll" style="color: var(--accent-secondary);"></i> Agent Guidelines',
+    settingsAgentRulesSub: "Define specific guidelines and rules that agents must follow during call evaluations.",
+    settingsAgentRulesPlaceholder: "e.g. El agente debe presentarse con su nombre y el de la empresa...",
+    settingsAgentRulesBtnSave: '<i class="fa-solid fa-floppy-disk"></i> Save Guidelines',
+    settingsAgentRulesSaved: '<i class="fa-solid fa-circle-check"></i> Guidelines saved successfully!',
     settingsAgentTitle: '<i class="fa-solid fa-users-gear" style="color: var(--accent-secondary);"></i> Agent Name Mapping',
     settingsAgentSub: "The system extracts the agent identifier from the MP3 filename (e.g. <code>1245</code> from <code>..._1245.mp3</code>). Map these numbers to actual names below.",
     settingsActiveMappings: "Active Mappings",
@@ -318,6 +323,11 @@ const TRANSLATIONS = {
     settingsLangTitle: '<i class="fa-solid fa-language" style="color: var(--accent-secondary);"></i> Configuración de Idioma',
     settingsLangSub: "Seleccione el idioma de visualización de la interfaz del panel.",
     settingsLangLabel: "IDIOMA DE LA INTERFAZ",
+    settingsAgentRulesTitle: '<i class="fa-solid fa-scroll" style="color: var(--accent-secondary);"></i> Reglas del Agente',
+    settingsAgentRulesSub: "Define las reglas y directrices específicas que el agente debe seguir durante la evaluación de la llamada.",
+    settingsAgentRulesPlaceholder: "ej., El agente debe presentarse con su nombre y el de la empresa...",
+    settingsAgentRulesBtnSave: '<i class="fa-solid fa-floppy-disk"></i> Guardar Reglas',
+    settingsAgentRulesSaved: '<i class="fa-solid fa-circle-check"></i> ¡Reglas guardadas exitosamente!',
     settingsAgentTitle: '<i class="fa-solid fa-users-gear" style="color: var(--accent-secondary);"></i> Mapeo de Nombres de Agentes',
     settingsAgentSub: "El sistema extrae el identificador del agente del archivo MP3 (ej., <code>1245</code> de <code>..._1245.mp3</code>). Mapee estos números a nombres reales a continuación.",
     settingsActiveMappings: "Mapeos Activos",
@@ -641,7 +651,26 @@ function updateUILanguage() {
   
   const settingsLangLabelEl = document.getElementById("settingsLangCardLabel");
   if (settingsLangLabelEl) settingsLangLabelEl.textContent = dict.settingsLangLabel;
-  
+
+  // Agent Rules Card Translations
+  const rulesTitleEl = document.getElementById("labelAgentRulesTitle");
+  if (rulesTitleEl) rulesTitleEl.innerHTML = dict.settingsAgentRulesTitle;
+
+  const rulesSubEl = document.getElementById("labelAgentRulesSub");
+  if (rulesSubEl) rulesSubEl.textContent = dict.settingsAgentRulesSub;
+
+  const rulesTextarea = document.getElementById("textareaAgentRules");
+  if (rulesTextarea) rulesTextarea.setAttribute("placeholder", dict.settingsAgentRulesPlaceholder);
+
+  const rulesSaveBtn = document.getElementById("btnSaveAgentRules");
+  if (rulesSaveBtn) {
+    const rulesBtnTextSpan = document.getElementById("labelAgentRulesBtnText");
+    if (rulesBtnTextSpan) rulesBtnTextSpan.textContent = dict.settingsAgentRulesBtnSave.replace(/<[^>]*>/g, '').trim();
+  }
+
+  const rulesSavedEl = document.getElementById("labelAgentRulesSavedStatus");
+  if (rulesSavedEl) rulesSavedEl.innerHTML = dict.settingsAgentRulesSaved;
+
   const settingsAgentTitleEl = document.querySelector("#settingsAgentMappingCard h3");
   if (settingsAgentTitleEl) settingsAgentTitleEl.innerHTML = dict.settingsAgentTitle;
   
@@ -4686,6 +4715,9 @@ function setupSettingsDrawer() {
     if (typeof loadCustomKpis === "function") {
       loadCustomKpis();
     }
+    if (typeof loadAgentRules === "function") {
+      loadAgentRules();
+    }
   }
 
   function closeSettings() {
@@ -4999,9 +5031,101 @@ function setupSettingsDrawer() {
     });
   }
 
+  // 4. Agent Guidelines (rules) logic
+  const textareaAgentRules = document.getElementById("textareaAgentRules");
+  const saveRulesBtn = document.getElementById("btnSaveAgentRules");
+  const rulesStatusLabel = document.getElementById("agentRulesSaveStatus");
+
+  // Load rules from Supabase global_settings or localStorage on open
+  async function loadAgentRules() {
+    try {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=eq.agent_rules`, {
+        headers: {
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.length > 0) {
+          const val = data[0].setting_value;
+          if (val !== undefined && val !== null) {
+            if (textareaAgentRules) textareaAgentRules.value = val;
+            localStorage.setItem("gcs_agent_rules", val);
+            return;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Could not load agent rules from global_settings:", err);
+    }
+    
+    // Fallback to localStorage
+    const localRules = localStorage.getItem("gcs_agent_rules");
+    if (localRules !== null && textareaAgentRules) {
+      textareaAgentRules.value = localRules;
+    }
+  }
+
+  // Bind Save Rules button
+  if (saveRulesBtn) {
+    saveRulesBtn.addEventListener("click", async () => {
+      const rulesVal = textareaAgentRules ? textareaAgentRules.value : "";
+      localStorage.setItem("gcs_agent_rules", rulesVal);
+
+      try {
+        const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=eq.agent_rules`, {
+          headers: {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        });
+        
+        if (checkRes.ok) {
+          const existing = await checkRes.json();
+          if (existing.length > 0) {
+            await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=eq.agent_rules`, {
+              method: "PATCH",
+              headers: {
+                "apikey": SUPABASE_ANON_KEY,
+                "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({ setting_value: rulesVal })
+            });
+          } else {
+            await fetch(`${SUPABASE_URL}/rest/v1/global_settings`, {
+              method: "POST",
+              headers: {
+                "apikey": SUPABASE_ANON_KEY,
+                "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                setting_key: "agent_rules",
+                setting_value: rulesVal
+              })
+            });
+          }
+        }
+      } catch (err) {
+        console.warn("Could not save agent rules to global_settings table:", err);
+      }
+
+      if (rulesStatusLabel) {
+        rulesStatusLabel.style.display = "block";
+        setTimeout(() => {
+          rulesStatusLabel.style.display = "none";
+        }, 3000);
+      }
+    });
+  }
+
   // Auto-load on open
   window.loadCustomKpis = loadCustomKpis; // expose to parent scope if needed
+  window.loadAgentRules = loadAgentRules; // expose to parent scope if needed
   loadCustomKpis();
+  loadAgentRules();
 }
 
 // ==========================================================================
