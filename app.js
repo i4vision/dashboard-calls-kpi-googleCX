@@ -62,6 +62,10 @@ const TRANSLATIONS = {
     
     tabOverview: '<i class="fa-solid fa-chart-pie"></i> Overview Analytics',
     tabTrends: '<i class="fa-solid fa-chart-line"></i> Temporal Trends',
+    tabCoaching: '<i class="fa-solid fa-graduation-cap"></i> Coaching & Training',
+    coachingTitle: "Training Gaps & Coaching Priorities per Agent",
+    coachingSubtitle: "Consolidated improvement areas extracted from call records under the Gemini_Agent_Improvements KPI.",
+    coachingNoData: "No training gaps or coaching priorities identified for this period.",
     
     titleSentiment: '<i class="fa-solid fa-face-smile"></i> Sentiment Breakdown',
     titleCategoryRisk: '<i class="fa-solid fa-triangle-exclamation"></i> Category & Risk Matrix',
@@ -213,6 +217,10 @@ const TRANSLATIONS = {
     
     tabOverview: '<i class="fa-solid fa-chart-pie"></i> Análisis General',
     tabTrends: '<i class="fa-solid fa-chart-line"></i> Tendencias Temporales',
+    tabCoaching: '<i class="fa-solid fa-graduation-cap"></i> Capacitación y Coaching',
+    coachingTitle: "Brechas de Capacitación y Prioridades de Coaching por Agente",
+    coachingSubtitle: "Áreas de mejora consolidadas extraídas de las evaluaciones de Gemini bajo el KPI Gemini_Agent_Improvements.",
+    coachingNoData: "No se identificaron brechas de capacitación o prioridades de coaching para este período.",
     
     titleSentiment: '<i class="fa-solid fa-face-smile"></i> Distribución de Sentimiento',
     titleCategoryRisk: '<i class="fa-solid fa-triangle-exclamation"></i> Matriz de Categoría y Riesgo',
@@ -401,6 +409,7 @@ function updateUILanguage() {
     const target = btn.getAttribute("data-target");
     if (target === "overviewCharts") btn.innerHTML = dict.tabOverview;
     if (target === "trendCharts") btn.innerHTML = dict.tabTrends;
+    if (target === "coachingSection") btn.innerHTML = dict.tabCoaching;
   });
   
   // 4. Chart Headers (need to be careful to select correctly)
@@ -713,6 +722,12 @@ function updateUILanguage() {
   // Refresh Call Details Drawer if it's currently open
   if (state.activeCall) {
     openDrawer(state.activeCall);
+  }
+
+  // Refresh Coaching Section if currently active
+  const isCoachingActive = document.querySelector(".tab-btn[data-target='coachingSection']").classList.contains("active");
+  if (isCoachingActive) {
+    renderCoachingSection();
   }
 }
 
@@ -1130,8 +1145,11 @@ function updateDashboardUI() {
   updateKPIs();
   
   const isTrendsActive = document.querySelector(".tab-btn[data-target='trendCharts']").classList.contains("active");
+  const isCoachingActive = document.querySelector(".tab-btn[data-target='coachingSection']").classList.contains("active");
   if (isTrendsActive) {
     renderTrendCharts();
+  } else if (isCoachingActive) {
+    renderCoachingSection();
   } else {
     renderOverviewCharts();
   }
@@ -2601,13 +2619,234 @@ function setupTabNavigation() {
       if (target === "overviewCharts") {
         document.getElementById("overviewCharts").style.display = "grid";
         document.getElementById("trendCharts").style.display = "none";
+        document.getElementById("coachingSection").style.display = "none";
         renderOverviewCharts();
-      } else {
+      } else if (target === "trendCharts") {
         document.getElementById("overviewCharts").style.display = "none";
         document.getElementById("trendCharts").style.display = "grid";
+        document.getElementById("coachingSection").style.display = "none";
         renderTrendCharts();
+      } else if (target === "coachingSection") {
+        document.getElementById("overviewCharts").style.display = "none";
+        document.getElementById("trendCharts").style.display = "none";
+        document.getElementById("coachingSection").style.display = "block";
+        renderCoachingSection();
       }
     });
+  });
+}
+
+// ==========================================================================
+// Coaching & Training Gaps Rendering
+// ==========================================================================
+function renderCoachingSection() {
+  const container = document.getElementById("coachingContainer");
+  if (!container) return;
+  container.innerHTML = "";
+
+  const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
+  const dict = TRANSLATIONS[lang];
+
+  // Update Section Headers
+  const titleEl = document.getElementById("labelCoachingTitle");
+  if (titleEl) titleEl.innerHTML = `<i class="fa-solid fa-graduation-cap" style="color: var(--accent-primary);"></i> ${dict.coachingTitle}`;
+  const subtitleEl = document.getElementById("labelCoachingSubtitle");
+  if (subtitleEl) subtitleEl.textContent = dict.coachingSubtitle;
+
+  const calls = state.filteredCalls || [];
+  if (calls.length === 0) {
+    container.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; font-size: 0.85rem; color: var(--text-muted); padding: 2rem;">${lang === "es" ? "No hay llamadas filtradas." : "No filtered calls found."}</div>`;
+    return;
+  }
+
+  // Helper to extract custom improvements KPI values
+  const getImprovementsVal = (call) => {
+    if (!call.kpis) return null;
+    let parsed = call.kpis;
+    if (typeof parsed === "string") {
+      try { parsed = JSON.parse(parsed); } catch (e) { parsed = null; }
+    }
+    let kpiObj = null;
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      kpiObj = parsed[0];
+    } else if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      kpiObj = parsed;
+    }
+    if (!kpiObj) return null;
+    for (const key of Object.keys(kpiObj)) {
+      const k = key.toLowerCase();
+      if (k === "gemini_agent_improvements" || k === "gemini agent improvements" || k === "agent_improvements" || k === "improvements") {
+        return kpiObj[key];
+      }
+    }
+    return null;
+  };
+
+  // Helper to parse improvements into Gaps vs Priorities lists
+  const parseImpList = (val) => {
+    let trainingGaps = [];
+    let coachingPriorities = [];
+    if (!val) return { trainingGaps, coachingPriorities };
+
+    let parsed = val;
+    if (typeof val === "string") {
+      const trimmed = val.trim();
+      if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+        try { parsed = JSON.parse(trimmed); } catch (e) { parsed = val; }
+      }
+    }
+
+    if (Array.isArray(parsed)) {
+      parsed.forEach(item => {
+        if (item) {
+          const str = String(item).trim();
+          if (str) {
+            const lower = str.toLowerCase();
+            if (lower.includes("coaching") || lower.includes("prioridad") || lower.includes("priority")) {
+              coachingPriorities.push(str);
+            } else {
+              trainingGaps.push(str);
+            }
+          }
+        }
+      });
+    } else if (parsed && typeof parsed === "object") {
+      let found = false;
+      for (const key of Object.keys(parsed)) {
+        const kLower = key.toLowerCase();
+        if (kLower.includes("training") || kLower.includes("gap") || kLower.includes("capacitacion") || kLower.includes("brecha")) {
+          found = true;
+          const sub = parsed[key];
+          if (Array.isArray(sub)) {
+            trainingGaps.push(...sub.map(s => String(s).trim()).filter(Boolean));
+          } else if (sub) {
+            trainingGaps.push(String(sub).trim());
+          }
+        }
+        if (kLower.includes("coaching") || kLower.includes("prioridad") || kLower.includes("priority") || kLower.includes("mejora")) {
+          found = true;
+          const sub = parsed[key];
+          if (Array.isArray(sub)) {
+            coachingPriorities.push(...sub.map(s => String(s).trim()).filter(Boolean));
+          } else if (sub) {
+            coachingPriorities.push(String(sub).trim());
+          }
+        }
+      }
+      if (!found) {
+        Object.entries(parsed).forEach(([k, v]) => {
+          trainingGaps.push(`${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`);
+        });
+      }
+    } else if (typeof parsed === "string") {
+      const lines = parsed.split(/\n+/);
+      lines.forEach(line => {
+        const clean = line.trim().replace(/^[-*•\d\.\s]+/, "").trim();
+        if (clean) {
+          const lower = clean.toLowerCase();
+          if (lower.includes("coaching") || lower.includes("prioridad") || lower.includes("priority")) {
+            coachingPriorities.push(clean);
+          } else {
+            trainingGaps.push(clean);
+          }
+        }
+      });
+    }
+    return { trainingGaps, coachingPriorities };
+  };
+
+  // Group call improvements by Agent Name
+  const agentData = {};
+  calls.forEach(call => {
+    const agent = getAgentName(call);
+    if (!agentData[agent]) {
+      agentData[agent] = { callsCount: 0, trainingGaps: [], coachingPriorities: [] };
+    }
+    agentData[agent].callsCount++;
+    const impVal = getImprovementsVal(call);
+    if (impVal) {
+      const { trainingGaps, coachingPriorities } = parseImpList(impVal);
+      agentData[agent].trainingGaps.push(...trainingGaps);
+      agentData[agent].coachingPriorities.push(...coachingPriorities);
+    }
+  });
+
+  // Render per-agent dashboard cards
+  Object.keys(agentData).sort().forEach(agentName => {
+    const info = agentData[agentName];
+    // Deduplicate lists
+    const uniqueGaps = [...new Set(info.trainingGaps)].filter(Boolean);
+    const uniquePriorities = [...new Set(info.coachingPriorities)].filter(Boolean);
+
+    const card = document.createElement("div");
+    card.className = "chart-card";
+    card.style.cssText = "display: flex; flex-direction: column; padding: 1.25rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); min-height: 200px;";
+
+    const initials = agentName.split(/\s+/).map(n => n[0]).join("").substring(0, 2).toUpperCase() || "A";
+
+    // Setup HTML Layout inside the card
+    let gapsHtml = "";
+    if (uniqueGaps.length === 0) {
+      gapsHtml = `<div style="font-size: 0.75rem; color: var(--text-muted); font-style: italic; margin-bottom: 0.5rem;">${lang === "es" ? "No se detectaron brechas de capacitación." : "No training gaps identified."}</div>`;
+    } else {
+      gapsHtml = uniqueGaps.map(item => `
+        <div style="font-size: 0.78rem; line-height: 1.4; color: var(--text-secondary); margin-bottom: 0.35rem; display: flex; gap: 0.4rem; align-items: flex-start;">
+          <i class="fa-solid fa-circle-exclamation" style="color: var(--color-warning); font-size: 0.72rem; margin-top: 0.25rem;"></i>
+          <span>${item}</span>
+        </div>
+      `).join("");
+    }
+
+    let prioritiesHtml = "";
+    if (uniquePriorities.length === 0) {
+      prioritiesHtml = `<div style="font-size: 0.75rem; color: var(--text-muted); font-style: italic; margin-bottom: 0.5rem;">${lang === "es" ? "No se detectaron prioridades de coaching." : "No coaching priorities identified."}</div>`;
+    } else {
+      prioritiesHtml = uniquePriorities.map(item => `
+        <div style="font-size: 0.78rem; line-height: 1.4; color: var(--text-secondary); margin-bottom: 0.35rem; display: flex; gap: 0.4rem; align-items: flex-start;">
+          <i class="fa-solid fa-hand-holding-heart" style="color: var(--accent-primary); font-size: 0.72rem; margin-top: 0.25rem;"></i>
+          <span>${item}</span>
+        </div>
+      `).join("");
+    }
+
+    let summaryHtml = "";
+    if (uniqueGaps.length === 0 && uniquePriorities.length === 0) {
+      summaryHtml = `
+        <div style="font-size: 0.78rem; color: var(--color-positive); display: flex; align-items: center; gap: 0.35rem; margin-top: 1rem; font-weight: 500;">
+          <i class="fa-solid fa-circle-check"></i> ${dict.coachingNoData}
+        </div>
+      `;
+    } else {
+      summaryHtml = `
+        <div style="margin-bottom: 1rem;">
+          <h4 style="font-size: 0.75rem; font-weight: 700; color: var(--color-warning); text-transform: uppercase; margin: 0 0 0.5rem 0; display: flex; align-items: center; gap: 0.35rem; letter-spacing: 0.03em;">
+            <i class="fa-solid fa-graduation-cap"></i> ${lang === "es" ? "Brechas de Capacitación" : "Training Gaps"}
+          </h4>
+          ${gapsHtml}
+        </div>
+        <div>
+          <h4 style="font-size: 0.75rem; font-weight: 700; color: var(--accent-primary); text-transform: uppercase; margin: 0 0 0.5rem 0; display: flex; align-items: center; gap: 0.35rem; letter-spacing: 0.03em;">
+            <i class="fa-solid fa-person-chalkboard"></i> ${lang === "es" ? "Prioridades de Coaching" : "Coaching Priorities"}
+          </h4>
+          ${prioritiesHtml}
+        </div>
+      `;
+    }
+
+    card.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
+        <div style="width: 36px; height: 36px; border-radius: 50%; background: rgba(139, 92, 246, 0.15); color: var(--accent-primary); display: flex; align-items: center; justify-content: center; font-size: 0.95rem; font-weight: 700;">
+          ${initials}
+        </div>
+        <div>
+          <h3 style="font-size: 0.9rem; font-weight: 700; color: var(--text-primary); margin: 0;">${agentName}</h3>
+          <span style="font-size: 0.7rem; color: var(--text-muted);">${info.callsCount} ${lang === "es" ? "llamadas evaluadas" : "calls evaluated"}</span>
+        </div>
+      </div>
+      ${summaryHtml}
+    `;
+
+    container.appendChild(card);
   });
 }
 
