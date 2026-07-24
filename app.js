@@ -1804,12 +1804,36 @@ function openDrawer(call) {
   const googleCXEntCount = renderEntityTags("drawerGoogleCXEntities", call.entities, call.entity_types, "No Google Cloud CX entities extracted.");
   document.getElementById("drawerGoogleCXEntityCount").textContent = call.entity_count !== null && call.entity_count !== undefined ? call.entity_count : googleCXEntCount;
 
+  const cxEntitiesHeader = document.getElementById("drawerGoogleCXEntitiesHeader");
+  const cxEntitiesContainer = document.getElementById("drawerGoogleCXEntities");
+  if (cxEntitiesHeader && cxEntitiesContainer) {
+    if (googleCXEntCount === 0) {
+      cxEntitiesHeader.style.setProperty("display", "none", "important");
+      cxEntitiesContainer.style.setProperty("display", "none", "important");
+    } else {
+      cxEntitiesHeader.style.display = "flex";
+      cxEntitiesContainer.style.display = "flex";
+    }
+  }
+
   // Render intents comparison
   const geminiIntCount = renderIntentTags("drawerGeminiIntents", call.gemini_intents, "No Gemini intents extracted.");
   document.getElementById("drawerGeminiAnnotationCount").textContent = call.gemini_annotation_count !== null && call.gemini_annotation_count !== undefined ? call.gemini_annotation_count : geminiIntCount;
   
   const googleCXIntCount = renderIntentTags("drawerGoogleCXIntents", call.intents, "No Google Cloud CX intents extracted.");
   document.getElementById("drawerGoogleCXAnnotationCount").textContent = call.annotation_count !== null && call.annotation_count !== undefined ? call.annotation_count : googleCXIntCount;
+
+  const cxIntentsHeader = document.getElementById("drawerGoogleCXIntentsHeader");
+  const cxIntentsContainer = document.getElementById("drawerGoogleCXIntents");
+  if (cxIntentsHeader && cxIntentsContainer) {
+    if (googleCXIntCount === 0) {
+      cxIntentsHeader.style.setProperty("display", "none", "important");
+      cxIntentsContainer.style.setProperty("display", "none", "important");
+    } else {
+      cxIntentsHeader.style.display = "flex";
+      cxIntentsContainer.style.display = "flex";
+    }
+  }
 
   // Render Custom Call KPIs
   const kpisSection = document.getElementById("drawerCustomKpisSection");
