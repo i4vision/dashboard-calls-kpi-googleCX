@@ -33,7 +33,9 @@ let state = {
   lang: 'en',
   predefinedQuestions: [],
   agentMappings: {},
-  scoreThresholdFilter: null
+  scoreThresholdFilter: null,
+  selectedCategoryFilter: null,
+  selectedAgentFilter: null
 };
 
 // ==========================================================================
@@ -813,6 +815,25 @@ function setupEventListeners() {
   // Reset filters
   document.getElementById("resetFilters").addEventListener("click", resetFilters);
 
+  // Reset clickable chart filters
+  const resetCatFilterBtn = document.getElementById("btnResetCategoryFilter");
+  if (resetCatFilterBtn) {
+    resetCatFilterBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      state.selectedCategoryFilter = null;
+      applyFilters();
+    });
+  }
+
+  const resetAgentFilterBtn = document.getElementById("btnResetAgentFilter");
+  if (resetAgentFilterBtn) {
+    resetAgentFilterBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      state.selectedAgentFilter = null;
+      applyFilters();
+    });
+  }
+
   // Drawer Close
   document.getElementById("drawerClose").addEventListener("click", closeDrawer);
   document.getElementById("drawerBackdrop").addEventListener("click", closeDrawer);
@@ -995,8 +1016,24 @@ function applyFilters() {
       scoreMatch = avgScore <= state.scoreThresholdFilter;
     }
 
-    return searchMatch && audioSearchMatch && sentimentMatch && riskMatch && resolutionMatch && categoryMatch && durationMatch && scoreMatch;
+    // Clickable Category filter
+    const selectedCategoryMatch = !state.selectedCategoryFilter || getParentCategory(call.category) === state.selectedCategoryFilter;
+
+    // Clickable Agent filter
+    const selectedAgentMatch = !state.selectedAgentFilter || getAgentName(call) === state.selectedAgentFilter;
+
+    return searchMatch && audioSearchMatch && sentimentMatch && riskMatch && resolutionMatch && categoryMatch && durationMatch && scoreMatch && selectedCategoryMatch && selectedAgentMatch;
   });
+
+  // Toggle chart reset buttons based on active selections
+  const btnResetCat = document.getElementById("btnResetCategoryFilter");
+  if (btnResetCat) {
+    btnResetCat.style.display = state.selectedCategoryFilter ? "flex" : "none";
+  }
+  const btnResetAgent = document.getElementById("btnResetAgentFilter");
+  if (btnResetAgent) {
+    btnResetAgent.style.display = state.selectedAgentFilter ? "flex" : "none";
+  }
 
   renderActiveFilterBadges();
   updateDashboardUI();
@@ -1015,12 +1052,13 @@ function renderActiveFilterBadges() {
   if (!container) return;
   container.innerHTML = "";
 
+  const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
+
   if (state.scoreThresholdFilter !== null && state.scoreThresholdFilter !== undefined) {
     const badge = document.createElement("span");
     badge.className = "badge";
     badge.style.cssText = "background: rgba(244, 63, 94, 0.12); color: #f43f5e; border-color: rgba(244, 63, 94, 0.25); display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 500; font-size: 0.75rem; padding: 0.25rem 0.50rem; border-radius: var(--radius-sm); cursor: pointer; border: 1px solid;";
     
-    const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
     const label = lang === "es" 
       ? `Promedio Agente <= ${state.scoreThresholdFilter}`
       : `Agent Avg Score <= ${state.scoreThresholdFilter}`;
@@ -1028,6 +1066,40 @@ function renderActiveFilterBadges() {
     badge.innerHTML = `${label} <i class="fa-solid fa-xmark" style="font-size: 0.85rem; margin-left: 0.25rem;"></i>`;
     badge.addEventListener("click", () => {
       state.scoreThresholdFilter = null;
+      applyFilters();
+    });
+    container.appendChild(badge);
+  }
+
+  if (state.selectedCategoryFilter) {
+    const badge = document.createElement("span");
+    badge.className = "badge";
+    badge.style.cssText = "background: rgba(139, 92, 246, 0.12); color: #8b5cf6; border-color: rgba(139, 92, 246, 0.25); display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 500; font-size: 0.75rem; padding: 0.25rem 0.50rem; border-radius: var(--radius-sm); cursor: pointer; border: 1px solid;";
+    
+    const label = lang === "es"
+      ? `Categoría: ${getLocalizedCategory(state.selectedCategoryFilter)}`
+      : `Category: ${getLocalizedCategory(state.selectedCategoryFilter)}`;
+      
+    badge.innerHTML = `${label} <i class="fa-solid fa-xmark" style="font-size: 0.85rem; margin-left: 0.25rem;"></i>`;
+    badge.addEventListener("click", () => {
+      state.selectedCategoryFilter = null;
+      applyFilters();
+    });
+    container.appendChild(badge);
+  }
+
+  if (state.selectedAgentFilter) {
+    const badge = document.createElement("span");
+    badge.className = "badge";
+    badge.style.cssText = "background: rgba(59, 130, 246, 0.12); color: #3b82f6; border-color: rgba(59, 130, 246, 0.25); display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 500; font-size: 0.75rem; padding: 0.25rem 0.50rem; border-radius: var(--radius-sm); cursor: pointer; border: 1px solid;";
+    
+    const label = lang === "es"
+      ? `Agente: ${state.selectedAgentFilter}`
+      : `Agent: ${state.selectedAgentFilter}`;
+      
+    badge.innerHTML = `${label} <i class="fa-solid fa-xmark" style="font-size: 0.85rem; margin-left: 0.25rem;"></i>`;
+    badge.addEventListener("click", () => {
+      state.selectedAgentFilter = null;
       applyFilters();
     });
     container.appendChild(badge);
@@ -1043,6 +1115,8 @@ function resetFilters() {
   document.getElementById("filterCategory").value = "all";
   document.getElementById("filterDuration").value = "all";
   state.scoreThresholdFilter = null;
+  state.selectedCategoryFilter = null;
+  state.selectedAgentFilter = null;
   
   state.filteredCalls = [...state.allCalls];
   renderActiveFilterBadges();
@@ -1211,6 +1285,33 @@ function renderOverviewCharts() {
       }
     }
   });
+  state.currentCategories = cats;
+
+  const catCanvas = document.getElementById("chartCategoryRisk");
+  if (catCanvas && !catCanvas.dataset.clickBound) {
+    catCanvas.dataset.clickBound = "true";
+    catCanvas.addEventListener("click", (e) => {
+      const chart = state.charts.categoryRisk;
+      if (!chart) return;
+      
+      const activeElements = chart.getElementsAtEventForMode(e, 'nearest', { intersect: false }, false);
+      if (activeElements.length > 0) {
+        const index = activeElements[0].index;
+        const canonicalCat = state.currentCategories ? state.currentCategories[index] : null;
+        if (canonicalCat) {
+          state.selectedCategoryFilter = canonicalCat;
+          applyFilters();
+        }
+      }
+    });
+
+    catCanvas.addEventListener("mousemove", (e) => {
+      const chart = state.charts.categoryRisk;
+      if (!chart) return;
+      const activeElements = chart.getElementsAtEventForMode(e, 'nearest', { intersect: false }, false);
+      catCanvas.style.cursor = activeElements.length > 0 ? "pointer" : "default";
+    });
+  }
 
   // ---------------------------------------------------------
   // 3. Agent Performance Leaderboard (Horizontal Bar)
@@ -1237,6 +1338,7 @@ function renderOverviewCharts() {
 
   const agentLabels = sortedAgents.map(a => a.name);
   const agentDataValues = sortedAgents.map(a => a.average);
+  state.currentAgentLabels = agentLabels;
 
   if (state.charts.agentScore) state.charts.agentScore.destroy();
   state.charts.agentScore = new Chart(document.getElementById("chartAgentScore").getContext("2d"), {
@@ -1293,20 +1395,30 @@ function renderOverviewCharts() {
       const y = e.clientY - rect.top;
       
       const xAxis = chart.scales.x;
-      if (xAxis && x >= xAxis.left && x <= xAxis.right) {
+      if (xAxis && x >= xAxis.left && x <= xAxis.right && y >= xAxis.top - 15) {
         // Ticks and labels are drawn at the bottom axis region (below xAxis.top - 15px)
-        if (y >= xAxis.top - 15) {
-          const clickedValue = xAxis.getValueForPixel(x);
-          const scoreVal = Math.round(clickedValue);
-          if (scoreVal >= 0 && scoreVal <= 10) {
-            // When 10 is clicked, it should reset the filter
-            if (scoreVal === 10) {
-              state.scoreThresholdFilter = null;
-            } else {
-              state.scoreThresholdFilter = scoreVal;
-            }
-            applyFilters();
+        const clickedValue = xAxis.getValueForPixel(x);
+        const scoreVal = Math.round(clickedValue);
+        if (scoreVal >= 0 && scoreVal <= 10) {
+          // When 10 is clicked, it should reset the filter
+          if (scoreVal === 10) {
+            state.scoreThresholdFilter = null;
+          } else {
+            state.scoreThresholdFilter = scoreVal;
           }
+          applyFilters();
+          return;
+        }
+      }
+
+      // Check for Agent Bar click (intersect: false so it selects the horizontal row)
+      const activeElements = chart.getElementsAtEventForMode(e, 'nearest', { intersect: false }, false);
+      if (activeElements.length > 0) {
+        const index = activeElements[0].index;
+        const agentName = state.currentAgentLabels ? state.currentAgentLabels[index] : null;
+        if (agentName) {
+          state.selectedAgentFilter = agentName;
+          applyFilters();
         }
       }
     });
@@ -1321,6 +1433,12 @@ function renderOverviewCharts() {
       
       const xAxis = chart.scales.x;
       if (xAxis && x >= xAxis.left && x <= xAxis.right && y >= xAxis.top - 15) {
+        canvas.style.cursor = "pointer";
+        return;
+      }
+
+      const activeElements = chart.getElementsAtEventForMode(e, 'nearest', { intersect: false }, false);
+      if (activeElements.length > 0) {
         canvas.style.cursor = "pointer";
       } else {
         canvas.style.cursor = "default";

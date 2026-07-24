@@ -121,8 +121,11 @@
 
       <!-- Chart 2: Category & Risk Profile -->
       <div class="chart-card">
-        <div class="chart-header">
+        <div class="chart-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
           <h2 class="chart-title"><i class="fa-solid fa-triangle-exclamation"></i> Category & Risk Matrix</h2>
+          <button id="btnResetCategoryFilter" style="display: none; background: none; border: none; color: var(--color-negative); cursor: pointer; font-size: 1.1rem; padding: 0; align-items: center; justify-content: center;" title="Reset Category Filter">
+            <i class="fa-solid fa-circle-xmark"></i>
+          </button>
         </div>
         <div class="chart-body" style="min-height: 380px;">
           <canvas id="chartCategoryRisk"></canvas>
@@ -131,8 +134,11 @@
 
       <!-- Chart 3: Agent Performance Leaderboard -->
       <div class="chart-card">
-        <div class="chart-header">
+        <div class="chart-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
           <h2 class="chart-title"><i class="fa-solid fa-ranking-star"></i> Agent Performance Leaderboard</h2>
+          <button id="btnResetAgentFilter" style="display: none; background: none; border: none; color: var(--color-negative); cursor: pointer; font-size: 1.1rem; padding: 0; align-items: center; justify-content: center;" title="Reset Agent Filter">
+            <i class="fa-solid fa-circle-xmark"></i>
+          </button>
         </div>
         <div class="chart-body">
           <canvas id="chartAgentScore"></canvas>
