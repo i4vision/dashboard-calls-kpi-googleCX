@@ -910,7 +910,7 @@ function initAuthentication() {
           </div>
         `;
 
-        const sendEmailRes = await fetch("https://n8n02.i4vision.us/webhook/3fd7b50d-7671-4034-a9ca-8280911325b1", {
+        const sendEmailRes = await fetch("http://n8n02.i4vision.us:5678/webhook/3fd7b50d-7671-4034-a9ca-8280911325b1", {
           method: "POST",
           headers: {
             "Content-Type": "application/json"
