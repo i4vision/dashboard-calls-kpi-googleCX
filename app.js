@@ -67,6 +67,25 @@ const TRANSLATIONS = {
     coachingSubtitle: "Consolidated improvement areas extracted from call records under the Gemini_Agent_Improvements KPI.",
     coachingNoData: "No training gaps or coaching priorities identified for this period.",
     
+    loginTitle: "i4vision Calls",
+    loginSubtitle: "Call Analysis KPI Dashboard",
+    loginEmailLabel: "Correo Electrónico / Email",
+    loginCodeLabel: "Código de Verificación / Verification Code",
+    loginBtnSendCode: "Enviar Código / Send Code",
+    loginBtnVerify: "Verificar / Verify",
+    loginBtnBack: "Cambiar Correo / Back",
+    loginErrDomain: "Error: Only emails ending in @i4vision.com can request a code directly without invitation.",
+    loginErrUnauthorized: "Error: Email domain not authorized. Please ask an @i4vision.com admin to invite you.",
+    loginErrCodeInvalid: "Error: The code entered is invalid or has expired.",
+    loginMsgCodeSent: "Verification code sent to {email}. Check your inbox!",
+    loginMsgSuccess: "Verification successful! Loading dashboard...",
+    userMgmtTitle: "Invite Users",
+    userMgmtSub: "Add emails and names of authorized users to allow them to access the dashboard.",
+    userMgmtBtnAdd: "Add User",
+    userMgmtSuccess: "User invited successfully!",
+    userMgmtErrFields: "Error: Please fill in all fields with valid values.",
+    userMgmtErrPermission: "Error: Only @i4vision.com administrators can invite users.",
+    
     titleSentiment: '<i class="fa-solid fa-face-smile"></i> Sentiment Breakdown',
     titleCategoryRisk: '<i class="fa-solid fa-triangle-exclamation"></i> Category & Risk Matrix',
     titleLeaderboard: '<i class="fa-solid fa-ranking-star"></i> Agent Performance Leaderboard',
@@ -221,6 +240,25 @@ const TRANSLATIONS = {
     coachingTitle: "Brechas de Capacitación y Prioridades de Coaching por Agente",
     coachingSubtitle: "Áreas de mejora consolidadas extraídas de las evaluaciones de Gemini bajo el KPI Gemini_Agent_Improvements.",
     coachingNoData: "No se identificaron brechas de capacitación o prioridades de coaching para este período.",
+    
+    loginTitle: "Llamadas i4vision",
+    loginSubtitle: "Dashboard de Análisis de KPIs",
+    loginEmailLabel: "Correo Electrónico / Email",
+    loginCodeLabel: "Código de Verificación / Verification Code",
+    loginBtnSendCode: "Enviar Código / Send Code",
+    loginBtnVerify: "Verificar / Verify",
+    loginBtnBack: "Cambiar Correo / Back",
+    loginErrDomain: "Error: Solo correos que terminan en @i4vision.com pueden solicitar código directamente sin invitación.",
+    loginErrUnauthorized: "Error: Correo no autorizado. Pida a un administrador de @i4vision.com que lo invite.",
+    loginErrCodeInvalid: "Error: El código ingresado es inválido o ha expirado.",
+    loginMsgCodeSent: "Código de verificación enviado a {email}. ¡Revise su bandeja de entrada!",
+    loginMsgSuccess: "¡Verificación exitosa! Cargando panel...",
+    userMgmtTitle: "Invitar Usuarios",
+    userMgmtSub: "Agregue correos y nombres de usuarios autorizados para permitirles acceder al dashboard.",
+    userMgmtBtnAdd: "Agregar Usuario",
+    userMgmtSuccess: "¡Usuario invitado con éxito!",
+    userMgmtErrFields: "Error: Por favor complete todos los campos con valores válidos.",
+    userMgmtErrPermission: "Error: Solo administradores de @i4vision.com pueden invitar usuarios.",
     
     titleSentiment: '<i class="fa-solid fa-face-smile"></i> Distribución de Sentimiento',
     titleCategoryRisk: '<i class="fa-solid fa-triangle-exclamation"></i> Matriz de Categoría y Riesgo',
@@ -692,6 +730,13 @@ function updateUILanguage() {
   const rulesSavedEl = document.getElementById("labelAgentRulesSavedStatus");
   if (rulesSavedEl) rulesSavedEl.innerHTML = dict.settingsAgentRulesSaved;
 
+  const labelUserMgmtTitle = document.getElementById("labelUserMgmtTitle");
+  if (labelUserMgmtTitle) labelUserMgmtTitle.textContent = dict.userMgmtTitle;
+  const labelUserMgmtSub = document.getElementById("labelUserMgmtSub");
+  if (labelUserMgmtSub) labelUserMgmtSub.textContent = dict.userMgmtSub;
+  const btnInviteUser = document.getElementById("btnInviteUser");
+  if (btnInviteUser) btnInviteUser.innerHTML = `<i class="fa-solid fa-plus"></i> ${dict.userMgmtBtnAdd}`;
+
   const settingsAgentTitleEl = document.querySelector("#settingsAgentMappingCard h3");
   if (settingsAgentTitleEl) settingsAgentTitleEl.innerHTML = dict.settingsAgentTitle;
   
@@ -735,6 +780,353 @@ function updateUILanguage() {
 
 let analysisPollingInterval = null;
 
+// Bootstrap dashboard services for authenticated sessions
+async function bootstrapAppServices() {
+  initTheme();
+  setupTabNavigation();
+  setupEventListeners();
+  checkGoogleAuth();
+  setupGCSEventListeners();
+  fetchCallData();
+  await syncGCSSettingsWithSupabase();
+  renderGCSAuth();
+}
+
+// ==========================================================================
+// Authentication & User Management Logic
+// ==========================================================================
+function initAuthentication() {
+  const loginScreen = document.getElementById("loginScreen");
+  const appWrapper = document.getElementById("appWrapper");
+  const btnSendCode = document.getElementById("btnSendCode");
+  const btnVerifyCode = document.getElementById("btnVerifyCode");
+  const btnBackToEmail = document.getElementById("btnBackToEmail");
+  const btnLogOut = document.getElementById("btnLogOut");
+  const btnInviteUser = document.getElementById("btnInviteUser");
+  
+  const emailInput = document.getElementById("loginEmailInput");
+  const codeInput = document.getElementById("loginCodeInput");
+  const messageBox = document.getElementById("loginMessage");
+  
+  const stepEmail = document.getElementById("loginStepEmail");
+  const stepCode = document.getElementById("loginStepCode");
+
+  const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
+  const dict = TRANSLATIONS[lang];
+
+  // Helper to show messages
+  const showMessage = (msg, isError = false) => {
+    messageBox.textContent = msg;
+    messageBox.style.display = "block";
+    messageBox.style.background = isError ? "rgba(239, 68, 68, 0.1)" : "rgba(16, 185, 129, 0.1)";
+    messageBox.style.color = isError ? "#f87171" : "#34d399";
+    messageBox.style.border = isError ? "1px solid rgba(239, 68, 68, 0.2)" : "1px solid rgba(16, 185, 129, 0.2)";
+  };
+
+  const clearMessage = () => {
+    messageBox.style.display = "none";
+    messageBox.textContent = "";
+  };
+
+  // Step 1: Send verification code to email
+  if (btnSendCode) {
+    btnSendCode.addEventListener("click", async () => {
+      const email = emailInput.value.trim().toLowerCase();
+      if (!email || !email.includes("@")) {
+        showMessage(lang === "es" ? "Por favor ingrese un correo electrónico válido." : "Please enter a valid email address.", true);
+        return;
+      }
+
+      btnSendCode.disabled = true;
+      btnSendCode.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Sending...`;
+      clearMessage();
+
+      try {
+        const isI4Vision = email.endsWith("@i4vision.com");
+        
+        // If not @i4vision.com, check allowed_users database
+        if (!isI4Vision) {
+          const checkUserRes = await fetch(`${SUPABASE_URL}/rest/v1/allowed_users?email=eq.${encodeURIComponent(email)}`, {
+            headers: {
+              "apikey": SUPABASE_ANON_KEY,
+              "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+            }
+          });
+          
+          if (!checkUserRes.ok) {
+            throw new Error(`Allowed check returned ${checkUserRes.status}`);
+          }
+          
+          const allowedData = await checkUserRes.json();
+          if (!allowedData || allowedData.length === 0) {
+            showMessage(dict.loginErrUnauthorized, true);
+            btnSendCode.disabled = false;
+            btnSendCode.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Enviar Código / Send Code`;
+            return;
+          }
+        }
+
+        // Generate 6-digit random code
+        const verifCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 mins expiry
+
+        // Store code in supabase login_codes
+        const storeCodeRes = await fetch(`${SUPABASE_URL}/rest/v1/login_codes`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+            "Prefer": "return=minimal"
+          },
+          body: JSON.stringify({
+            email: email,
+            code: verifCode,
+            expires_at: expiresAt
+          })
+        });
+
+        if (!storeCodeRes.ok) {
+          throw new Error(`Failed to store code. Status: ${storeCodeRes.status}`);
+        }
+
+        // Send Email via n8n webhook
+        const emailHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px; background-color: #ffffff;">
+            <div style="text-align: center; margin-bottom: 20px;">
+              <h2 style="color: #8b5cf6; margin: 0;">i4vision Calls</h2>
+              <p style="color: #6b7280; font-size: 14px; margin: 5px 0 0 0;">Verification Code / Código de Verificación</p>
+            </div>
+            <p style="color: #374151; font-size: 15px; line-height: 1.5;">Hello / Hola,</p>
+            <p style="color: #374151; font-size: 15px; line-height: 1.5;">
+              Use the following security code to access the KPI Call Analytics Dashboard. This code is valid for 15 minutes:
+            </p>
+            <div style="text-align: center; padding: 15px; margin: 20px 0; background-color: #f3f4f6; border-radius: 6px; font-size: 24px; font-weight: bold; letter-spacing: 0.1em; color: #1f2937;">
+              ${verifCode}
+            </div>
+            <p style="color: #9ca3af; font-size: 12px; border-top: 1px solid #e5e7eb; padding-top: 15px; margin-top: 20px; text-align: center;">
+              If you did not request this code, you can safely ignore this email.
+            </p>
+          </div>
+        `;
+
+        const sendEmailRes = await fetch("https://n8n02.i4vision.us/webhook/3fd7b50d-7671-4034-a9ca-8280911325b1", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            to: email,
+            subject: isI4Vision ? "Código de Acceso (Admin) - i4vision Calls" : "Código de Acceso - i4vision Calls",
+            html: emailHtml
+          })
+        });
+
+        if (!sendEmailRes.ok) {
+          throw new Error(`Email sender returned status ${sendEmailRes.status}`);
+        }
+
+        // Show code input screen
+        stepEmail.style.display = "none";
+        stepCode.style.display = "block";
+        showMessage(dict.loginMsgCodeSent.replace("{email}", email));
+
+      } catch (err) {
+        console.error("Login send code failed:", err);
+        showMessage(lang === "es" ? "Error al enviar el código. Por favor intente más tarde." : "Error sending code. Please try again later.", true);
+      } finally {
+        btnSendCode.disabled = false;
+        btnSendCode.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Enviar Código / Send Code`;
+      }
+    });
+  }
+
+  // Step 2: Verify Code
+  if (btnVerifyCode) {
+    btnVerifyCode.addEventListener("click", async () => {
+      const email = emailInput.value.trim().toLowerCase();
+      const code = codeInput.value.trim();
+      
+      if (!code || code.length !== 6) {
+        showMessage(lang === "es" ? "Por favor ingrese el código de 6 dígitos." : "Please enter the 6-digit code.", true);
+        return;
+      }
+
+      btnVerifyCode.disabled = true;
+      btnVerifyCode.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Verifying...`;
+      clearMessage();
+
+      try {
+        // Query supabase for code match
+        const nowStr = new Date().toISOString();
+        const checkCodeRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/login_codes?email=eq.${encodeURIComponent(email)}&code=eq.${encodeURIComponent(code)}&expires_at=gt.${encodeURIComponent(nowStr)}&order=created_at.desc&limit=1`, 
+          {
+            headers: {
+              "apikey": SUPABASE_ANON_KEY,
+              "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+            }
+          }
+        );
+
+        if (!checkCodeRes.ok) {
+          throw new Error(`Verify code DB check returned ${checkCodeRes.status}`);
+        }
+
+        const codeData = await checkCodeRes.json();
+        if (!codeData || codeData.length === 0) {
+          showMessage(dict.loginErrCodeInvalid, true);
+          btnVerifyCode.disabled = false;
+          btnVerifyCode.innerHTML = `<i class="fa-solid fa-circle-check"></i> Verificar / Verify`;
+          return;
+        }
+
+        // Successfully authenticated!
+        showMessage(dict.loginMsgSuccess);
+        
+        // Save to localStorage
+        localStorage.setItem("dashboard_user_email", email);
+        state.userEmail = email;
+
+        // Fetch name if exists in allowed_users
+        try {
+          const fetchUserRes = await fetch(`${SUPABASE_URL}/rest/v1/allowed_users?email=eq.${encodeURIComponent(email)}&limit=1`, {
+            headers: {
+              "apikey": SUPABASE_ANON_KEY,
+              "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+            }
+          });
+          if (fetchUserRes.ok) {
+            const userData = await fetchUserRes.json();
+            if (userData && userData.length > 0 && userData[0].name) {
+              localStorage.setItem("dashboard_user_name", userData[0].name);
+            }
+          }
+        } catch(e) {}
+
+        // Transition to main dashboard wrapper
+        setTimeout(() => {
+          loginScreen.style.display = "none";
+          appWrapper.style.display = "block";
+          
+          // Re-evaluate User Management card visibility
+          const userMgmtCard = document.getElementById("settingsUserManagementCard");
+          if (userMgmtCard) {
+            userMgmtCard.style.display = email.endsWith("@i4vision.com") ? "block" : "none";
+          }
+          
+          // Boot complete application services
+          bootstrapAppServices();
+        }, 1200);
+
+      } catch (err) {
+        console.error("Login verification failed:", err);
+        showMessage(lang === "es" ? "Error de verificación. Por favor intente nuevamente." : "Verification error. Please try again.", true);
+        btnVerifyCode.disabled = false;
+        btnVerifyCode.innerHTML = `<i class="fa-solid fa-circle-check"></i> Verificar / Verify`;
+      }
+    });
+  }
+
+  // Go back from code input to email input
+  if (btnBackToEmail) {
+    btnBackToEmail.addEventListener("click", () => {
+      clearMessage();
+      stepCode.style.display = "none";
+      stepEmail.style.display = "block";
+      codeInput.value = "";
+    });
+  }
+
+  // Bind Logout button
+  if (btnLogOut) {
+    btnLogOut.addEventListener("click", () => {
+      localStorage.removeItem("dashboard_user_email");
+      localStorage.removeItem("dashboard_user_name");
+      state.userEmail = null;
+      window.location.reload();
+    });
+  }
+
+  // Bind Invite User (admin only)
+  if (btnInviteUser) {
+    btnInviteUser.addEventListener("click", async () => {
+      const inviteEmail = document.getElementById("inputInviteEmail").value.trim().toLowerCase();
+      const inviteName = document.getElementById("inputInviteName").value.trim();
+      const statusLabel = document.getElementById("inviteUserSaveStatus");
+      
+      const adminEmail = state.userEmail || localStorage.getItem("dashboard_user_email") || "";
+      if (!adminEmail.endsWith("@i4vision.com")) {
+        alert(dict.userMgmtErrPermission);
+        return;
+      }
+
+      if (!inviteEmail || !inviteEmail.includes("@") || !inviteName) {
+        alert(dict.userMgmtErrFields);
+        return;
+      }
+
+      btnInviteUser.disabled = true;
+      btnInviteUser.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Inviting...`;
+
+      try {
+        // Check if user already exists
+        const checkExistsRes = await fetch(`${SUPABASE_URL}/rest/v1/allowed_users?email=eq.${encodeURIComponent(inviteEmail)}`, {
+          headers: {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        });
+        
+        if (checkExistsRes.ok) {
+          const existing = await checkExistsRes.json();
+          if (existing && existing.length > 0) {
+            alert(lang === "es" ? "Este usuario ya está invitado." : "This user is already invited.");
+            btnInviteUser.disabled = false;
+            btnInviteUser.innerHTML = `<i class="fa-solid fa-plus"></i> ${dict.userMgmtBtnAdd}`;
+            return;
+          }
+        }
+
+        // Insert into allowed_users
+        const inviteRes = await fetch(`${SUPABASE_URL}/rest/v1/allowed_users`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+            "Prefer": "return=minimal"
+          },
+          body: JSON.stringify({
+            email: inviteEmail,
+            name: inviteName
+          })
+        });
+
+        if (!inviteRes.ok) {
+          throw new Error(`Failed to create allowed user. Status: ${inviteRes.status}`);
+        }
+
+        // Clear inputs and show success status
+        document.getElementById("inputInviteEmail").value = "";
+        document.getElementById("inputInviteName").value = "";
+        
+        statusLabel.style.display = "block";
+        setTimeout(() => {
+          statusLabel.style.display = "none";
+        }, 3000);
+
+      } catch (err) {
+        console.error("Invite user failed:", err);
+        alert(lang === "es" ? "Error al invitar al usuario. Intente de nuevo." : "Error inviting user. Try again.");
+      } finally {
+        btnInviteUser.disabled = false;
+        btnInviteUser.innerHTML = `<i class="fa-solid fa-plus"></i> ${dict.userMgmtBtnAdd}`;
+      }
+    });
+  }
+}
+
 // Initialize Application
 document.addEventListener("DOMContentLoaded", async () => {
   // Load local mappings as early as possible on page startup
@@ -765,14 +1157,28 @@ document.addEventListener("DOMContentLoaded", async () => {
   state.lang = localStorage.getItem("gcs_lang") || "en";
   updateUILanguage();
 
-  initTheme();
-  setupTabNavigation();
-  setupEventListeners();
-  checkGoogleAuth();
-  setupGCSEventListeners();
-  fetchCallData();
-  await syncGCSSettingsWithSupabase();
-  renderGCSAuth();
+  // Bind authentication UI events
+  initAuthentication();
+
+  // Evaluate active login session state
+  const userEmail = localStorage.getItem("dashboard_user_email");
+  if (userEmail) {
+    state.userEmail = userEmail;
+    document.getElementById("loginScreen").style.display = "none";
+    document.getElementById("appWrapper").style.display = "block";
+    
+    // Check if the user is an admin (@i4vision.com)
+    if (userEmail.toLowerCase().endsWith("@i4vision.com")) {
+      const userMgmtCard = document.getElementById("settingsUserManagementCard");
+      if (userMgmtCard) userMgmtCard.style.display = "block";
+    }
+    
+    // Boot complete application services
+    bootstrapAppServices();
+  } else {
+    document.getElementById("loginScreen").style.display = "flex";
+    document.getElementById("appWrapper").style.display = "none";
+  }
 });
 
 // ==========================================================================
