@@ -4572,9 +4572,25 @@ async function triggerBulkCallAnalysisWebhook() {
   let completed = 0;
   let successful = 0;
   
+  const googleToken = await getGoogleAccessToken();
+  const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
+  if (!googleToken) {
+    const banner = document.getElementById("gcsAnalysisErrorBanner");
+    if (banner) {
+      banner.textContent = lang === "es"
+        ? "Error: Credenciales de Google no conectadas o inválidas."
+        : "Error: Google credentials not connected or invalid.";
+      banner.style.display = "block";
+    }
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+    if (selectAllCheckbox) selectAllCheckbox.disabled = false;
+    return;
+  }
+
   btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Triggering (0/${total})...`;
   
-  const webhookUrl = "https://n8n102.i4vision.us/webhook/cdf5e5e5-f8fb-42a6-902d-d5ca4c97d1a9";
+  const tasksApiUrl = "https://cloudtasks.googleapis.com/v2/projects/franquiciasqc/locations/us-central1/queues/CalliQ/tasks";
   
   // Hide old error banner if visible
   const gcsAnalysisErrorBanner = document.getElementById("gcsAnalysisErrorBanner");
@@ -4596,21 +4612,43 @@ async function triggerBulkCallAnalysisWebhook() {
     const displayName = file.name.substring(GCS_PREFIX.length);
     const startFetch = Date.now();
     try {
-      const response = await fetch(webhookUrl, {
+      const payload = {
+        audio_file_name: displayName,
+        filename: displayName,
+        file_name: displayName,
+        gcs_path: file.name,
+        stt_provider: sttProvider,
+        stt_model: sttModel,
+        google_cx_enabled: googleCxEnabled,
+        google_cx_analysis: googleCxEnabled ? "on" : "off"
+      };
+
+      const base64Body = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+      const scheduleEpoch = Math.floor(Date.now() / 1000);
+
+      const taskPayload = {
+        task: {
+          scheduleTime: {
+            seconds: scheduleEpoch
+          },
+          httpRequest: {
+            httpMethod: "POST",
+            url: "https://n8n102.i4vision.us/webhook/cdf5e5e5-f8fb-42a6-902d-d5ca4c97d1a9",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: base64Body
+          }
+        }
+      };
+
+      const response = await fetch(tasksApiUrl, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${googleToken}`
         },
-        body: JSON.stringify({
-          audio_file_name: displayName,
-          filename: displayName,
-          file_name: displayName,
-          gcs_path: file.name,
-          stt_provider: sttProvider,
-          stt_model: sttModel,
-          google_cx_enabled: googleCxEnabled,
-          google_cx_analysis: googleCxEnabled ? "on" : "off"
-        })
+        body: JSON.stringify(taskPayload)
       });
       
       let isSuccess = false;
