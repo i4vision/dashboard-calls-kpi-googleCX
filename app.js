@@ -2804,6 +2804,17 @@ function getAgentIdFromFilename(audioFileName) {
   return agentId || null;
 }
 
+function getAlarmIdFromFilename(audioFileName) {
+  if (!audioFileName) return null;
+  // e.g. 20260706-082241_50019786_1149_PRE1RAS-all_1149.mp3 -> 50019786
+  const baseName = audioFileName.split("/").pop().replace(/\.mp3$/i, "").trim();
+  const parts = baseName.split("_");
+  if (parts.length > 1) {
+    return parts[1].trim() || null;
+  }
+  return null;
+}
+
 // Compute canonical names for each agent ID based on the loaded calls data
 function computeCanonicalAgents(calls) {
   state.canonicalAgents = {};
@@ -5018,6 +5029,7 @@ async function triggerBulkCallAnalysisWebhook() {
     const displayName = file.name.substring(GCS_PREFIX.length);
     const startFetch = Date.now();
     try {
+      const alarmId = getAlarmIdFromFilename(displayName);
       const payload = {
         audio_file_name: displayName,
         filename: displayName,
@@ -5026,7 +5038,8 @@ async function triggerBulkCallAnalysisWebhook() {
         stt_provider: sttProvider,
         stt_model: sttModel,
         google_cx_enabled: googleCxEnabled,
-        google_cx_analysis: googleCxEnabled ? "on" : "off"
+        google_cx_analysis: googleCxEnabled ? "on" : "off",
+        alarm_id: alarmId
       };
 
       const base64Body = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
@@ -5039,7 +5052,7 @@ async function triggerBulkCallAnalysisWebhook() {
           },
           httpRequest: {
             httpMethod: "POST",
-            url: "https://n8n102.i4vision.us/webhook/cdf5e5e5-f8fb-42a6-902d-d5ca4c97d1a9",
+            url: "https://n8n102.i4vision.us/webhook/099211b6-8bd0-4367-9877-80d7eaa9cc30",
             headers: {
               "Content-Type": "application/json"
             },
