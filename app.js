@@ -2159,7 +2159,7 @@ function renderTranscript(call) {
       // 1. Google STT alternatives structure mapping
       if (item.alternatives && Array.isArray(item.alternatives) && item.alternatives.length > 0) {
         const alt = item.alternatives[0];
-        const text = alt.transcript || "";
+        const text = cleanTranscriptText(alt.transcript || "");
         
         let speakerVal = null;
         if (alt.words && Array.isArray(alt.words) && alt.words.length > 0) {
@@ -2209,7 +2209,7 @@ function renderTranscript(call) {
           id: item.id !== undefined ? item.id : idx,
           start: isNaN(startVal) ? 0 : startVal,
           end: isNaN(endVal) ? 0 : endVal,
-          text: item.text || "",
+          text: cleanTranscriptText(item.text || ""),
           speaker: item.speaker || null
         });
       }
@@ -2330,7 +2330,7 @@ function renderTranscript(call) {
     textBlock.style.color = "var(--text-primary)";
     textBlock.style.whiteSpace = "pre-wrap";
     textBlock.style.padding = "0.25rem";
-    textBlock.textContent = call.transcript.trim();
+    textBlock.textContent = cleanTranscriptText(call.transcript.trim());
 
     container.appendChild(textBlock);
   }
@@ -2339,6 +2339,31 @@ function renderTranscript(call) {
 // ==========================================================================
 // Formatting Helpers
 // ==========================================================================
+function cleanTranscriptText(text) {
+  if (!text) return "";
+  
+  let cleaned = text;
+  
+  const index = text.indexOf('", "gemini_');
+  if (index !== -1) {
+    cleaned = text.substring(0, index).trim();
+  } else {
+    const braceIndex = text.indexOf('{"gemini_summary"');
+    if (braceIndex !== -1) {
+      cleaned = text.substring(0, braceIndex).trim();
+    }
+  }
+
+  // Strip trailing quotes if the JSON structure boundary left a stray one
+  if (cleaned.endsWith('"') && !cleaned.startsWith('"')) {
+    cleaned = cleaned.substring(0, cleaned.length - 1).trim();
+  }
+  if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
+    cleaned = cleaned.substring(1, cleaned.length - 1).trim();
+  }
+  
+  return cleaned;
+}
 function formatAudioTime(seconds) {
   if (isNaN(seconds) || seconds === Infinity) return "0:00";
   const minutes = Math.floor(seconds / 60);
