@@ -4680,7 +4680,7 @@ async function triggerBulkCallAnalysisWebhook() {
 
             if (hasErrorKeyword || hasErrorProperty) {
               isSuccess = false;
-              console.error("n8n returned error payload for file:", file.name, parsedData);
+              console.error("Cloud Tasks returned error payload for file:", file.name, parsedData);
             } else {
               isSuccess = true;
             }
@@ -4689,15 +4689,31 @@ async function triggerBulkCallAnalysisWebhook() {
             const lowerText = rawText.toLowerCase();
             if (lowerText.includes("error") || lowerText.includes("fail") || lowerText.includes("exception") || lowerText.includes("reject")) {
               isSuccess = false;
-              console.error("n8n returned text error for file:", file.name, rawText);
+              console.error("Cloud Tasks returned text error for file:", file.name, rawText);
             } else {
               isSuccess = true;
             }
           }
         } catch (parseErr) {
           isSuccess = false;
-          console.error("Could not parse n8n response:", file.name, parseErr);
+          console.error("Could not parse Cloud Tasks response:", file.name, parseErr);
         }
+      } else {
+        const errorText = await response.text();
+        console.error(`Google Cloud Tasks creation failed for ${file.name}. Status: ${response.status} ${response.statusText}`, errorText);
+        
+        // Push error details to banner if possible
+        const banner = document.getElementById("gcsAnalysisErrorBanner");
+        if (banner) {
+          try {
+            const parsedError = JSON.parse(errorText);
+            if (parsedError.error && parsedError.error.message) {
+              banner.textContent = `Error: ${parsedError.error.message}`;
+              banner.style.display = "block";
+            }
+          } catch (e) {}
+        }
+        isSuccess = false;
       }
       
       if (isSuccess) {
