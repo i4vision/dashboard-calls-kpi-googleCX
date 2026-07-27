@@ -2249,7 +2249,27 @@ function renderTranscript(call) {
     segments.forEach(seg => {
       if (!seg.text || !seg.text.trim()) return;
 
-      const isAgent = seg.speaker === agentSpeaker;
+      let isAgent = false;
+      const callDateStr = call.created_at || call.create_time || "";
+      const isToday = callDateStr.startsWith("2026-07-27");
+      
+      if (isToday) {
+        if (seg.speaker) {
+          const spkStr = String(seg.speaker);
+          if (spkStr.endsWith("1") || spkStr === "1") {
+            isAgent = true;
+          } else if (spkStr.endsWith("2") || spkStr === "2") {
+            isAgent = false;
+          } else {
+            isAgent = seg.speaker === agentSpeaker;
+          }
+        } else {
+          isAgent = false;
+        }
+      } else {
+        isAgent = seg.speaker === agentSpeaker;
+      }
+      
       const speakerName = isAgent ? agentName : (lang === 'es' ? 'Cliente' : 'Customer');
       
       const bubbleContainer = document.createElement("div");
