@@ -790,6 +790,68 @@ async function bootstrapAppServices() {
   fetchCallData();
   await syncGCSSettingsWithSupabase();
   renderGCSAuth();
+  enforceRBACPermissions();
+}
+
+// Enforce Role-Based Access Control permissions on UI controls and page actions
+function enforceRBACPermissions() {
+  const role = state.userRole || "viewer";
+  const isAdmin = role === "admin";
+  const isEditor = role === "editor";
+  const isViewer = role === "viewer";
+
+  console.log(`Enforcing RBAC permissions for user role: ${role}`);
+
+  // 1. Settings button (only visible to admin)
+  const btnSettings = document.getElementById("btnOpenSettings");
+  if (btnSettings) {
+    btnSettings.style.display = isAdmin ? "block" : "none";
+  }
+
+  // 2. Settings cards (only visible to admin)
+  const userMgmtCard = document.getElementById("settingsUserManagementCard");
+  if (userMgmtCard) {
+    userMgmtCard.style.display = isAdmin ? "block" : "none";
+  }
+  const settingsAgentRulesCard = document.getElementById("settingsAgentRulesCard");
+  if (settingsAgentRulesCard) {
+    settingsAgentRulesCard.style.display = isAdmin ? "block" : "none";
+  }
+  const settingsAgentMappingCard = document.getElementById("settingsAgentMappingCard");
+  if (settingsAgentMappingCard) {
+    settingsAgentMappingCard.style.display = isAdmin ? "block" : "none";
+  }
+  const settingsCustomKpiCard = document.getElementById("settingsCustomKpiCard");
+  if (settingsCustomKpiCard) {
+    settingsCustomKpiCard.style.display = isAdmin ? "block" : "none";
+  }
+
+  // 3. GCS processing parameter configuration fields (only editable by admin)
+  const paramMinCallLength = document.getElementById("paramMinCallLength");
+  if (paramMinCallLength) paramMinCallLength.disabled = !isAdmin;
+  const paramMaxCallLength = document.getElementById("paramMaxCallLength");
+  if (paramMaxCallLength) paramMaxCallLength.disabled = !isAdmin;
+  const btnSaveParameters = document.getElementById("btnSaveParameters");
+  if (btnSaveParameters) btnSaveParameters.disabled = !isAdmin;
+
+  // 4. STT provider engine & model selectors (only editable by admin)
+  const sttProviderSelect = document.getElementById("sttProviderSelect");
+  if (sttProviderSelect) sttProviderSelect.disabled = !isAdmin;
+  const sttModelSelect = document.getElementById("sttModelSelect");
+  if (sttModelSelect) sttModelSelect.disabled = !isAdmin;
+  const googleCxAnalyzeSelect = document.getElementById("googleCxAnalyzeSelect");
+  if (googleCxAnalyzeSelect) googleCxAnalyzeSelect.disabled = !isAdmin;
+
+  // 5. GCS bulk checkbox selector & select quantity inputs (only active/visible for admin and editor)
+  const selectQtyInput = document.getElementById("inputSelectQuantity");
+  if (selectQtyInput) selectQtyInput.disabled = isViewer;
+  const btnApplySelectQty = document.getElementById("btnApplySelectQuantity");
+  if (btnApplySelectQty) btnApplySelectQty.disabled = isViewer;
+
+  const bulkActions = document.getElementById("gcsBulkActions");
+  if (bulkActions) {
+    bulkActions.style.display = isViewer ? "none" : "flex";
+  }
 }
 
 // ==========================================================================
@@ -988,7 +1050,11 @@ function initAuthentication() {
         localStorage.setItem("dashboard_user_email", email);
         state.userEmail = email;
 
-        // Fetch name if exists in allowed_users
+        // Fetch user metadata (name and role) if exists in allowed_users
+        let role = "viewer"; // Default fallback
+        if (email.endsWith("@i4vision.com")) {
+          role = "admin"; // Internal domain default is always admin
+        }
         try {
           const fetchUserRes = await fetch(`${SUPABASE_URL}/rest/v1/allowed_users?email=eq.${encodeURIComponent(email)}&limit=1`, {
             headers: {
@@ -998,11 +1064,19 @@ function initAuthentication() {
           });
           if (fetchUserRes.ok) {
             const userData = await fetchUserRes.json();
-            if (userData && userData.length > 0 && userData[0].name) {
-              localStorage.setItem("dashboard_user_name", userData[0].name);
+            if (userData && userData.length > 0) {
+              if (userData[0].name) {
+                localStorage.setItem("dashboard_user_name", userData[0].name);
+              }
+              if (userData[0].role) {
+                role = userData[0].role.toLowerCase();
+              }
             }
           }
         } catch(e) {}
+
+        localStorage.setItem("dashboard_user_role", role);
+        state.userRole = role;
 
         // Transition to main dashboard wrapper
         setTimeout(() => {
@@ -1099,7 +1173,8 @@ function initAuthentication() {
           },
           body: JSON.stringify({
             email: inviteEmail,
-            name: inviteName
+            name: inviteName,
+            role: document.getElementById("selectInviteRole") ? document.getElementById("selectInviteRole").value : "viewer"
           })
         });
 
@@ -1164,14 +1239,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   const userEmail = localStorage.getItem("dashboard_user_email");
   if (userEmail) {
     state.userEmail = userEmail;
+    
+    // Retrieve role (domain fallback takes priority)
+    let role = localStorage.getItem("dashboard_user_role") || "viewer";
+    if (userEmail.toLowerCase().endsWith("@i4vision.com")) {
+      role = "admin";
+    }
+    state.userRole = role;
+
     document.getElementById("loginScreen").style.display = "none";
     document.getElementById("appWrapper").style.display = "block";
-    
-    // Check if the user is an admin (@i4vision.com)
-    if (userEmail.toLowerCase().endsWith("@i4vision.com")) {
-      const userMgmtCard = document.getElementById("settingsUserManagementCard");
-      if (userMgmtCard) userMgmtCard.style.display = "block";
-    }
     
     // Boot complete application services
     bootstrapAppServices();
@@ -2804,17 +2881,6 @@ function getAgentIdFromFilename(audioFileName) {
   return agentId || null;
 }
 
-function getAlarmIdFromFilename(audioFileName) {
-  if (!audioFileName) return null;
-  // e.g. 20260706-082241_50019786_1149_PRE1RAS-all_1149.mp3 -> 50019786
-  const baseName = audioFileName.split("/").pop().replace(/\.mp3$/i, "").trim();
-  const parts = baseName.split("_");
-  if (parts.length > 1) {
-    return parts[1].trim() || null;
-  }
-  return null;
-}
-
 // Compute canonical names for each agent ID based on the loaded calls data
 function computeCanonicalAgents(calls) {
   state.canonicalAgents = {};
@@ -3690,6 +3756,11 @@ async function syncGCSSettingsWithSupabase() {
 }
 
 async function saveSettingToSupabase(key, value) {
+  const role = state.userRole || localStorage.getItem("dashboard_user_role") || "viewer";
+  if (role !== "admin") {
+    console.warn("Unauthorized settings save attempt blocked.");
+    return;
+  }
   try {
     const colMap = {
       gcs_service_account: "gcs_service_account",
@@ -3724,6 +3795,11 @@ async function saveSettingToSupabase(key, value) {
 }
 
 async function deleteSettingFromSupabase(key) {
+  const role = state.userRole || localStorage.getItem("dashboard_user_role") || "viewer";
+  if (role !== "admin") {
+    console.warn("Unauthorized settings delete attempt blocked.");
+    return;
+  }
   try {
     const colMap = {
       gcs_service_account: "gcs_service_account",
@@ -4724,11 +4800,12 @@ function renderGCSFileList() {
       statusBadge = `<span class="gcs-status-badge badge-pending"><i class="fa-solid fa-circle-notch"></i> Pending</span>`;
     }
 
-    const canReset = fileStatus !== "pending" && ongoing !== "pending";
+    const isViewer = state.userRole === "viewer";
+    const canReset = fileStatus !== "pending" && ongoing !== "pending" && !isViewer;
 
     item.innerHTML = `
-      <div class="gcs-checkbox-wrapper" style="margin-right: 0.5rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-        <input type="checkbox" class="gcs-item-checkbox" data-name="${file.name}" ${state.selectedGcsFiles.has(file.name) ? 'checked' : ''} style="cursor: pointer; width: 15px; height: 15px;" ${ongoing === "pending" ? 'disabled' : ''}>
+      <div class="gcs-checkbox-wrapper" style="margin-right: 0.5rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0; ${isViewer ? 'display: none !important;' : ''}">
+        <input type="checkbox" class="gcs-item-checkbox" data-name="${file.name}" ${state.selectedGcsFiles.has(file.name) ? 'checked' : ''} style="cursor: pointer; width: 15px; height: 15px;" ${(ongoing === "pending" || isViewer) ? 'disabled' : ''}>
       </div>
       <div class="gcs-file-info" style="flex: 1; min-width: 0;">
         <span class="gcs-file-name" title="${displayName}" style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${displayName}</span>
@@ -4823,6 +4900,7 @@ function renderGCSFileList() {
 
   // Update select all count and disabled states at the end of rendering
   updateBulkActionUI();
+  enforceRBACPermissions();
 }
 
 async function playGCSAudio(file) {
@@ -4969,6 +5047,11 @@ function updateBulkActionUI() {
 }
 
 async function triggerBulkCallAnalysisWebhook() {
+  const role = state.userRole || localStorage.getItem("dashboard_user_role") || "viewer";
+  if (role === "viewer") {
+    alert("Error: Viewers are not allowed to trigger call analysis.");
+    return;
+  }
   const btn = document.getElementById("btnBulkAnalyze");
   const selectAllCheckbox = document.getElementById("gcsSelectAllCheckbox");
   if (!btn) return;
@@ -5029,7 +5112,6 @@ async function triggerBulkCallAnalysisWebhook() {
     const displayName = file.name.substring(GCS_PREFIX.length);
     const startFetch = Date.now();
     try {
-      const alarmId = getAlarmIdFromFilename(displayName);
       const payload = {
         audio_file_name: displayName,
         filename: displayName,
@@ -5038,8 +5120,7 @@ async function triggerBulkCallAnalysisWebhook() {
         stt_provider: sttProvider,
         stt_model: sttModel,
         google_cx_enabled: googleCxEnabled,
-        google_cx_analysis: googleCxEnabled ? "on" : "off",
-        alarm_id: alarmId
+        google_cx_analysis: googleCxEnabled ? "on" : "off"
       };
 
       const base64Body = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
@@ -5052,7 +5133,7 @@ async function triggerBulkCallAnalysisWebhook() {
           },
           httpRequest: {
             httpMethod: "POST",
-            url: "https://n8n102.i4vision.us/webhook/099211b6-8bd0-4367-9877-80d7eaa9cc30",
+            url: "https://n8n102.i4vision.us/webhook/cdf5e5e5-f8fb-42a6-902d-d5ca4c97d1a9",
             headers: {
               "Content-Type": "application/json"
             },
@@ -5321,6 +5402,11 @@ async function exportCallDataToExcel(e) {
 }
 
 async function resetRecordingData(file, btn) {
+  const role = state.userRole || localStorage.getItem("dashboard_user_role") || "viewer";
+  if (role !== "admin") {
+    alert("Error: Only administrators are allowed to reset recordings.");
+    return;
+  }
   const displayName = file.name.substring(GCS_PREFIX.length);
   
   // Double-check warning prompts
@@ -5465,6 +5551,11 @@ async function resetRecordingData(file, btn) {
 }
 
 async function triggerBulkCallReset() {
+  const role = state.userRole || localStorage.getItem("dashboard_user_role") || "viewer";
+  if (role !== "admin") {
+    alert("Error: Only administrators are allowed to reset recordings.");
+    return;
+  }
   const btn = document.getElementById("btnBulkReset");
   const selectAllCheckbox = document.getElementById("gcsSelectAllCheckbox");
   if (!btn) return;

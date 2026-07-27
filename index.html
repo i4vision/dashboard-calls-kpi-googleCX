@@ -815,6 +815,14 @@
             <label class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">EMAIL / CORREO ELECTRÓNICO</label>
             <input type="email" id="inputInviteEmail" class="gcs-input" placeholder="user@domain.com" style="width: 100%; height: 32px; padding: 0 0.5rem; font-size: 0.75rem; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color); outline: none;">
           </div>
+          <div>
+            <label class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">ROLE / ROL</label>
+            <select id="selectInviteRole" class="gcs-input" style="width: 100%; height: 32px; padding: 0 0.5rem; font-size: 0.75rem; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color); outline: none; cursor: pointer;">
+              <option value="admin">Admin / Administrador</option>
+              <option value="editor">Editor / Editor</option>
+              <option value="viewer" selected>Viewer / Visor</option>
+            </select>
+          </div>
         </div>
 
         <button id="btnInviteUser" class="btn-primary" style="width: 100%; font-size: 0.8rem; padding: 0.65rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; height: 36px;">
