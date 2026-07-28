@@ -416,9 +416,12 @@
       <div class="drawer-section">
         <h3 class="drawer-section-title">Performance Metrics</h3>
         <div class="details-grid">
-          <div class="details-item">
-            <span class="details-item-label">Agent Score</span>
-            <span id="drawerScore" class="details-item-value">2 / 5</span>
+          <div class="details-item" id="drawerScoreContainer" style="grid-column: span 2; display: flex; flex-direction: column; gap: 0.35rem; align-items: flex-start; justify-content: flex-start; width: 100%;">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+              <span class="details-item-label" style="margin: 0;">Agent Score</span>
+              <span id="drawerScore" class="details-item-value">2 / 5</span>
+            </div>
+            <div id="drawerScoreBreakdown" style="display: none; width: 100%; border-top: 1px dashed var(--border-color); padding-top: 0.35rem; margin-top: 0.15rem; flex-direction: column; gap: 0.2rem;"></div>
           </div>
         </div>
       </div>

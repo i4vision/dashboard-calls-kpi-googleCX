@@ -1565,7 +1565,7 @@ function applyFilters() {
 function getAgentAverageScore(agentName) {
   if (!state.allCalls) return 0;
   const agentCalls = state.allCalls.filter(c => getAgentName(c) === agentName);
-  const scores = agentCalls.map(c => Number(c.agent_score)).filter(s => !isNaN(s));
+  const scores = agentCalls.map(c => getAgentScoreNumber(c.agent_score)).filter(s => !isNaN(s));
   if (scores.length === 0) return 0;
   return scores.reduce((a, b) => a + b, 0) / scores.length;
 }
@@ -1679,7 +1679,7 @@ function updateKPIs() {
   }
 
   // 1. Average Agent Score (Scale 0-10)
-  const validScores = state.filteredCalls.map(c => Number(c.agent_score)).filter(s => !isNaN(s));
+  const validScores = state.filteredCalls.map(c => getAgentScoreNumber(c.agent_score)).filter(s => !isNaN(s));
   const avgScore = validScores.reduce((acc, curr) => acc + curr, 0) / validScores.length;
   document.getElementById("kpiAvgScore").textContent = avgScore.toFixed(1);
 
@@ -1878,7 +1878,7 @@ function renderOverviewCharts() {
     if (!agentScores[agent]) {
       agentScores[agent] = { total: 0, count: 0 };
     }
-    const score = Number(c.agent_score);
+    const score = getAgentScoreNumber(c.agent_score);
     if (!isNaN(score)) {
       agentScores[agent].total += score;
       agentScores[agent].count++;
@@ -2010,7 +2010,7 @@ function renderOverviewCharts() {
     if (!categoryScores[parentCat]) {
       categoryScores[parentCat] = { total: 0, count: 0 };
     }
-    const score = Number(c.agent_score);
+    const score = getAgentScoreNumber(c.agent_score);
     if (!isNaN(score)) {
       categoryScores[parentCat].total += score;
       categoryScores[parentCat].count++;
@@ -2113,7 +2113,7 @@ function renderTable() {
     const resHtml = `<span class="badge ${resClass}">${getLocalizedResolution(call.resolution_status)}</span>`;
 
     // Agent score pill representation
-    const scoreNum = Number(call.agent_score);
+    const scoreNum = getAgentScoreNumber(call.agent_score);
     const scoreHtml = !isNaN(scoreNum)
       ? `<span class="badge" style="background: rgba(139, 92, 246, 0.12); color: var(--accent-secondary); border-color: rgba(139, 92, 246, 0.25); font-family: var(--font-mono); font-weight: bold; font-size: 0.85rem;">${scoreNum.toFixed(1)} / 10</span>`
       : `<span style="color: var(--text-muted); font-size: 0.85rem;">-</span>`;
@@ -2188,8 +2188,26 @@ function openDrawer(call) {
   category.textContent = `${localizedParent} (${rawCat})`;
 
   // Performance stats
-  const drawerScoreNum = Number(call.agent_score);
+  const scoreDetails = getAgentScoreDetails(call.agent_score);
+  const drawerScoreNum = scoreDetails.score;
   document.getElementById("drawerScore").textContent = !isNaN(drawerScoreNum) ? `${drawerScoreNum.toFixed(1)} / 10` : "N/A";
+
+  const breakdownEl = document.getElementById("drawerScoreBreakdown");
+  if (breakdownEl) {
+    if (scoreDetails.breakdown && Object.keys(scoreDetails.breakdown).length > 0) {
+      breakdownEl.style.display = "flex";
+      breakdownEl.innerHTML = Object.entries(scoreDetails.breakdown).map(([k, v]) => {
+        const name = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        return `<div style="display: flex; justify-content: space-between; font-size: 0.75rem; width: 100%;">
+          <span style="color: var(--text-secondary);">${name}:</span>
+          <span style="font-family: var(--font-mono); font-weight: 600; color: var(--text-primary);">${Number(v).toFixed(1)} / 10</span>
+        </div>`;
+      }).join("");
+    } else {
+      breakdownEl.style.display = "none";
+      breakdownEl.innerHTML = "";
+    }
+  }
 
   // Cost & Usage stats
   const totalCost = Number(call.total_cost_usd);
@@ -2971,6 +2989,95 @@ function computeCanonicalAgents(calls) {
 
     state.canonicalAgents[agentId] = bestCandidate;
   });
+}
+
+function getAgentScoreDetails(agentScore) {
+  if (agentScore === null || agentScore === undefined) {
+    return { score: NaN, breakdown: null };
+  }
+
+  // If it's already a number
+  if (typeof agentScore === "number") {
+    return { score: agentScore, breakdown: null };
+  }
+  
+  if (typeof agentScore === "string") {
+    const trimmed = agentScore.trim();
+    if (!isNaN(trimmed) && trimmed !== "") {
+      return { score: Number(trimmed), breakdown: null };
+    }
+    
+    let cleanStr = trimmed;
+    // Clean up "[Object: ...]" or similar wrappers if present
+    if (cleanStr.startsWith("[Object:") && cleanStr.endsWith("]")) {
+      cleanStr = cleanStr.substring(8, cleanStr.length - 1).trim();
+    }
+    
+    try {
+      const parsed = JSON.parse(cleanStr);
+      return processParsedScore(parsed);
+    } catch (e) {
+      const jsonMatch = cleanStr.match(/\{.*\}/);
+      if (jsonMatch) {
+        try {
+          const parsed = JSON.parse(jsonMatch[0]);
+          return processParsedScore(parsed);
+        } catch (e2) {
+          // Ignore
+        }
+      }
+    }
+  } else if (typeof agentScore === "object") {
+    return processParsedScore(agentScore);
+  }
+
+  return { score: NaN, breakdown: null };
+}
+
+function processParsedScore(parsed) {
+  if (Array.isArray(parsed)) {
+    if (parsed.length > 0) {
+      return processParsedScore(parsed[0]);
+    }
+    return { score: NaN, breakdown: null };
+  }
+
+  if (parsed && typeof parsed === "object") {
+    const keys = Object.keys(parsed);
+    if (keys.length === 0) {
+      return { score: NaN, breakdown: {} };
+    }
+    
+    let sum = 0;
+    let validCount = 0;
+    const breakdown = {};
+    
+    keys.forEach(key => {
+      const val = Number(parsed[key]);
+      if (!isNaN(val)) {
+        sum += val;
+        validCount++;
+        breakdown[key] = val;
+      }
+    });
+    
+    if (validCount > 0) {
+      const avg = sum / validCount;
+      return { score: avg, breakdown };
+    }
+    return { score: NaN, breakdown };
+  }
+
+  const num = Number(parsed);
+  if (!isNaN(num)) {
+    return { score: num, breakdown: null };
+  }
+
+  return { score: NaN, breakdown: null };
+}
+
+function getAgentScoreNumber(agentScore) {
+  return getAgentScoreDetails(agentScore).score;
 }
 
 // Extract Agent Name from Entities or Transcript (falling back to Hashed Deterministic Names if not found)
@@ -5345,7 +5452,8 @@ function convertToCSV(arr) {
   
   const rows = arr.map(c => {
     const agentName = getAgentName(c);
-    const score = c.agent_score ? Number(c.agent_score).toFixed(1) : "N/A";
+    const scoreNum = getAgentScoreNumber(c.agent_score);
+    const score = !isNaN(scoreNum) ? scoreNum.toFixed(1) : "N/A";
     
     return [
       c.conversation_name || "",
@@ -6804,7 +6912,8 @@ function compileOKFCallsContext() {
     const cat = call.category || "N/A";
     const sent = call.sentiment || "N/A";
     const risk = call.risk_level || "N/A";
-    const score = call.agent_score !== null && call.agent_score !== undefined ? `${call.agent_score}/10` : "N/A";
+    const scoreNum = getAgentScoreNumber(call.agent_score);
+    const score = !isNaN(scoreNum) ? `${scoreNum.toFixed(1)}/10` : "N/A";
     const cost = call.total_cost_usd !== null && call.total_cost_usd !== undefined ? `$${Number(call.total_cost_usd).toFixed(3)}` : "N/A";
     
     // Parse custom KPIs list to present in context table
