@@ -6591,6 +6591,62 @@ function retrieveTranscriptsForQuery(query) {
   return context;
 }
 
+function compileCustomKPIsDefinitionsContext() {
+  const kpis = state.customKpis || [];
+  if (kpis.length === 0) {
+    return "\n### CONFIGURED CUSTOM CALL KPIS DEFINITIONS (KPIs de Llamada Personalizados)\nNo custom call KPIs are currently configured in the system.\n";
+  }
+  let md = "\n### CONFIGURED CUSTOM CALL KPIS DEFINITIONS (KPIs de Llamada Personalizados)\n";
+  md += "These are the custom KPIs configured in the system that are evaluated for the calls:\n";
+  kpis.forEach(kpi => {
+    const name = kpi.name || "N/A";
+    const type = kpi.type || "N/A";
+    const desc = kpi.description || "No description";
+    const val = kpi.value || "";
+    md += `- **${name}** (Type: ${type}): ${desc}. Evaluated using criteria/prompt: "${val}"\n`;
+  });
+  return md;
+}
+
+function compileAllCallsCustomKPIsContext() {
+  const calls = state.allCalls || [];
+  if (calls.length === 0) {
+    return "\n### CUSTOM KPIS FOR ALL LOADED CALLS (KPIs de Llamada Personalizados de todas las llamadas)\nNo calls are currently loaded.\n";
+  }
+  let md = "\n### CUSTOM KPIS FOR ALL LOADED CALLS (KPIs de Llamada Personalizados de todas las llamadas)\n";
+  md += "Below are the evaluated custom KPIs for every call currently in the database:\n";
+  calls.forEach(call => {
+    let id = call.conversation_name || "N/A";
+    if (id.includes("/conversations/")) {
+      id = id.substring(id.lastIndexOf("/") + 1);
+    }
+    const agent = getAgentName(call);
+    
+    let kpisStr = "None";
+    if (call.kpis) {
+      let parsedKpis = call.kpis;
+      if (typeof parsedKpis === "string") {
+        try {
+          parsedKpis = JSON.parse(parsedKpis);
+        } catch (e) {
+          parsedKpis = null;
+        }
+      }
+      let kpiObj = null;
+      if (Array.isArray(parsedKpis) && parsedKpis.length > 0) {
+        kpiObj = parsedKpis[0];
+      } else if (parsedKpis && typeof parsedKpis === "object" && !Array.isArray(parsedKpis)) {
+        kpiObj = parsedKpis;
+      }
+      if (kpiObj && Object.keys(kpiObj).length > 0) {
+        kpisStr = Object.entries(kpiObj).map(([k, v]) => `${k}:${JSON.stringify(v)}`).join(", ");
+      }
+    }
+    md += `- Call ${id} (Agent: ${agent}): ${kpisStr}\n`;
+  });
+  return md;
+}
+
 function compileOKFCallsContext() {
   const callsToInclude = state.filteredCalls || state.allCalls || [];
   if (callsToInclude.length === 0) {
@@ -6769,14 +6825,20 @@ async function handleChatSend() {
   try {
     const okfContext = compileOKFCallsContext();
     const ragContext = retrieveTranscriptsForQuery(text);
+    const kpiDefinitionsContext = compileCustomKPIsDefinitionsContext();
+    const allCallsKpisContext = compileAllCallsCustomKPIsContext();
     
     const systemPrompt = `You are the Call Center Analytics AI Assistant. Your job is to answer questions about the call analytics database.
 You are equipped with a hybrid analytics stack:
 1. CURATED METADATA (OKF): A clean Markdown table containing structural metadata of the calls (IDs, scores, sentiments, categories, summaries).
-2. TRANSCRIPT SNIPPETS (RAG): A selection of the top matching call transcripts based on the user's query context.
+2. CONFIGURED CUSTOM CALL KPIS DEFINITIONS: The list of custom KPIs defined in the system and what they measure.
+3. CUSTOM CALL KPIS FOR ALL LOADED CALLS: The evaluated custom KPI values for every call in the database. Use this to perform complete database counts, statistics, and queries about custom KPIs across all calls.
+4. TRANSCRIPT SNIPPETS (RAG): A selection of the top matching call transcripts based on the user's query context.
 
 When answering:
 - Be highly factual and deterministic. Rely first on the Curated Metadata (OKF) table for numbers, counts, and categories.
+- Use the CUSTOM CALL KPIS FOR ALL LOADED CALLS section when the user asks questions or wants statistics/counts involving custom call KPIs across the entire call log.
+- Use the CONFIGURED CUSTOM CALL KPIS DEFINITIONS section to understand what custom KPI fields represent.
 - If the user asks about specific quotes or dialogue details, search the Transcript Snippets (RAG) context.
 - Format your response using markdown. Use bulleted lists, bold text, and HTML-like markdown tables where appropriate.
 - If the user's question cannot be answered by the provided data, state that clearly.
@@ -6795,7 +6857,7 @@ When answering:
         model: model,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: `Here is the call context:\n\n${okfContext}\n${ragContext}\n\nUser Question: ${text}` }
+          { role: "user", content: `Here is the call context:\n\n${okfContext}\n${kpiDefinitionsContext}\n${allCallsKpisContext}\n${ragContext}\n\nUser Question: ${text}` }
         ],
         temperature: 0.2
       })
