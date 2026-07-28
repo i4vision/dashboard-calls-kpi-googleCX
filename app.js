@@ -972,20 +972,45 @@ function initAuthentication() {
           </div>
         `;
 
-        const sendEmailRes = await fetch("http://n8n02.i4vision.us:5678/webhook/3fd7b50d-7671-4034-a9ca-8280911325b1", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            to: email,
-            subject: isI4Vision ? "Código de Acceso (Admin) - i4vision Calls" : "Código de Acceso - i4vision Calls",
-            html: emailHtml
-          })
-        });
+        let sendEmailRes;
+        let isPrimarySuccessful = false;
+        try {
+          sendEmailRes = await fetch("http://n8n02.i4vision.us:5678/webhook/3fd7b50d-7671-4034-a9ca-8280911325b1", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              to: email,
+              subject: isI4Vision ? "Código de Acceso (Admin) - i4vision Calls" : "Código de Acceso - i4vision Calls",
+              html: emailHtml
+            })
+          });
+          if (sendEmailRes.ok) {
+            isPrimarySuccessful = true;
+          } else {
+            console.warn(`Primary email webhook failed with status ${sendEmailRes.status}. Trying backup...`);
+          }
+        } catch (err) {
+          console.warn("Primary email webhook threw an error. Trying backup...", err);
+        }
 
-        if (!sendEmailRes.ok) {
-          throw new Error(`Email sender returned status ${sendEmailRes.status}`);
+        if (!isPrimarySuccessful) {
+          sendEmailRes = await fetch("https://n8n02.i4vision.us/webhook/3fd7b50d-7671-4034-a9ca-8280911325b1", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              to: email,
+              subject: isI4Vision ? "Código de Acceso (Admin) - i4vision Calls" : "Código de Acceso - i4vision Calls",
+              html: emailHtml
+            })
+          });
+
+          if (!sendEmailRes.ok) {
+            throw new Error(`Email sender returned status ${sendEmailRes.status} on backup endpoint`);
+          }
         }
 
         // Show code input screen
