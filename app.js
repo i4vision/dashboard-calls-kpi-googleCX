@@ -6608,42 +6608,163 @@ function compileCustomKPIsDefinitionsContext() {
   return md;
 }
 
-function compileAllCallsCustomKPIsContext() {
+function compileGlobalCustomKPIsStats() {
   const calls = state.allCalls || [];
   if (calls.length === 0) {
-    return "\n### CUSTOM KPIS FOR ALL LOADED CALLS (KPIs de Llamada Personalizados de todas las llamadas)\nNo calls are currently loaded.\n";
+    return "\n### CUSTOM KPIS GLOBAL STATS SUMMARY\nNo custom KPIs data available.\n";
   }
-  let md = "\n### CUSTOM KPIS FOR ALL LOADED CALLS (KPIs de Llamada Personalizados de todas las llamadas)\n";
-  md += "Below are the evaluated custom KPIs for every call currently in the database:\n";
+  
+  const stats = {};
+  
+  if (Array.isArray(state.customKpis)) {
+    state.customKpis.forEach(kpi => {
+      if (kpi.name) {
+        stats[kpi.name] = { totalCount: 0, valFreq: {} };
+      }
+    });
+  }
+  
   calls.forEach(call => {
+    if (!call.kpis) return;
+    
+    let parsedKpis = call.kpis;
+    if (typeof parsedKpis === "string") {
+      try {
+        parsedKpis = JSON.parse(parsedKpis);
+      } catch (e) {
+        parsedKpis = null;
+      }
+    }
+    
+    let kpiObj = null;
+    if (Array.isArray(parsedKpis) && parsedKpis.length > 0) {
+      kpiObj = parsedKpis[0];
+    } else if (parsedKpis && typeof parsedKpis === "object" && !Array.isArray(parsedKpis)) {
+      kpiObj = parsedKpis;
+    }
+    
+    if (kpiObj && typeof kpiObj === "object") {
+      Object.keys(kpiObj).forEach(key => {
+        if (!stats[key]) {
+          stats[key] = { totalCount: 0, valFreq: {} };
+        }
+        
+        let val = kpiObj[key];
+        stats[key].totalCount++;
+        
+        let valStr = "";
+        if (val === null || val === undefined) {
+          valStr = "null";
+        } else if (typeof val === "boolean") {
+          valStr = val ? "true" : "false";
+        } else if (Array.isArray(val)) {
+          valStr = `[${val.join(", ")}]`;
+        } else if (typeof val === "object") {
+          valStr = JSON.stringify(val);
+        } else {
+          valStr = String(val).trim().toLowerCase();
+        }
+        
+        stats[key].valFreq[valStr] = (stats[key].valFreq[valStr] || 0) + 1;
+      });
+    }
+  });
+  
+  let md = "\n### CUSTOM KPIS GLOBAL STATS SUMMARY (Summary of all call records)\n";
+  md += `Total loaded call records in database: ${calls.length}\n\n`;
+  
+  const keys = Object.keys(stats);
+  if (keys.length === 0) {
+    md += "No custom KPIs are currently evaluated on any call.\n";
+    return md;
+  }
+  
+  keys.forEach(key => {
+    const kpiStat = stats[key];
+    md += `- **KPI Parameter: ${key}**\n`;
+    md += `  - Total calls evaluated with this KPI: ${kpiStat.totalCount}\n`;
+    
+    const freqs = Object.entries(kpiStat.valFreq);
+    if (freqs.length === 0) {
+      md += "  - Value distribution: No values recorded.\n";
+    } else {
+      md += "  - Value distribution/frequencies:\n";
+      freqs.sort((a, b) => b[1] - a[1]);
+      const topFreqs = freqs.slice(0, 15);
+      topFreqs.forEach(([val, count]) => {
+        const spanishSuffix = val === "true" ? " (si)" : (val === "false" ? " (no)" : "");
+        md += `    - "${val}"${spanishSuffix}: ${count} call(s)\n`;
+      });
+      if (freqs.length > 15) {
+        md += `    - (... and ${freqs.length - 15} other unique values)\n`;
+      }
+    }
+  });
+  
+  return md;
+}
+
+function compileAllCallsCustomKPIsContext() {
+  const calls = state.allCalls || [];
+  
+  const callsWithKpis = calls.filter(call => {
+    if (!call.kpis) return false;
+    let parsedKpis = call.kpis;
+    if (typeof parsedKpis === "string") {
+      try {
+        parsedKpis = JSON.parse(parsedKpis);
+      } catch (e) {
+        return false;
+      }
+    }
+    let kpiObj = null;
+    if (Array.isArray(parsedKpis) && parsedKpis.length > 0) {
+      kpiObj = parsedKpis[0];
+    } else if (parsedKpis && typeof parsedKpis === "object" && !Array.isArray(parsedKpis)) {
+      kpiObj = parsedKpis;
+    }
+    return kpiObj && Object.keys(kpiObj).length > 0;
+  });
+
+  if (callsWithKpis.length === 0) {
+    return "\n### CUSTOM KPIS FOR CALLS LIST\nNo calls with evaluated custom KPIs found.\n";
+  }
+
+  const limitedCalls = callsWithKpis.slice(0, 150);
+
+  let md = "\n### CUSTOM KPIS FOR CALLS LIST (Sample of up to 150 calls with evaluated KPIs)\n";
+  limitedCalls.forEach(call => {
     let id = call.conversation_name || "N/A";
     if (id.includes("/conversations/")) {
       id = id.substring(id.lastIndexOf("/") + 1);
     }
     const agent = getAgentName(call);
     
-    let kpisStr = "None";
-    if (call.kpis) {
-      let parsedKpis = call.kpis;
-      if (typeof parsedKpis === "string") {
-        try {
-          parsedKpis = JSON.parse(parsedKpis);
-        } catch (e) {
-          parsedKpis = null;
-        }
+    let kpisStr = "";
+    let parsedKpis = call.kpis;
+    if (typeof parsedKpis === "string") {
+      try {
+        parsedKpis = JSON.parse(parsedKpis);
+      } catch (e) {
+        parsedKpis = null;
       }
-      let kpiObj = null;
-      if (Array.isArray(parsedKpis) && parsedKpis.length > 0) {
-        kpiObj = parsedKpis[0];
-      } else if (parsedKpis && typeof parsedKpis === "object" && !Array.isArray(parsedKpis)) {
-        kpiObj = parsedKpis;
-      }
-      if (kpiObj && Object.keys(kpiObj).length > 0) {
-        kpisStr = Object.entries(kpiObj).map(([k, v]) => `${k}:${JSON.stringify(v)}`).join(", ");
-      }
+    }
+    let kpiObj = null;
+    if (Array.isArray(parsedKpis) && parsedKpis.length > 0) {
+      kpiObj = parsedKpis[0];
+    } else if (parsedKpis && typeof parsedKpis === "object" && !Array.isArray(parsedKpis)) {
+      kpiObj = parsedKpis;
+    }
+    if (kpiObj) {
+      kpisStr = Object.entries(kpiObj).map(([k, v]) => `${k}:${JSON.stringify(v)}`).join(", ");
     }
     md += `- Call ${id} (Agent: ${agent}): ${kpisStr}\n`;
   });
+
+  if (callsWithKpis.length > 150) {
+    md += `\n*(Note: Showing first 150 calls out of ${callsWithKpis.length} total calls with evaluated KPIs. Refer to the GLOBAL STATS SUMMARY for complete totals.)*\n`;
+  }
+
   return md;
 }
 
@@ -6826,18 +6947,20 @@ async function handleChatSend() {
     const okfContext = compileOKFCallsContext();
     const ragContext = retrieveTranscriptsForQuery(text);
     const kpiDefinitionsContext = compileCustomKPIsDefinitionsContext();
+    const kpiStatsContext = compileGlobalCustomKPIsStats();
     const allCallsKpisContext = compileAllCallsCustomKPIsContext();
     
     const systemPrompt = `You are the Call Center Analytics AI Assistant. Your job is to answer questions about the call analytics database.
 You are equipped with a hybrid analytics stack:
 1. CURATED METADATA (OKF): A clean Markdown table containing structural metadata of the calls (IDs, scores, sentiments, categories, summaries).
 2. CONFIGURED CUSTOM CALL KPIS DEFINITIONS: The list of custom KPIs defined in the system and what they measure.
-3. CUSTOM CALL KPIS FOR ALL LOADED CALLS: The evaluated custom KPI values for every call in the database. Use this to perform complete database counts, statistics, and queries about custom KPIs across all calls.
-4. TRANSCRIPT SNIPPETS (RAG): A selection of the top matching call transcripts based on the user's query context.
+3. CUSTOM CALL KPIS GLOBAL STATS SUMMARY: The aggregated totals and frequency distribution of all evaluated custom KPIs across every call in the database. Use this summary for all database counts, aggregates, statistics, and queries (e.g. counting how many calls have a specific KPI set to a certain value like true/false/si/no).
+4. CUSTOM CALL KPIS FOR ALL LOADED CALLS: The evaluated custom KPI values for calls in the database (sample limited to first 150).
+5. TRANSCRIPT SNIPPETS (RAG): A selection of the top matching call transcripts based on the user's query context.
 
 When answering:
 - Be highly factual and deterministic. Rely first on the Curated Metadata (OKF) table for numbers, counts, and categories.
-- Use the CUSTOM CALL KPIS FOR ALL LOADED CALLS section when the user asks questions or wants statistics/counts involving custom call KPIs across the entire call log.
+- Always use the CUSTOM CALL KPIS GLOBAL STATS SUMMARY section when the user asks for total counts, statistics, or metrics involving custom call KPIs across all calls in the database (e.g. "how many calls have voicemail_answered = si"). Note that "true" correlates with "si" / "yes" and "false" with "no".
 - Use the CONFIGURED CUSTOM CALL KPIS DEFINITIONS section to understand what custom KPI fields represent.
 - If the user asks about specific quotes or dialogue details, search the Transcript Snippets (RAG) context.
 - Format your response using markdown. Use bulleted lists, bold text, and HTML-like markdown tables where appropriate.
@@ -6857,7 +6980,7 @@ When answering:
         model: model,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: `Here is the call context:\n\n${okfContext}\n${kpiDefinitionsContext}\n${allCallsKpisContext}\n${ragContext}\n\nUser Question: ${text}` }
+          { role: "user", content: `Here is the call context:\n\n${okfContext}\n${kpiDefinitionsContext}\n${kpiStatsContext}\n${allCallsKpisContext}\n${ragContext}\n\nUser Question: ${text}` }
         ],
         temperature: 0.2
       })
