@@ -1394,7 +1394,7 @@ function updateThemeToggleIcon() {
   const toggleBtn = document.getElementById("themeToggle");
   if (toggleBtn) {
     toggleBtn.innerHTML = state.activeTheme === "dark" 
-      ? '<i class="fa-solid fa-sun"></i>' 
+      ? '<i class="fa-solid fa-lightbulb"></i>' 
       : '<i class="fa-solid fa-moon"></i>';
   }
 }
