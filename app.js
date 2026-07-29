@@ -5330,7 +5330,8 @@ async function triggerBulkCallAnalysisWebhook() {
         stt_provider: sttProvider,
         stt_model: sttModel,
         google_cx_enabled: googleCxEnabled,
-        google_cx_analysis: googleCxEnabled ? "on" : "off"
+        google_cx_analysis: googleCxEnabled ? "on" : "off",
+        user_email: state.userEmail || localStorage.getItem("dashboard_user_email") || ""
       };
 
       const base64Body = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
