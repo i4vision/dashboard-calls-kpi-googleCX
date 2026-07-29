@@ -764,6 +764,11 @@ function updateUILanguage() {
   const saveGeneralSettingsStatus = document.getElementById("generalSettingsSaveStatus");
   if (saveGeneralSettingsStatus) saveGeneralSettingsStatus.innerHTML = dict.settingsSavedStatus;
 
+  const labelNewKpiWeight = document.getElementById("labelNewKpiWeight");
+  if (labelNewKpiWeight) {
+    labelNewKpiWeight.textContent = lang === "es" ? "PESO KPI (0 o 1 a 10)" : "KPI WEIGHT (0 or 1 to 10)";
+  }
+
   // Refresh Call Details Drawer if it's currently open
   if (state.activeCall) {
     openDrawer(state.activeCall);
@@ -6136,13 +6141,14 @@ function setupSettingsDrawer() {
       const item = document.createElement("div");
       item.className = "agent-mapping-item";
       item.style.cssText = "display: flex; justify-content: space-between; align-items: center; background: rgba(255, 255, 255, 0.02); padding: 0.4rem 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);";
-      const scoreVal = kpi.score !== undefined ? kpi.score : (kpi.order !== undefined ? kpi.order : 0);
+      const weightVal = kpi.weight !== undefined ? kpi.weight : (kpi.score !== undefined ? kpi.score : (kpi.order !== undefined ? kpi.order : 0));
+      const isEs = state.lang === "es" || localStorage.getItem("gcs_lang") === "es";
       item.innerHTML = `
         <div style="display: flex; flex-direction: column; gap: 0.15rem;">
           <div style="display: flex; align-items: center; gap: 0.35rem;">
             <span style="font-weight: 600; font-size: 0.78rem; color: var(--text-primary); font-family: var(--font-mono);">${kpi.name}</span>
             <span class="badge" style="font-size: 0.65rem; padding: 0.05rem 0.25rem; text-transform: uppercase; background: rgba(139, 92, 246, 0.1); color: var(--accent-primary); border-color: rgba(139, 92, 246, 0.2);">${kpi.type}</span>
-            <span class="badge" style="font-size: 0.65rem; padding: 0.05rem 0.25rem; background: rgba(255, 255, 255, 0.05); color: var(--text-secondary); border-color: rgba(255, 255, 255, 0.1);">Score: ${scoreVal}</span>
+            <span class="badge" style="font-size: 0.65rem; padding: 0.05rem 0.25rem; background: rgba(255, 255, 255, 0.05); color: var(--text-secondary); border-color: rgba(255, 255, 255, 0.1);">${isEs ? "Peso" : "Weight"}: ${weightVal}</span>
           </div>
           <div style="font-size: 0.65rem; color: var(--text-secondary); line-height: 1.2;">${kpi.description || "No description"}</div>
         </div>
@@ -6212,25 +6218,27 @@ function setupSettingsDrawer() {
       let scoreVal = scoreInput ? parseInt(scoreInput.value, 10) : 0;
       if (isNaN(scoreVal)) scoreVal = 0;
 
+      const isEs = state.lang === "es" || localStorage.getItem("gcs_lang") === "es";
+
       if (!name) {
-        alert("Please enter a valid parameter name.");
+        alert(isEs ? "Por favor ingrese un nombre de parámetro válido." : "Please enter a valid parameter name.");
         return;
       }
 
       state.customKpis = state.customKpis || [];
       const exists = state.customKpis.some(kpi => kpi.name === name);
       if (exists) {
-        alert("A KPI parameter with this name already exists.");
+        alert(isEs ? "Un parámetro de KPI con este nombre ya existe." : "A KPI parameter with this name already exists.");
         return;
       }
 
       if (scoreVal !== 0 && (scoreVal < 1 || scoreVal > 10)) {
-        alert("KPI Score must be 0, or a number from 1 to 10.");
+        alert(isEs ? "El peso del KPI debe ser 0, o un número del 1 al 10." : "KPI Weight must be 0, or a number from 1 to 10.");
         return;
       }
 
       const valStr = getSingleKpiValue(name, type);
-      state.customKpis.push({ name, description: desc, type, value: valStr, score: scoreVal });
+      state.customKpis.push({ name, description: desc, type, value: valStr, score: scoreVal, weight: scoreVal });
       
       newKpiNameInput.value = "";
       newKpiDescInput.value = "";
