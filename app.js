@@ -6054,13 +6054,13 @@ function setupSettingsDrawer() {
       const item = document.createElement("div");
       item.className = "agent-mapping-item";
       item.style.cssText = "display: flex; justify-content: space-between; align-items: center; background: rgba(255, 255, 255, 0.02); padding: 0.4rem 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);";
-      const priorityVal = kpi.order !== undefined ? kpi.order : 0;
+      const scoreVal = kpi.score !== undefined ? kpi.score : (kpi.order !== undefined ? kpi.order : 0);
       item.innerHTML = `
         <div style="display: flex; flex-direction: column; gap: 0.15rem;">
           <div style="display: flex; align-items: center; gap: 0.35rem;">
             <span style="font-weight: 600; font-size: 0.78rem; color: var(--text-primary); font-family: var(--font-mono);">${kpi.name}</span>
             <span class="badge" style="font-size: 0.65rem; padding: 0.05rem 0.25rem; text-transform: uppercase; background: rgba(139, 92, 246, 0.1); color: var(--accent-primary); border-color: rgba(139, 92, 246, 0.2);">${kpi.type}</span>
-            <span class="badge" style="font-size: 0.65rem; padding: 0.05rem 0.25rem; background: rgba(255, 255, 255, 0.05); color: var(--text-secondary); border-color: rgba(255, 255, 255, 0.1);">Priority: ${priorityVal}</span>
+            <span class="badge" style="font-size: 0.65rem; padding: 0.05rem 0.25rem; background: rgba(255, 255, 255, 0.05); color: var(--text-secondary); border-color: rgba(255, 255, 255, 0.1);">Score: ${scoreVal}</span>
           </div>
           <div style="font-size: 0.65rem; color: var(--text-secondary); line-height: 1.2;">${kpi.description || "No description"}</div>
         </div>
@@ -6126,9 +6126,9 @@ function setupSettingsDrawer() {
       const desc = newKpiDescInput.value.trim();
       const type = newKpiTypeSelect.value;
       
-      const orderInput = document.getElementById("inputNewKpiOrder");
-      let orderVal = orderInput ? parseInt(orderInput.value, 10) : 0;
-      if (isNaN(orderVal)) orderVal = 0;
+      const scoreInput = document.getElementById("inputNewKpiScore");
+      let scoreVal = scoreInput ? parseInt(scoreInput.value, 10) : 0;
+      if (isNaN(scoreVal)) scoreVal = 0;
 
       if (!name) {
         alert("Please enter a valid parameter name.");
@@ -6142,17 +6142,17 @@ function setupSettingsDrawer() {
         return;
       }
 
-      if (orderVal !== 0 && (orderVal < 1 || orderVal > 10)) {
-        alert("KPI Order/Priority must be 0, or a number from 1 to 10.");
+      if (scoreVal !== 0 && (scoreVal < 1 || scoreVal > 10)) {
+        alert("KPI Score must be 0, or a number from 1 to 10.");
         return;
       }
 
       const valStr = getSingleKpiValue(name, type);
-      state.customKpis.push({ name, description: desc, type, value: valStr, order: orderVal });
+      state.customKpis.push({ name, description: desc, type, value: valStr, score: scoreVal });
       
       newKpiNameInput.value = "";
       newKpiDescInput.value = "";
-      if (orderInput) orderInput.value = "0";
+      if (scoreInput) scoreInput.value = "0";
       renderCustomKpisList();
     });
   }
