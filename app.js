@@ -808,23 +808,9 @@ function enforceRBACPermissions() {
     btnSettings.style.display = isAdmin ? "block" : "none";
   }
 
-  // 2. Settings cards (only visible to admin)
-  const userMgmtCard = document.getElementById("settingsUserManagementCard");
-  if (userMgmtCard) {
-    userMgmtCard.style.display = isAdmin ? "block" : "none";
-  }
-  const settingsAgentRulesCard = document.getElementById("settingsAgentRulesCard");
-  if (settingsAgentRulesCard) {
-    settingsAgentRulesCard.style.display = isAdmin ? "block" : "none";
-  }
-  const settingsAgentMappingCard = document.getElementById("settingsAgentMappingCard");
-  if (settingsAgentMappingCard) {
-    settingsAgentMappingCard.style.display = isAdmin ? "block" : "none";
-  }
-  const settingsCustomKpiCard = document.getElementById("settingsCustomKpiCard");
-  if (settingsCustomKpiCard) {
-    settingsCustomKpiCard.style.display = isAdmin ? "block" : "none";
-  }
+  // 2. Settings tabs & cards visibility
+  const userEmail = state.userEmail || localStorage.getItem("dashboard_user_email") || "";
+  updateSettingsDrawerTabsVisibility(isAdmin, userEmail);
 
   // 3. GCS processing parameter configuration fields (only editable by admin)
   const paramMinCallLength = document.getElementById("paramMinCallLength");
@@ -851,6 +837,89 @@ function enforceRBACPermissions() {
   const bulkActions = document.getElementById("gcsBulkActions");
   if (bulkActions) {
     bulkActions.style.display = isViewer ? "none" : "flex";
+  }
+}
+
+function setupSettingsTabs() {
+  const tabs = document.querySelectorAll(".settings-tab-btn");
+  const contents = document.querySelectorAll(".settings-tab-content");
+
+  tabs.forEach(tab => {
+    tab.addEventListener("click", () => {
+      // Remove active class from all tabs
+      tabs.forEach(t => t.classList.remove("active"));
+      // Add active class to clicked tab
+      tab.classList.add("active");
+
+      // Hide all contents
+      contents.forEach(c => {
+        c.classList.remove("active-content");
+        c.style.display = "none";
+      });
+
+      // Show target content
+      const targetId = tab.getAttribute("data-tab");
+      const targetContent = document.getElementById(targetId);
+      if (targetContent) {
+        targetContent.classList.add("active-content");
+        targetContent.style.display = "flex";
+      }
+    });
+  });
+}
+
+function updateSettingsDrawerTabsVisibility(isAdmin, userEmail) {
+  const settingsTabsContainer = document.getElementById("settingsTabsContainer");
+  const tabUsers = document.getElementById("btnTabUsers");
+  
+  if (!settingsTabsContainer) return;
+
+  if (isAdmin) {
+    // Show tabs menu
+    settingsTabsContainer.style.display = "flex";
+    
+    // Show or hide Users tab based on email domain
+    const isDomainAdmin = userEmail && userEmail.toLowerCase().endsWith("@i4vision.com");
+    if (tabUsers) {
+      tabUsers.style.display = isDomainAdmin ? "flex" : "none";
+    }
+
+    // Set layout for all cards to block since they are controlled by tab displays
+    const cards = [
+      "settingsUserManagementCard",
+      "settingsAgentRulesCard",
+      "settingsAgentMappingCard",
+      "settingsCustomKpiCard"
+    ];
+    cards.forEach(cardId => {
+      const card = document.getElementById(cardId);
+      if (card) {
+        card.style.display = "block";
+      }
+    });
+
+    // Trigger click on active tab button or the first tab button
+    const activeTab = settingsTabsContainer.querySelector(".settings-tab-btn.active") || settingsTabsContainer.querySelector(".settings-tab-btn");
+    if (activeTab) {
+      activeTab.click();
+    }
+  } else {
+    // Non-admin: Hide tabs menu
+    settingsTabsContainer.style.display = "none";
+    
+    // Hide all tab contents
+    const contents = document.querySelectorAll(".settings-tab-content");
+    contents.forEach(c => {
+      c.classList.remove("active-content");
+      c.style.display = "none";
+    });
+
+    // Show only the Language content
+    const langContent = document.getElementById("tab-lang");
+    if (langContent) {
+      langContent.classList.add("active-content");
+      langContent.style.display = "flex";
+    }
   }
 }
 
@@ -1108,11 +1177,9 @@ function initAuthentication() {
           loginScreen.style.display = "none";
           appWrapper.style.display = "block";
           
-          // Re-evaluate User Management card visibility
-          const userMgmtCard = document.getElementById("settingsUserManagementCard");
-          if (userMgmtCard) {
-            userMgmtCard.style.display = email.endsWith("@i4vision.com") ? "block" : "none";
-          }
+          // Re-evaluate Settings tabs & cards visibility
+          const isAdmin = role === "admin";
+          updateSettingsDrawerTabsVisibility(isAdmin, email);
           
           // Boot complete application services
           bootstrapAppServices();
@@ -1385,6 +1452,9 @@ function setupEventListeners() {
 
   // Setup General Settings Drawer triggers and keys
   setupSettingsDrawer();
+
+  // Setup General Settings Drawer submenu tabs
+  setupSettingsTabs();
 }
 
 // Helper: Debounce search input

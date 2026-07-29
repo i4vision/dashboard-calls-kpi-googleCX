@@ -762,188 +762,215 @@
         <i class="fa-solid fa-xmark"></i>
       </button>
     </div>
-
+    
     <div class="drawer-body" style="padding: 1rem; overflow-y: auto; display: flex; flex-direction: column; gap: 1.25rem; height: calc(100% - 60px);">
+      <!-- Sub-menu Tabs for Settings -->
+      <div id="settingsTabsContainer" class="settings-tabs" style="display: none;">
+        <button class="settings-tab-btn active" data-tab="tab-lang">
+          <i class="fa-solid fa-language"></i> <span class="tab-label">Language</span>
+        </button>
+        <button class="settings-tab-btn" data-tab="tab-rules">
+          <i class="fa-solid fa-scroll"></i> <span class="tab-label">Guidelines</span>
+        </button>
+        <button id="btnTabUsers" class="settings-tab-btn" data-tab="tab-users" style="display: none;">
+          <i class="fa-solid fa-user-plus"></i> <span class="tab-label">Users</span>
+        </button>
+        <button class="settings-tab-btn" data-tab="tab-agents">
+          <i class="fa-solid fa-users-gear"></i> <span class="tab-label">Mappings</span>
+        </button>
+        <button class="settings-tab-btn" data-tab="tab-kpis">
+          <i class="fa-solid fa-chart-line"></i> <span class="tab-label">KPIs</span>
+        </button>
+      </div>
+
       <!-- Language Settings Card -->
-      <div class="settings-card" style="padding: 1rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
-        <h3 id="settingsLangCardTitle" style="font-size: 0.9rem; font-weight: 600; margin: 0 0 0.5rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.35rem;">
-          <i class="fa-solid fa-language" style="color: var(--accent-secondary);"></i> Language Settings
-        </h3>
-        <p id="settingsLangCardSub" style="font-size: 0.72rem; line-height: 1.4; color: var(--text-secondary); margin: 0 0 1rem;">
-          Choose the display language for the dashboard frontend interface.
-        </p>
-        <div style="margin-bottom: 0.5rem;">
-          <label id="settingsLangCardLabel" class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">INTERFACE LANGUAGE</label>
-          <select id="settingsLangSelect" class="gcs-input" style="width: 100%; height: 32px; padding: 0 0.5rem; font-size: 0.75rem; cursor: pointer; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); outline: none;">
-            <option value="en">English</option>
-            <option value="es">Español</option>
-          </select>
+      <div id="tab-lang" class="settings-tab-content active-content">
+        <div class="settings-card" style="padding: 1rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); width: 100%;">
+          <h3 id="settingsLangCardTitle" style="font-size: 0.9rem; font-weight: 600; margin: 0 0 0.5rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.35rem;">
+            <i class="fa-solid fa-language" style="color: var(--accent-secondary);"></i> Language Settings
+          </h3>
+          <p id="settingsLangCardSub" style="font-size: 0.72rem; line-height: 1.4; color: var(--text-secondary); margin: 0 0 1rem;">
+            Choose the display language for the dashboard frontend interface.
+          </p>
+          <div style="margin-bottom: 0.5rem;">
+            <label id="settingsLangCardLabel" class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">INTERFACE LANGUAGE</label>
+            <select id="settingsLangSelect" class="gcs-input" style="width: 100%; height: 32px; padding: 0 0.5rem; font-size: 0.75rem; cursor: pointer; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); outline: none;">
+              <option value="en">English</option>
+              <option value="es">Español</option>
+            </select>
+          </div>
         </div>
       </div>
 
       <!-- Agent Rules Configuration Card -->
-      <div id="settingsAgentRulesCard" class="settings-card" style="padding: 1rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
-        <h3 style="font-size: 0.9rem; font-weight: 600; margin: 0 0 0.5rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.35rem;">
-          <i class="fa-solid fa-scroll" style="color: var(--accent-secondary);"></i> <span id="labelAgentRulesTitle">Agent Guidelines</span>
-        </h3>
-        <p id="labelAgentRulesSub" style="font-size: 0.72rem; line-height: 1.4; color: var(--text-secondary); margin: 0 0 0.75rem;">
-          Define specific guidelines and rules that agents must follow during call evaluations.
-        </p>
-        <div style="margin-bottom: 0.75rem;">
-          <textarea id="textareaAgentRules" class="gcs-input" placeholder="e.g. El agente debe presentarse con su nombre y el de la empresa..." style="width: 100%; height: 100px; font-size: 0.75rem; padding: 0.5rem; resize: vertical; font-family: inherit; line-height: 1.4;"></textarea>
-        </div>
-        <button id="btnSaveAgentRules" class="btn-primary" style="width: 100%; font-size: 0.8rem; padding: 0.65rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
-          <i class="fa-solid fa-floppy-disk"></i> <span id="labelAgentRulesBtnText">Save Guidelines</span>
-        </button>
-        <div id="agentRulesSaveStatus" style="font-size: 0.7rem; margin-top: 0.5rem; text-align: center; color: var(--color-positive); display: none;">
-          <i class="fa-solid fa-circle-check"></i> <span id="labelAgentRulesSavedStatus">Guidelines saved successfully!</span>
+      <div id="tab-rules" class="settings-tab-content">
+        <div id="settingsAgentRulesCard" class="settings-card" style="padding: 1rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); width: 100%;">
+          <h3 style="font-size: 0.9rem; font-weight: 600; margin: 0 0 0.5rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.35rem;">
+            <i class="fa-solid fa-scroll" style="color: var(--accent-secondary);"></i> <span id="labelAgentRulesTitle">Agent Guidelines</span>
+          </h3>
+          <p id="labelAgentRulesSub" style="font-size: 0.72rem; line-height: 1.4; color: var(--text-secondary); margin: 0 0 0.75rem;">
+            Define specific guidelines and rules that agents must follow during call evaluations.
+          </p>
+          <div style="margin-bottom: 0.75rem;">
+            <textarea id="textareaAgentRules" class="gcs-input" placeholder="e.g. El agente debe presentarse con su nombre y el de la empresa..." style="width: 100%; height: 120px; font-size: 0.75rem; padding: 0.5rem; resize: vertical; font-family: inherit; line-height: 1.4;"></textarea>
+          </div>
+          <button id="btnSaveAgentRules" class="btn-primary" style="width: 100%; font-size: 0.8rem; padding: 0.65rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+            <i class="fa-solid fa-floppy-disk"></i> <span id="labelAgentRulesBtnText">Save Guidelines</span>
+          </button>
+          <div id="agentRulesSaveStatus" style="font-size: 0.7rem; margin-top: 0.5rem; text-align: center; color: var(--color-positive); display: none;">
+            <i class="fa-solid fa-circle-check"></i> <span id="labelAgentRulesSavedStatus">Guidelines saved successfully!</span>
+          </div>
         </div>
       </div>
 
       <!-- User Management Card (Admins only) -->
-      <div id="settingsUserManagementCard" class="settings-card" style="display: none; padding: 1rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
-        <h3 style="font-size: 0.9rem; font-weight: 600; margin: 0 0 0.5rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.35rem;">
-          <i class="fa-solid fa-user-plus" style="color: var(--accent-secondary);"></i> <span id="labelUserMgmtTitle">Invite Users</span>
-        </h3>
-        <p id="labelUserMgmtSub" style="font-size: 0.72rem; line-height: 1.4; color: var(--text-secondary); margin: 0 0 1rem;">
-          Add emails and names of authorized users to allow them to access the dashboard.
-        </p>
-        
-        <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem;">
-          <div>
-            <label class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">FULL NAME / NOMBRE COMPLETO</label>
-            <input type="text" id="inputInviteName" class="gcs-input" placeholder="e.g. Juan Pérez" style="width: 100%; height: 32px; padding: 0 0.5rem; font-size: 0.75rem; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color); outline: none;">
+      <div id="tab-users" class="settings-tab-content">
+        <div id="settingsUserManagementCard" class="settings-card" style="padding: 1rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); width: 100%;">
+          <h3 style="font-size: 0.9rem; font-weight: 600; margin: 0 0 0.5rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.35rem;">
+            <i class="fa-solid fa-user-plus" style="color: var(--accent-secondary);"></i> <span id="labelUserMgmtTitle">Invite Users</span>
+          </h3>
+          <p id="labelUserMgmtSub" style="font-size: 0.72rem; line-height: 1.4; color: var(--text-secondary); margin: 0 0 1rem;">
+            Add emails and names of authorized users to allow them to access the dashboard.
+          </p>
+          
+          <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem;">
+            <div>
+              <label class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">FULL NAME / NOMBRE COMPLETO</label>
+              <input type="text" id="inputInviteName" class="gcs-input" placeholder="e.g. Juan Pérez" style="width: 100%; height: 32px; padding: 0 0.5rem; font-size: 0.75rem; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color); outline: none;">
+            </div>
+            <div>
+              <label class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">EMAIL / CORREO ELECTRÓNICO</label>
+              <input type="email" id="inputInviteEmail" class="gcs-input" placeholder="user@domain.com" style="width: 100%; height: 32px; padding: 0 0.5rem; font-size: 0.75rem; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color); outline: none;">
+            </div>
+            <div>
+              <label class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">ROLE / ROL</label>
+              <select id="selectInviteRole" class="gcs-input" style="width: 100%; height: 32px; padding: 0 0.5rem; font-size: 0.75rem; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color); outline: none; cursor: pointer;">
+                <option value="admin">Admin / Administrador</option>
+                <option value="editor">Editor / Editor</option>
+                <option value="viewer" selected>Viewer / Visor</option>
+              </select>
+            </div>
           </div>
-          <div>
-            <label class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">EMAIL / CORREO ELECTRÓNICO</label>
-            <input type="email" id="inputInviteEmail" class="gcs-input" placeholder="user@domain.com" style="width: 100%; height: 32px; padding: 0 0.5rem; font-size: 0.75rem; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color); outline: none;">
-          </div>
-          <div>
-            <label class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">ROLE / ROL</label>
-            <select id="selectInviteRole" class="gcs-input" style="width: 100%; height: 32px; padding: 0 0.5rem; font-size: 0.75rem; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color); outline: none; cursor: pointer;">
-              <option value="admin">Admin / Administrador</option>
-              <option value="editor">Editor / Editor</option>
-              <option value="viewer" selected>Viewer / Visor</option>
-            </select>
-          </div>
-        </div>
 
-        <button id="btnInviteUser" class="btn-primary" style="width: 100%; font-size: 0.8rem; padding: 0.65rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; height: 36px;">
-          <i class="fa-solid fa-plus"></i> <span id="labelInviteBtnText">Add User</span>
-        </button>
+          <button id="btnInviteUser" class="btn-primary" style="width: 100%; font-size: 0.8rem; padding: 0.65rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; height: 36px;">
+            <i class="fa-solid fa-plus"></i> <span id="labelInviteBtnText">Add User</span>
+          </button>
 
-        <div id="inviteUserSaveStatus" style="font-size: 0.7rem; margin-top: 0.5rem; text-align: center; color: var(--color-positive); display: none;">
-          <i class="fa-solid fa-circle-check"></i> <span id="labelInviteStatusText">User created successfully!</span>
+          <div id="inviteUserSaveStatus" style="font-size: 0.7rem; margin-top: 0.5rem; text-align: center; color: var(--color-positive); display: none;">
+            <i class="fa-solid fa-circle-check"></i> <span id="labelInviteStatusText">User created successfully!</span>
+          </div>
         </div>
       </div>
 
       <!-- Agent Name Parser Settings Card -->
-      <div id="settingsAgentMappingCard" class="settings-card" style="padding: 1rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
-        <h3 style="font-size: 0.9rem; font-weight: 600; margin: 0 0 0.5rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.35rem;">
-          <i class="fa-solid fa-users-gear" style="color: var(--accent-secondary);"></i> Agent Name Mapping
-        </h3>
-        <p style="font-size: 0.72rem; line-height: 1.4; color: var(--text-secondary); margin: 0 0 1rem;">
-          The system extracts the agent identifier from the MP3 filename (e.g. <code>1245</code> from <code>..._1245.mp3</code>). Map these numbers to actual names below.
-        </p>
+      <div id="tab-agents" class="settings-tab-content">
+        <div id="settingsAgentMappingCard" class="settings-card" style="padding: 1rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); width: 100%;">
+          <h3 style="font-size: 0.9rem; font-weight: 600; margin: 0 0 0.5rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.35rem;">
+            <i class="fa-solid fa-users-gear" style="color: var(--accent-secondary);"></i> Agent Name Mapping
+          </h3>
+          <p style="font-size: 0.72rem; line-height: 1.4; color: var(--text-secondary); margin: 0 0 1rem;">
+            The system extracts the agent identifier from the MP3 filename (e.g. <code>1245</code> from <code>..._1245.mp3</code>). Map these numbers to actual names below.
+          </p>
 
-        <!-- Mappings List Container -->
-        <div style="margin-bottom: 1rem;">
-          <div style="font-size: 0.7rem; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin-bottom: 0.4rem; padding-bottom: 0.25rem; border-bottom: 1px dashed var(--border-color);">
-            Active Mappings
-          </div>
-          <div id="settingsAgentMappingsList" style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 220px; overflow-y: auto; padding-right: 0.25rem;">
-            <!-- Mappings will be inserted here dynamically -->
-          </div>
-        </div>
-
-        <!-- Add Mapping Form -->
-        <div style="background: rgba(255, 255, 255, 0.02); padding: 0.75rem; border-radius: var(--radius-sm); border: 1px dashed var(--border-color); margin-bottom: 1.25rem;">
-          <div style="font-size: 0.75rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">
-            Add New Mapping
-          </div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem;">
-            <div>
-              <label class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">AGENT ID (E.G., 1245)</label>
-              <input type="text" id="inputNewAgentId" class="gcs-input" placeholder="e.g. 1245" style="width: 100%; font-size: 0.75rem; height: 32px;">
+          <!-- Mappings List Container -->
+          <div style="margin-bottom: 1rem;">
+            <div style="font-size: 0.7rem; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin-bottom: 0.4rem; padding-bottom: 0.25rem; border-bottom: 1px dashed var(--border-color);">
+              Active Mappings
             </div>
-            <div>
-              <label class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">REAL NAME</label>
-              <input type="text" id="inputNewAgentName" class="gcs-input" placeholder="e.g. Marcelo" style="width: 100%; font-size: 0.75rem; height: 32px;">
+            <div id="settingsAgentMappingsList" style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 220px; overflow-y: auto; padding-right: 0.25rem;">
+              <!-- Mappings will be inserted here dynamically -->
             </div>
           </div>
-          <button id="btnAddAgentMapping" class="btn-secondary" style="width: 100%; height: 30px; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; gap: 0.35rem; padding: 0;">
-            <i class="fa-solid fa-plus"></i> Add Mapping
+
+          <!-- Add Mapping Form -->
+          <div style="background: rgba(255, 255, 255, 0.02); padding: 0.75rem; border-radius: var(--radius-sm); border: 1px dashed var(--border-color); margin-bottom: 1.25rem;">
+            <div style="font-size: 0.75rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">
+              Add New Mapping
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem;">
+              <div>
+                <label class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">AGENT ID (E.G., 1245)</label>
+                <input type="text" id="inputNewAgentId" class="gcs-input" placeholder="e.g. 1245" style="width: 100%; font-size: 0.75rem; height: 32px;">
+              </div>
+              <div>
+                <label class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">REAL NAME</label>
+                <input type="text" id="inputNewAgentName" class="gcs-input" placeholder="e.g. Marcelo" style="width: 100%; font-size: 0.75rem; height: 32px;">
+              </div>
+            </div>
+            <button id="btnAddAgentMapping" class="btn-secondary" style="width: 100%; height: 30px; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; gap: 0.35rem; padding: 0;">
+              <i class="fa-solid fa-plus"></i> Add Mapping
+            </button>
+          </div>
+
+          <button id="btnSaveGeneralSettings" class="btn-primary" style="width: 100%; font-size: 0.8rem; padding: 0.65rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+            <i class="fa-solid fa-floppy-disk"></i> Save Mappings
           </button>
-        </div>
-
-        <button id="btnSaveGeneralSettings" class="btn-primary" style="width: 100%; font-size: 0.8rem; padding: 0.65rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
-          <i class="fa-solid fa-floppy-disk"></i> Save Mappings
-        </button>
-        <div id="generalSettingsSaveStatus" style="font-size: 0.7rem; margin-top: 0.5rem; text-align: center; color: var(--color-positive); display: none;">
-          <i class="fa-solid fa-circle-check"></i> Agent mappings saved successfully!
+          <div id="generalSettingsSaveStatus" style="font-size: 0.7rem; margin-top: 0.5rem; text-align: center; color: var(--color-positive); display: none;">
+            <i class="fa-solid fa-circle-check"></i> Agent mappings saved successfully!
+          </div>
         </div>
       </div>
 
       <!-- Custom KPI Configuration Card -->
-      <div id="settingsCustomKpiCard" class="settings-card" style="padding: 1rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
-        <h3 style="font-size: 0.9rem; font-weight: 600; margin: 0 0 0.5rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.35rem;">
-          <i class="fa-solid fa-chart-line" style="color: var(--accent-secondary);"></i> Custom Call KPIs
-        </h3>
-        <p style="font-size: 0.72rem; line-height: 1.4; color: var(--text-secondary); margin: 0 0 1rem;">
-          Define custom Call KPI parameters to parse from call analysis results. Custom definitions are saved to Supabase global settings.
-        </p>
+      <div id="tab-kpis" class="settings-tab-content">
+        <div id="settingsCustomKpiCard" class="settings-card" style="padding: 1rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); width: 100%;">
+          <h3 style="font-size: 0.9rem; font-weight: 600; margin: 0 0 0.5rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.35rem;">
+            <i class="fa-solid fa-chart-line" style="color: var(--accent-secondary);"></i> Custom Call KPIs
+          </h3>
+          <p style="font-size: 0.72rem; line-height: 1.4; color: var(--text-secondary); margin: 0 0 1rem;">
+            Define custom Call KPI parameters to parse from call analysis results. Custom definitions are saved to Supabase global settings.
+          </p>
 
-        <!-- Active KPIs List -->
-        <div style="margin-bottom: 1rem;">
-          <div style="font-size: 0.7rem; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin-bottom: 0.4rem; padding-bottom: 0.25rem; border-bottom: 1px dashed var(--border-color);">
-            Defined KPIs
+          <!-- Active KPIs List -->
+          <div style="margin-bottom: 1rem;">
+            <div style="font-size: 0.7rem; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin-bottom: 0.4rem; padding-bottom: 0.25rem; border-bottom: 1px dashed var(--border-color);">
+              Defined KPIs
+            </div>
+            <div id="settingsCustomKpisList" style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 180px; overflow-y: auto; padding-right: 0.25rem;">
+              <!-- Custom KPIs will be inserted here dynamically -->
+            </div>
           </div>
-          <div id="settingsCustomKpisList" style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 180px; overflow-y: auto; padding-right: 0.25rem;">
-            <!-- Custom KPIs will be inserted here dynamically -->
-          </div>
-        </div>
 
-        <!-- Add KPI Form -->
-        <div style="background: rgba(255, 255, 255, 0.02); padding: 0.75rem; border-radius: var(--radius-sm); border: 1px dashed var(--border-color); margin-bottom: 1rem;">
-          <div style="font-size: 0.75rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">
-            Add New KPI Parameter
+          <!-- Add KPI Form -->
+          <div style="background: rgba(255, 255, 255, 0.02); padding: 0.75rem; border-radius: var(--radius-sm); border: 1px dashed var(--border-color); margin-bottom: 1rem;">
+            <div style="font-size: 0.75rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">
+              Add New KPI Parameter
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.5rem;">
+              <div>
+                <label class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">PARAMETER NAME</label>
+                <input type="text" id="inputNewKpiName" class="gcs-input" placeholder="e.g. gemini_sentiment" style="width: 100%; font-size: 0.75rem; height: 32px;">
+              </div>
+              <div>
+                <label class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">DESCRIPTION</label>
+                <input type="text" id="inputNewKpiDesc" class="gcs-input" placeholder="e.g. Call sentiment" style="width: 100%; font-size: 0.75rem; height: 32px;">
+              </div>
+              <div>
+                <label class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">DATA TYPE</label>
+                <select id="selectNewKpiType" class="gcs-input" style="width: 100%; height: 32px; padding: 0 0.5rem; font-size: 0.75rem; cursor: pointer; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); outline: none;">
+                  <option value="string">String</option>
+                  <option value="array">Array ([])</option>
+                  <option value="number">Number</option>
+                  <option value="boolean">Boolean</option>
+                  <option value="object">Object ({})</option>
+                </select>
+              </div>
+              <div>
+                <label class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">KPI SCORE (0 or 1 to 10)</label>
+                <input type="number" id="inputNewKpiScore" class="gcs-input" value="0" min="0" max="10" style="width: 100%; font-size: 0.75rem; height: 32px;">
+              </div>
+            </div>
+            <button id="btnAddCustomKpi" class="btn-secondary" style="width: 100%; height: 30px; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; gap: 0.35rem; padding: 0;">
+              <i class="fa-solid fa-plus"></i> Add KPI Parameter
+            </button>
           </div>
-          <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.5rem;">
-            <div>
-              <label class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">PARAMETER NAME</label>
-              <input type="text" id="inputNewKpiName" class="gcs-input" placeholder="e.g. gemini_sentiment" style="width: 100%; font-size: 0.75rem; height: 32px;">
-            </div>
-            <div>
-              <label class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">DESCRIPTION</label>
-              <input type="text" id="inputNewKpiDesc" class="gcs-input" placeholder="e.g. Call sentiment" style="width: 100%; font-size: 0.75rem; height: 32px;">
-            </div>
-            <div>
-              <label class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">DATA TYPE</label>
-              <select id="selectNewKpiType" class="gcs-input" style="width: 100%; height: 32px; padding: 0 0.5rem; font-size: 0.75rem; cursor: pointer; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); outline: none;">
-                <option value="string">String</option>
-                <option value="array">Array ([])</option>
-                <option value="number">Number</option>
-                <option value="boolean">Boolean</option>
-                <option value="object">Object ({})</option>
-              </select>
-            </div>
-            <div>
-              <label class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">KPI SCORE (0 or 1 to 10)</label>
-              <input type="number" id="inputNewKpiScore" class="gcs-input" value="0" min="0" max="10" style="width: 100%; font-size: 0.75rem; height: 32px;">
-            </div>
-          </div>
-          <button id="btnAddCustomKpi" class="btn-secondary" style="width: 100%; height: 30px; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; gap: 0.35rem; padding: 0;">
-            <i class="fa-solid fa-plus"></i> Add KPI Parameter
+
+          <button id="btnSaveCustomKpiSettings" class="btn-primary" style="width: 100%; font-size: 0.8rem; padding: 0.65rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+            <i class="fa-solid fa-floppy-disk"></i> Save KPI Settings
           </button>
-        </div>
-
-        <!-- Code snippet block removed as it is now saved directly inside the database value column -->
-
-        <button id="btnSaveCustomKpiSettings" class="btn-primary" style="width: 100%; font-size: 0.8rem; padding: 0.65rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
-          <i class="fa-solid fa-floppy-disk"></i> Save KPI Settings
-        </button>
-        <div id="customKpiSettingsSaveStatus" style="font-size: 0.7rem; margin-top: 0.5rem; text-align: center; color: var(--color-positive); display: none;">
-          <i class="fa-solid fa-circle-check"></i> KPI settings saved successfully!
+          <div id="customKpiSettingsSaveStatus" style="font-size: 0.7rem; margin-top: 0.5rem; text-align: center; color: var(--color-positive); display: none;">
+            <i class="fa-solid fa-circle-check"></i> KPI settings saved successfully!
+          </div>
         </div>
       </div>
     </div>
