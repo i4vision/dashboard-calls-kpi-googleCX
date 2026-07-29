@@ -4337,21 +4337,8 @@ function setupGCSEventListeners() {
 
   // STT Engine Dropdowns Setup
   const STT_MODELS = {
-    google: [
-      { value: "chirp", label: "chirp (Recommended)" },
-      { value: "latest_long", label: "latest_long" },
-      { value: "latest_short", label: "latest_short" }
-    ],
-    openai: [
-      { value: "whisper-1", label: "whisper-1 (Recommended)" }
-    ],
     gemini: [
-      { value: "gemini-3.5-flash", label: "gemini-3.5-flash" }
-    ],
-    local: [
-      { value: "local_whisper", label: "local_whisper" },
-      { value: "parakeet", label: "parakeet" },
-      { value: "whisperx", label: "whisperx" }
+      { value: "gemini-3.6-flash", label: "gemini-3.6-flash" }
     ]
   };
 
@@ -4375,11 +4362,6 @@ function setupGCSEventListeners() {
     localStorage.setItem("gcs_stt_provider", provider);
     localStorage.setItem("gcs_stt_model", sttModelSelect.value);
     
-    // Update Google CX toggle visibility
-    const cxContainer = document.getElementById("googleCxToggleContainer");
-    if (cxContainer) {
-      cxContainer.style.display = (provider === "gemini") ? "block" : "none";
-    }
   }
 
   if (sttProviderSelect && sttModelSelect) {
@@ -4388,17 +4370,8 @@ function setupGCSEventListeners() {
       localStorage.setItem("gcs_stt_model", sttModelSelect.value);
     });
 
-    if (googleCxAnalyzeSelect) {
-      googleCxAnalyzeSelect.addEventListener("change", () => {
-        localStorage.setItem("gcs_google_cx_enabled", googleCxAnalyzeSelect.value);
-      });
-      // Load saved value
-      const savedGoogleCx = localStorage.getItem("gcs_google_cx_enabled") || "off";
-      googleCxAnalyzeSelect.value = savedGoogleCx;
-    }
-
     // Load saved settings
-    const savedProvider = localStorage.getItem("gcs_stt_provider") || "google";
+    const savedProvider = localStorage.getItem("gcs_stt_provider") || "gemini";
     const savedModel = localStorage.getItem("gcs_stt_model");
     
     sttProviderSelect.value = savedProvider;

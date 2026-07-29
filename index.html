@@ -652,10 +652,7 @@
             <div style="flex: 1;">
               <label class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">STT PROVIDER</label>
               <select id="sttProviderSelect" class="gcs-input" style="width: 100%; height: 32px; padding: 0 0.5rem; font-size: 0.75rem; cursor: pointer;">
-                <option value="google">Google</option>
-                <option value="openai">OpenAI</option>
-                <option value="gemini">Gemini</option>
-                <option value="local">Local</option>
+                <option value="gemini" selected>Gemini</option>
               </select>
             </div>
             <div style="flex: 1;">
@@ -664,14 +661,6 @@
                 <!-- Dynamically populated options -->
               </select>
             </div>
-          </div>
-          <!-- Google CX Option (Only visible when STT Provider is Gemini) -->
-          <div id="googleCxToggleContainer" style="margin-top: 0.75rem; display: none;">
-            <label class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem; display: block;">RUN GOOGLE CLOUD CX ANALYSIS?</label>
-            <select id="googleCxAnalyzeSelect" class="gcs-input" style="width: 100%; height: 32px; padding: 0 0.5rem; font-size: 0.75rem; cursor: pointer;">
-              <option value="off">Off (Recommended for Gemini only)</option>
-              <option value="on">On (Run both for comparison)</option>
-            </select>
           </div>
         </div>
 
