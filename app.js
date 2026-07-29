@@ -80,7 +80,7 @@ const TRANSLATIONS = {
     loginMsgCodeSent: "Verification code sent to {email}. Check your inbox!",
     loginMsgSuccess: "Verification successful! Loading dashboard...",
     userMgmtTitle: "Invite Users",
-    userMgmtSub: "Add emails and names of authorized users to allow them to access the dashboard.",
+    userMgmtSub: "Add emails and names of authorized users to allow them to access the dashboard. Each user can save their Gemini API key below to be used for call analyses.",
     userMgmtBtnAdd: "Add User",
     userMgmtSuccess: "User invited successfully!",
     userMgmtErrFields: "Error: Please fill in all fields with valid values.",
@@ -254,7 +254,7 @@ const TRANSLATIONS = {
     loginMsgCodeSent: "Código de verificación enviado a {email}. ¡Revise su bandeja de entrada!",
     loginMsgSuccess: "¡Verificación exitosa! Cargando panel...",
     userMgmtTitle: "Invitar Usuarios",
-    userMgmtSub: "Agregue correos y nombres de usuarios autorizados para permitirles acceder al dashboard.",
+    userMgmtSub: "Agregue correos y nombres de usuarios autorizados para permitirles acceder al dashboard. Cada usuario puede guardar su clave de Gemini API abajo para usarla en los análisis de llamadas.",
     userMgmtBtnAdd: "Agregar Usuario",
     userMgmtSuccess: "¡Usuario invitado con éxito!",
     userMgmtErrFields: "Error: Por favor complete todos los campos con valores válidos.",
@@ -7397,6 +7397,21 @@ async function loadAllowedUsersList() {
     if (!usersRes.ok) throw new Error("Failed to fetch users");
     const users = await usersRes.json();
 
+    // Prepend logged-in user if not in the list (e.g. admin auto-authorized via @i4vision.com domain)
+    const currentUserEmail = (state.userEmail || localStorage.getItem("dashboard_user_email") || "").toLowerCase().trim();
+    const currentUserName = localStorage.getItem("dashboard_user_name") || "Admin User";
+    const currentUserRole = state.userRole || "admin";
+
+    const isCurrentInList = users.some(u => u.email.toLowerCase().trim() === currentUserEmail);
+    if (currentUserEmail && !isCurrentInList) {
+      users.unshift({
+        email: currentUserEmail,
+        name: currentUserName.includes("@") ? currentUserName.split("@")[0] : currentUserName,
+        role: currentUserRole,
+        isCurrentUser: true
+      });
+    }
+
     // 2. Fetch all Gemini keys from ai_credentials where provider starts with gemini_key_
     const keysRes = await fetch(`${SUPABASE_URL}/rest/v1/ai_credentials?provider=like.gemini_key_*`, {
       headers: {
@@ -7420,13 +7435,14 @@ async function loadAllowedUsersList() {
     }
 
     container.innerHTML = users.map(user => {
-      const hasKey = !!keysMap[user.email.toLowerCase()];
+      const hasKey = !!keysMap[user.email.toLowerCase().trim()];
       const placeholderText = hasKey ? keySavedPlaceholder : keyPlaceholder;
+      const nameText = user.isCurrentUser ? `${user.name} (${isEs ? "Tú" : "You"})` : user.name;
       return `
         <div class="user-key-item" style="background: rgba(255, 255, 255, 0.02); padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 0.4rem;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <div style="display: flex; flex-direction: column; text-align: left;">
-              <span style="font-weight: 600; font-size: 0.75rem; color: var(--text-primary);">${user.name}</span>
+              <span style="font-weight: 600; font-size: 0.75rem; color: var(--text-primary);">${nameText}</span>
               <span style="font-size: 0.65rem; color: var(--text-secondary);">${user.email}</span>
             </div>
             <span class="badge" style="font-size: 0.65rem; padding: 0.05rem 0.25rem; text-transform: uppercase; background: rgba(59, 130, 246, 0.1); color: var(--accent-primary); border-color: rgba(59, 130, 246, 0.2);">${user.role}</span>
