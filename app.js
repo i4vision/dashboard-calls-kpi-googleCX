@@ -864,6 +864,9 @@ function setupSettingsTabs() {
         targetContent.classList.add("active-content");
         targetContent.style.display = "flex";
       }
+      if (targetId === "tab-users") {
+        loadAllowedUsersList();
+      }
     });
   });
 }
@@ -1282,6 +1285,11 @@ function initAuthentication() {
         setTimeout(() => {
           statusLabel.style.display = "none";
         }, 3000);
+
+        // Reload user list immediately
+        if (typeof loadAllowedUsersList === "function") {
+          loadAllowedUsersList();
+        }
 
       } catch (err) {
         console.error("Invite user failed:", err);
@@ -5957,6 +5965,9 @@ function setupSettingsDrawer() {
     if (typeof loadAgentRules === "function") {
       loadAgentRules();
     }
+    if (typeof loadAllowedUsersList === "function") {
+      loadAllowedUsersList();
+    }
   }
 
   function closeSettings() {
@@ -7356,4 +7367,143 @@ function getDefaultPredefinedQuestions() {
     { label: "Lowest score summary", prompt: "Which agent has the lowest score and what are their next actions?" },
     { label: "Find risk calls", prompt: "Are there any calls with medium or high risk levels? Detail them." }
   ];
+}
+
+async function loadAllowedUsersList() {
+  const container = document.getElementById("settingsUserListContainer");
+  if (!container) return;
+
+  const isEs = state.lang === "es" || localStorage.getItem("gcs_lang") === "es";
+  const loadingText = isEs ? "Cargando usuarios..." : "Loading users...";
+  const emptyText = isEs ? "No hay usuarios invitados todavía." : "No users invited yet.";
+  const keyPlaceholder = isEs ? "Clave Gemini..." : "Gemini API Key...";
+  const keySavedPlaceholder = isEs ? "•••••••••••• (Guardado)" : "•••••••••••• (Saved)";
+  const validationAlert = isEs ? "Por favor ingrese una clave válida." : "Please enter a valid key.";
+  const successAlert = isEs ? "Clave guardada exitosamente." : "Key saved successfully.";
+  const errorAlert = isEs ? "Error al guardar la clave." : "Error saving key.";
+  const failLoadText = isEs ? "Error al cargar la lista de usuarios." : "Failed to load users list.";
+
+  container.innerHTML = `<div style="font-size: 0.7rem; color: var(--text-secondary); text-align: center; padding: 1rem;"><i class="fa-solid fa-spinner fa-spin"></i> ${loadingText}</div>`;
+
+  try {
+    // 1. Fetch allowed users
+    const usersRes = await fetch(`${SUPABASE_URL}/rest/v1/allowed_users?order=name.asc`, {
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+    
+    if (!usersRes.ok) throw new Error("Failed to fetch users");
+    const users = await usersRes.json();
+
+    // 2. Fetch all Gemini keys from ai_credentials where provider starts with gemini_key_
+    const keysRes = await fetch(`${SUPABASE_URL}/rest/v1/ai_credentials?provider=like.gemini_key_*`, {
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+
+    let keysMap = {};
+    if (keysRes.ok) {
+      const keysData = await keysRes.json();
+      keysData.forEach(k => {
+        const email = k.provider.replace("gemini_key_", "");
+        keysMap[email] = k.api_key;
+      });
+    }
+
+    if (users.length === 0) {
+      container.innerHTML = `<div style="font-size: 0.7rem; color: var(--text-muted); text-align: center; padding: 1rem;">${emptyText}</div>`;
+      return;
+    }
+
+    container.innerHTML = users.map(user => {
+      const hasKey = !!keysMap[user.email.toLowerCase()];
+      const placeholderText = hasKey ? keySavedPlaceholder : keyPlaceholder;
+      return `
+        <div class="user-key-item" style="background: rgba(255, 255, 255, 0.02); padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 0.4rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; flex-direction: column; text-align: left;">
+              <span style="font-weight: 600; font-size: 0.75rem; color: var(--text-primary);">${user.name}</span>
+              <span style="font-size: 0.65rem; color: var(--text-secondary);">${user.email}</span>
+            </div>
+            <span class="badge" style="font-size: 0.65rem; padding: 0.05rem 0.25rem; text-transform: uppercase; background: rgba(59, 130, 246, 0.1); color: var(--accent-primary); border-color: rgba(59, 130, 246, 0.2);">${user.role}</span>
+          </div>
+          <div style="display: flex; gap: 0.35rem; align-items: center;">
+            <input type="password" class="gcs-input user-gemini-key-input" id="gemini_key_${user.email.replace(/[^a-zA-Z0-9]/g, '_')}" placeholder="${placeholderText}" style="flex: 1; height: 28px; font-size: 0.7rem; padding: 0 0.4rem; background: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary); outline: none;">
+            <button class="btn-primary btn-save-user-gemini-key" data-email="${user.email}" style="height: 28px; padding: 0 0.5rem; font-size: 0.7rem; display: flex; align-items: center; justify-content: center; width: auto; margin: 0;">
+              <i class="fa-solid fa-floppy-disk"></i>
+            </button>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    // Bind event listeners to Save buttons
+    container.querySelectorAll(".btn-save-user-gemini-key").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        const email = e.currentTarget.getAttribute("data-email");
+        const inputId = `gemini_key_${email.replace(/[^a-zA-Z0-9]/g, '_')}`;
+        const input = document.getElementById(inputId);
+        if (!input) return;
+
+        const keyVal = input.value.trim();
+        if (!keyVal) {
+          alert(validationAlert);
+          return;
+        }
+
+        const saveBtn = e.currentTarget;
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i>`;
+
+        try {
+          const providerName = `gemini_key_${email.toLowerCase()}`;
+          // Try to patch first
+          const patchRes = await fetch(`${SUPABASE_URL}/rest/v1/ai_credentials?provider=eq.${encodeURIComponent(providerName)}`, {
+            method: "PATCH",
+            headers: {
+              "apikey": SUPABASE_ANON_KEY,
+              "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+              "Content-Type": "application/json",
+              "Prefer": "return=representation"
+            },
+            body: JSON.stringify({ api_key: keyVal, updated_at: new Date().toISOString() })
+          });
+
+          if (patchRes.ok) {
+            const data = await patchRes.json();
+            if (data.length === 0) {
+              // If patch didn't update anything, insert a new record
+              await fetch(`${SUPABASE_URL}/rest/v1/ai_credentials`, {
+                method: "POST",
+                headers: {
+                  "apikey": SUPABASE_ANON_KEY,
+                  "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+                  "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ provider: providerName, api_key: keyVal })
+              });
+            }
+          }
+
+          input.value = "";
+          input.placeholder = keySavedPlaceholder;
+          alert(successAlert);
+        } catch (err) {
+          console.error("Failed to save Gemini key:", err);
+          alert(errorAlert);
+        } finally {
+          saveBtn.disabled = false;
+          saveBtn.innerHTML = `<i class="fa-solid fa-floppy-disk"></i>`;
+        }
+      });
+    });
+
+  } catch (err) {
+    console.error("Failed to load allowed users list:", err);
+    container.innerHTML = `<div style="font-size: 0.7rem; color: var(--color-negative); text-align: center; padding: 1rem;">${failLoadText}</div>`;
+  }
 }
