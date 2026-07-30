@@ -5294,7 +5294,6 @@ async function triggerBulkCallAnalysisWebhook() {
   let successful = 0;
   
   const googleToken = await getGoogleAccessToken();
-  const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
   if (!googleToken) {
     const banner = document.getElementById("gcsAnalysisErrorBanner");
     if (banner) {
