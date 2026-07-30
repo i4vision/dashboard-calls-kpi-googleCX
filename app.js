@@ -3072,6 +3072,54 @@ function computeCanonicalAgents(calls) {
 
     state.canonicalAgents[agentId] = bestCandidate;
   });
+
+  // Save active resolved agents to global_settings table dynamically
+  saveActiveAgentsToSupabase(state.canonicalAgents);
+}
+
+async function saveActiveAgentsToSupabase(agentsObj) {
+  try {
+    const agentsStr = JSON.stringify(agentsObj || {});
+
+    // First check if the row exists in global_settings
+    const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=eq.active_agents`, {
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+
+    if (checkRes.ok) {
+      const data = await checkRes.json();
+      if (data && data.length > 0) {
+        // Only update if value is actually different to avoid redundant database writes
+        if (data[0].setting_value !== agentsStr) {
+          await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=eq.active_agents`, {
+            method: "PATCH",
+            headers: {
+              "apikey": SUPABASE_ANON_KEY,
+              "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ setting_value: agentsStr, updated_at: new Date().toISOString() })
+          });
+        }
+      } else {
+        // Insert new row
+        await fetch(`${SUPABASE_URL}/rest/v1/global_settings`, {
+          method: "POST",
+          headers: {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ setting_key: "active_agents", setting_value: agentsStr })
+        });
+      }
+    }
+  } catch (err) {
+    console.warn("Could not save active agents to global_settings:", err);
+  }
 }
 
 function getAgentScoreDetails(agentScore) {
