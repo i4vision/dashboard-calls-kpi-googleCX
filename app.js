@@ -3007,12 +3007,55 @@ function getAgentIdFromFilename(audioFileName) {
   return agentId || null;
 }
 
+function getCallImprovements(call) {
+  if (!call || !call.kpis) return [];
+  let parsed = call.kpis;
+  if (typeof parsed === "string") {
+    try { parsed = JSON.parse(parsed); } catch (e) { parsed = null; }
+  }
+  let kpiObj = null;
+  if (Array.isArray(parsed) && parsed.length > 0) {
+    kpiObj = parsed[0];
+  } else if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    kpiObj = parsed;
+  }
+  if (!kpiObj) return [];
+  
+  let val = null;
+  for (const key of Object.keys(kpiObj)) {
+    const k = key.toLowerCase();
+    if (k === "gemini_agent_improvements" || k === "gemini agent improvements" || k === "agent_improvements" || k === "improvements") {
+      val = kpiObj[key];
+      break;
+    }
+  }
+  if (!val) return [];
+
+  let parsedVal = val;
+  if (typeof val === "string") {
+    const trimmed = val.trim();
+    if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+      try { parsedVal = JSON.parse(trimmed); } catch (e) { parsedVal = val; }
+    }
+  }
+
+  if (Array.isArray(parsedVal)) {
+    return parsedVal.map(item => typeof item === "string" ? item : JSON.stringify(item)).filter(Boolean);
+  } else if (typeof parsedVal === "string") {
+    return [parsedVal];
+  } else if (parsedVal && typeof parsedVal === "object") {
+    return Object.values(parsedVal).map(item => typeof item === "string" ? item : JSON.stringify(item)).filter(Boolean);
+  }
+  return [];
+}
+
 // Compute canonical names for each agent ID based on the loaded calls data
 function computeCanonicalAgents(calls) {
   state.canonicalAgents = {};
   if (!calls || !Array.isArray(calls)) return;
 
   const agentIdNames = {};
+  const agentImprovements = {}; // maps agentId -> Set of unique improvements
 
   calls.forEach(call => {
     const parsedId = getAgentIdFromFilename(call.audio_file_name);
@@ -3020,6 +3063,10 @@ function computeCanonicalAgents(calls) {
 
     if (!agentIdNames[parsedId]) {
       agentIdNames[parsedId] = [];
+    }
+
+    if (!agentImprovements[parsedId]) {
+      agentImprovements[parsedId] = new Set();
     }
 
     // Candidate 1: Supabase agent column
@@ -3038,6 +3085,13 @@ function computeCanonicalAgents(calls) {
     } else if (text.includes("carol") || text.includes("cruise")) {
       agentIdNames[parsedId].push("Carol");
     }
+
+    // Gather improvements
+    const imps = getCallImprovements(call);
+    imps.forEach(imp => {
+      const trimmed = imp.trim();
+      if (trimmed) agentImprovements[parsedId].add(trimmed);
+    });
   });
 
   const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
@@ -3073,8 +3127,19 @@ function computeCanonicalAgents(calls) {
     state.canonicalAgents[agentId] = bestCandidate;
   });
 
-  // Save active resolved agents to global_settings table dynamically
-  saveActiveAgentsToSupabase(state.canonicalAgents);
+  // Build the dynamic payload storing agent id, name, and all improvements
+  const activeAgentsPayload = {};
+  Object.keys(state.canonicalAgents).forEach(agentId => {
+    const name = state.canonicalAgents[agentId];
+    const impsSet = agentImprovements[agentId] || new Set();
+    activeAgentsPayload[agentId] = {
+      name: name,
+      improvements: Array.from(impsSet)
+    };
+  });
+
+  // Save active resolved agents payload to global_settings table dynamically
+  saveActiveAgentsToSupabase(activeAgentsPayload);
 }
 
 async function saveActiveAgentsToSupabase(agentsObj) {
