@@ -1505,6 +1505,25 @@ async function fetchCallData() {
     state.allCalls = data;
     state.canonicalAgents = null; // Reset cache to force recalculation of canonical agent names
     state.filteredCalls = [...data];
+
+    // Fetch agent_improvements from Supabase
+    try {
+      const impResponse = await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?select=*`, {
+        method: "GET",
+        headers: {
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+        }
+      });
+      if (impResponse.ok) {
+        state.agentImprovementsTable = await impResponse.json();
+      } else {
+        state.agentImprovementsTable = [];
+      }
+    } catch (e) {
+      console.warn("Failed to fetch agent_improvements table:", e);
+      state.agentImprovementsTable = [];
+    }
     
     // Extract unique parent categories
     state.categories = [...new Set(data.map(item => getParentCategory(item.category)))].sort();
@@ -3611,36 +3630,14 @@ function renderCoachingSection() {
     return { trainingGaps, coachingPriorities };
   };
 
-  // Group call improvements by Agent Name
-  const agentData = {};
-  calls.forEach(call => {
-    const agent = getAgentName(call);
-    if (!agentData[agent]) {
-      agentData[agent] = { callsCount: 0, trainingGaps: [], coachingPriorities: [] };
-    }
-    agentData[agent].callsCount++;
-    const impVal = getImprovementsVal(call);
-    if (impVal) {
-      const { trainingGaps, coachingPriorities } = parseImpList(impVal);
-      agentData[agent].trainingGaps.push(...trainingGaps);
-      agentData[agent].coachingPriorities.push(...coachingPriorities);
-    }
-  });
-
-  // Render per-agent dashboard cards
-  Object.keys(agentData).sort().forEach(agentName => {
-    const info = agentData[agentName];
-    // Deduplicate lists
-    const uniqueGaps = [...new Set(info.trainingGaps)].filter(Boolean);
-    const uniquePriorities = [...new Set(info.coachingPriorities)].filter(Boolean);
-
+  // Helper function to render a single coaching card
+  const renderCard = (agentName, uniqueGaps, uniquePriorities) => {
     const card = document.createElement("div");
     card.className = "chart-card";
     card.style.cssText = "display: flex; flex-direction: column; padding: 1.25rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); min-height: 200px;";
 
     const initials = agentName.split(/\s+/).map(n => n[0]).join("").substring(0, 2).toUpperCase() || "A";
 
-    // Setup HTML Layout inside the card
     let gapsHtml = "";
     if (uniqueGaps.length === 0) {
       gapsHtml = `<div style="font-size: 0.75rem; color: var(--text-muted); font-style: italic; margin-bottom: 0.5rem;">${lang === "es" ? "No se detectaron brechas de capacitación." : "No training gaps identified."}</div>`;
@@ -3659,34 +3656,10 @@ function renderCoachingSection() {
     } else {
       prioritiesHtml = uniquePriorities.map(item => `
         <div style="font-size: 0.78rem; line-height: 1.4; color: var(--text-secondary); margin-bottom: 0.35rem; display: flex; gap: 0.4rem; align-items: flex-start;">
-          <i class="fa-solid fa-hand-holding-heart" style="color: var(--accent-primary); font-size: 0.72rem; margin-top: 0.25rem;"></i>
+          <i class="fa-solid fa-person-chalkboard" style="color: var(--accent-primary); font-size: 0.72rem; margin-top: 0.25rem;"></i>
           <span>${item}</span>
         </div>
       `).join("");
-    }
-
-    let summaryHtml = "";
-    if (uniqueGaps.length === 0 && uniquePriorities.length === 0) {
-      summaryHtml = `
-        <div style="font-size: 0.78rem; color: var(--color-positive); display: flex; align-items: center; gap: 0.35rem; margin-top: 1rem; font-weight: 500;">
-          <i class="fa-solid fa-circle-check"></i> ${dict.coachingNoData}
-        </div>
-      `;
-    } else {
-      summaryHtml = `
-        <div style="margin-bottom: 1rem;">
-          <h4 style="font-size: 0.75rem; font-weight: 700; color: var(--color-warning); text-transform: uppercase; margin: 0 0 0.5rem 0; display: flex; align-items: center; gap: 0.35rem; letter-spacing: 0.03em;">
-            <i class="fa-solid fa-graduation-cap"></i> ${lang === "es" ? "Brechas de Capacitación" : "Training Gaps"}
-          </h4>
-          ${gapsHtml}
-        </div>
-        <div>
-          <h4 style="font-size: 0.75rem; font-weight: 700; color: var(--accent-primary); text-transform: uppercase; margin: 0 0 0.5rem 0; display: flex; align-items: center; gap: 0.35rem; letter-spacing: 0.03em;">
-            <i class="fa-solid fa-person-chalkboard"></i> ${lang === "es" ? "Prioridades de Coaching" : "Coaching Priorities"}
-          </h4>
-          ${prioritiesHtml}
-        </div>
-      `;
     }
 
     card.innerHTML = `
@@ -3695,15 +3668,78 @@ function renderCoachingSection() {
           ${initials}
         </div>
         <div>
-          <h3 style="font-size: 0.9rem; font-weight: 700; color: var(--text-primary); margin: 0;">${agentName}</h3>
-          <span style="font-size: 0.7rem; color: var(--text-muted);">${info.callsCount} ${lang === "es" ? "llamadas evaluadas" : "calls evaluated"}</span>
+          <h3 style="font-size: 0.9rem; font-weight: 700; color: var(--text-primary); margin: 0; text-align: left;">${agentName}</h3>
         </div>
       </div>
-      ${summaryHtml}
+      
+      <div style="margin-bottom: 1rem; text-align: left;">
+        <h4 style="font-size: 0.75rem; font-weight: 700; color: var(--color-warning); text-transform: uppercase; margin: 0 0 0.5rem 0; display: flex; align-items: center; gap: 0.35rem; letter-spacing: 0.03em;">
+          <i class="fa-solid fa-graduation-cap"></i> ${lang === "es" ? "Brechas de Capacitación" : "Training Gaps"}
+        </h4>
+        ${gapsHtml}
+      </div>
+      <div style="text-align: left;">
+        <h4 style="font-size: 0.75rem; font-weight: 700; color: var(--accent-primary); text-transform: uppercase; margin: 0 0 0.5rem 0; display: flex; align-items: center; gap: 0.35rem; letter-spacing: 0.03em;">
+          <i class="fa-solid fa-bullseye"></i> ${lang === "es" ? "Prioridades de Coaching" : "Coaching Priorities"}
+        </h4>
+        ${prioritiesHtml}
+      </div>
     `;
 
     container.appendChild(card);
-  });
+  };
+
+  const activeAgentNames = new Set(calls.map(call => getAgentName(call)).filter(Boolean));
+  const dbImprovements = state.agentImprovementsTable || [];
+  const filteredDbImps = dbImprovements.filter(row => activeAgentNames.has(row.agent_name));
+
+  if (filteredDbImps.length > 0) {
+    filteredDbImps.sort((a, b) => a.agent_name.localeCompare(b.agent_name)).forEach(row => {
+      const agentName = row.agent_name;
+      const list = Array.isArray(row.agent_improvements) ? row.agent_improvements : [];
+      
+      const trainingGaps = [];
+      const coachingPriorities = [];
+
+      list.forEach(item => {
+        if (!item) return;
+        const str = String(item).trim();
+        if (str) {
+          const lower = str.toLowerCase();
+          if (lower.includes("coaching") || lower.includes("prioridad") || lower.includes("priority")) {
+            coachingPriorities.push(str);
+          } else {
+            trainingGaps.push(str);
+          }
+        }
+      });
+
+      renderCard(agentName, trainingGaps, coachingPriorities);
+    });
+  } else {
+    // Fallback: Group call improvements by Agent Name (original logic)
+    const agentData = {};
+    calls.forEach(call => {
+      const agent = getAgentName(call);
+      if (!agentData[agent]) {
+        agentData[agent] = { callsCount: 0, trainingGaps: [], coachingPriorities: [] };
+      }
+      agentData[agent].callsCount++;
+      const impVal = getImprovementsVal(call);
+      if (impVal) {
+        const { trainingGaps, coachingPriorities } = parseImpList(impVal);
+        agentData[agent].trainingGaps.push(...trainingGaps);
+        agentData[agent].coachingPriorities.push(...coachingPriorities);
+      }
+    });
+
+    Object.keys(agentData).sort().forEach(agentName => {
+      const info = agentData[agentName];
+      const uniqueGaps = [...new Set(info.trainingGaps)].filter(Boolean);
+      const uniquePriorities = [...new Set(info.coachingPriorities)].filter(Boolean);
+      renderCard(agentName, uniqueGaps, uniquePriorities);
+    });
+  }
 }
 
 // ==========================================================================
