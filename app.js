@@ -5247,6 +5247,39 @@ async function triggerBulkCallAnalysisWebhook() {
   
   const filesToAnalyze = state.filteredGcsFiles.filter(file => state.selectedGcsFiles.has(file.name));
   if (filesToAnalyze.length === 0) return;
+
+  const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
+  const currentUserEmail = (state.userEmail || localStorage.getItem("dashboard_user_email") || "").toLowerCase().trim();
+  if (!currentUserEmail) {
+    alert(lang === "es" ? "Error: No se pudo determinar el correo del usuario actual." : "Error: Could not determine current user email.");
+    return;
+  }
+
+  // Fetch the current user's Gemini key from ai_credentials to verify it exists
+  let hasGeminiKey = false;
+  try {
+    const keyRes = await fetch(`${SUPABASE_URL}/rest/v1/ai_credentials?provider=eq.gemini_key_${encodeURIComponent(currentUserEmail)}`, {
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+    if (keyRes.ok) {
+      const keyData = await keyRes.json();
+      if (keyData && keyData.length > 0 && keyData[0].api_key && keyData[0].api_key.trim() !== "") {
+        hasGeminiKey = true;
+      }
+    }
+  } catch (err) {
+    console.error("Failed to verify user Gemini key:", err);
+  }
+
+  if (!hasGeminiKey) {
+    alert(lang === "es" 
+      ? "Error: No tiene una clave API de Gemini configurada. Por favor, guarde su clave en la sección 'Usuarios' de Configuración General." 
+      : "Error: You do not have a Gemini API key configured. Please save your key in the 'Users' tab under General Settings.");
+    return;
+  }
   
   const sttProvider = document.getElementById("sttProviderSelect") ? document.getElementById("sttProviderSelect").value : "google";
   const sttModel = document.getElementById("sttModelSelect") ? document.getElementById("sttModelSelect").value : "chirp";
