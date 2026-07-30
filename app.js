@@ -62,10 +62,10 @@ const TRANSLATIONS = {
     
     tabOverview: '<i class="fa-solid fa-chart-pie"></i> Overview Analytics',
     tabTrends: '<i class="fa-solid fa-chart-line"></i> Temporal Trends',
-    tabCoaching: '<i class="fa-solid fa-graduation-cap"></i> Coaching & Training',
-    coachingTitle: "Training Gaps & Coaching Priorities per Agent",
+    tabCoaching: '<i class="fa-solid fa-graduation-cap"></i> Training Gaps',
+    coachingTitle: "Training Gaps per Agent",
     coachingSubtitle: "Consolidated improvement areas extracted from call records under the Gemini_Agent_Improvements KPI.",
-    coachingNoData: "No training gaps or coaching priorities identified for this period.",
+    coachingNoData: "No training gaps identified for this period.",
     
     loginTitle: "i4vision Calls",
     loginSubtitle: "Call Analysis KPI Dashboard",
@@ -236,10 +236,10 @@ const TRANSLATIONS = {
     
     tabOverview: '<i class="fa-solid fa-chart-pie"></i> Análisis General',
     tabTrends: '<i class="fa-solid fa-chart-line"></i> Tendencias Temporales',
-    tabCoaching: '<i class="fa-solid fa-graduation-cap"></i> Capacitación y Coaching',
-    coachingTitle: "Brechas de Capacitación y Prioridades de Coaching por Agente",
+    tabCoaching: '<i class="fa-solid fa-graduation-cap"></i> Brechas de Capacitación',
+    coachingTitle: "Brechas de Capacitación por Agente",
     coachingSubtitle: "Áreas de mejora consolidadas extraídas de las evaluaciones de Gemini bajo el KPI Gemini_Agent_Improvements.",
-    coachingNoData: "No se identificaron brechas de capacitación o prioridades de coaching para este período.",
+    coachingNoData: "No se identificaron brechas de capacitación para este período.",
     
     loginTitle: "Llamadas i4vision",
     loginSubtitle: "Dashboard de Análisis de KPIs",
@@ -3631,10 +3631,10 @@ function renderCoachingSection() {
   };
 
   // Helper function to render a single coaching card
-  const renderCard = (agentName, uniqueGaps, uniquePriorities) => {
+  const renderCard = (agentName, uniqueGaps) => {
     const card = document.createElement("div");
     card.className = "chart-card";
-    card.style.cssText = "display: flex; flex-direction: column; padding: 1.25rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); min-height: 200px;";
+    card.style.cssText = "display: flex; flex-direction: column; padding: 1.25rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); min-height: 180px;";
 
     const initials = agentName.split(/\s+/).map(n => n[0]).join("").substring(0, 2).toUpperCase() || "A";
 
@@ -3650,18 +3650,6 @@ function renderCoachingSection() {
       `).join("");
     }
 
-    let prioritiesHtml = "";
-    if (uniquePriorities.length === 0) {
-      prioritiesHtml = `<div style="font-size: 0.75rem; color: var(--text-muted); font-style: italic; margin-bottom: 0.5rem;">${lang === "es" ? "No se detectaron prioridades de coaching." : "No coaching priorities identified."}</div>`;
-    } else {
-      prioritiesHtml = uniquePriorities.map(item => `
-        <div style="font-size: 0.78rem; line-height: 1.4; color: var(--text-secondary); margin-bottom: 0.35rem; display: flex; gap: 0.4rem; align-items: flex-start;">
-          <i class="fa-solid fa-person-chalkboard" style="color: var(--accent-primary); font-size: 0.72rem; margin-top: 0.25rem;"></i>
-          <span>${item}</span>
-        </div>
-      `).join("");
-    }
-
     card.innerHTML = `
       <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
         <div style="width: 36px; height: 36px; border-radius: 50%; background: rgba(139, 92, 246, 0.15); color: var(--accent-primary); display: flex; align-items: center; justify-content: center; font-size: 0.95rem; font-weight: 700;">
@@ -3672,17 +3660,11 @@ function renderCoachingSection() {
         </div>
       </div>
       
-      <div style="margin-bottom: 1rem; text-align: left;">
+      <div style="text-align: left; flex: 1;">
         <h4 style="font-size: 0.75rem; font-weight: 700; color: var(--color-warning); text-transform: uppercase; margin: 0 0 0.5rem 0; display: flex; align-items: center; gap: 0.35rem; letter-spacing: 0.03em;">
           <i class="fa-solid fa-graduation-cap"></i> ${lang === "es" ? "Brechas de Capacitación" : "Training Gaps"}
         </h4>
         ${gapsHtml}
-      </div>
-      <div style="text-align: left;">
-        <h4 style="font-size: 0.75rem; font-weight: 700; color: var(--accent-primary); text-transform: uppercase; margin: 0 0 0.5rem 0; display: flex; align-items: center; gap: 0.35rem; letter-spacing: 0.03em;">
-          <i class="fa-solid fa-bullseye"></i> ${lang === "es" ? "Prioridades de Coaching" : "Coaching Priorities"}
-        </h4>
-        ${prioritiesHtml}
       </div>
     `;
 
@@ -3699,22 +3681,16 @@ function renderCoachingSection() {
       const list = Array.isArray(row.agent_improvements) ? row.agent_improvements : [];
       
       const trainingGaps = [];
-      const coachingPriorities = [];
 
       list.forEach(item => {
         if (!item) return;
         const str = String(item).trim();
         if (str) {
-          const lower = str.toLowerCase();
-          if (lower.includes("coaching") || lower.includes("prioridad") || lower.includes("priority")) {
-            coachingPriorities.push(str);
-          } else {
-            trainingGaps.push(str);
-          }
+          trainingGaps.push(str);
         }
       });
 
-      renderCard(agentName, trainingGaps, coachingPriorities);
+      renderCard(agentName, trainingGaps);
     });
   } else {
     // Fallback: Group call improvements by Agent Name (original logic)
@@ -3728,16 +3704,14 @@ function renderCoachingSection() {
       const impVal = getImprovementsVal(call);
       if (impVal) {
         const { trainingGaps, coachingPriorities } = parseImpList(impVal);
-        agentData[agent].trainingGaps.push(...trainingGaps);
-        agentData[agent].coachingPriorities.push(...coachingPriorities);
+        agentData[agent].trainingGaps.push(...trainingGaps, ...coachingPriorities);
       }
     });
 
     Object.keys(agentData).sort().forEach(agentName => {
       const info = agentData[agentName];
       const uniqueGaps = [...new Set(info.trainingGaps)].filter(Boolean);
-      const uniquePriorities = [...new Set(info.coachingPriorities)].filter(Boolean);
-      renderCard(agentName, uniqueGaps, uniquePriorities);
+      renderCard(agentName, uniqueGaps);
     });
   }
 }
