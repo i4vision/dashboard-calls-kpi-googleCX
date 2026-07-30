@@ -3866,7 +3866,76 @@ function checkGoogleAuth() {
   }
 }
 
+async function loadAgentMappingsFromSupabase() {
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=eq.agent_mappings`, {
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+    if (response.ok) {
+      const data = await response.json();
+      if (data && data.length > 0) {
+        const mappingsStr = data[0].setting_value;
+        if (mappingsStr) {
+          localStorage.setItem("gcs_agent_mappings", mappingsStr);
+          state.agentMappings = JSON.parse(mappingsStr);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Could not load agent mappings from global_settings:", err);
+  }
+}
+
+async function saveAgentMappingsToSupabase(mappingsObj) {
+  try {
+    const mappingsStr = JSON.stringify(mappingsObj || {});
+    localStorage.setItem("gcs_agent_mappings", mappingsStr);
+
+    const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=eq.agent_mappings`, {
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+
+    if (checkRes.ok) {
+      const data = await checkRes.json();
+      const agentsStr = JSON.stringify(mappingsObj);
+      if (data && data.length > 0) {
+        // Update existing row
+        await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=eq.agent_mappings`, {
+          method: "PATCH",
+          headers: {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ setting_value: agentsStr, updated_at: new Date().toISOString() })
+        });
+      } else {
+        // Insert new row
+        await fetch(`${SUPABASE_URL}/rest/v1/global_settings`, {
+          method: "POST",
+          headers: {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ setting_key: "agent_mappings", setting_value: agentsStr })
+        });
+      }
+    }
+  } catch (err) {
+    console.warn("Could not save agent mappings to global_settings:", err);
+  }
+}
+
 async function syncGCSSettingsWithSupabase() {
+  // Sync agent mappings from global_settings first
+  await loadAgentMappingsFromSupabase();
   try {
     const response = await fetch(`${SUPABASE_URL}/rest/v1/dashboard_settings?id=eq.1`, {
       headers: {
@@ -3901,7 +3970,6 @@ async function syncGCSSettingsWithSupabase() {
         { localKey: "gcs_manual_token_flag", dbCol: "gcs_manual_token_flag" },
         { localKey: "gcs_min_call_length", dbCol: "min_call_length" },
         { localKey: "gcs_max_call_length", dbCol: "max_call_length" },
-        { localKey: "gcs_agent_mappings", dbCol: "agent_mappings" },
         { localKey: "gcs_predefined_questions", dbCol: "predefined_questions" }
       ];
 
@@ -6074,15 +6142,11 @@ function setupSettingsDrawer() {
         updateUILanguage();
       }
 
-      // 2. Process and save Agent Mappings
-      const mappingsStr = JSON.stringify(state.agentMappings || {});
-      localStorage.setItem("gcs_agent_mappings", mappingsStr);
-
-      // Save to Supabase (catch error if agent_mappings column does not exist yet)
+      // 2. Process and save Agent Mappings to Supabase global_settings
       try {
-        await saveSettingToSupabase("agent_mappings", mappingsStr);
+        await saveAgentMappingsToSupabase(state.agentMappings);
       } catch (err) {
-        console.warn("Could not persist agent mappings to database column:", err);
+        console.warn("Could not persist agent mappings to global_settings:", err);
       }
 
       // Show success indicator
