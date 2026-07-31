@@ -3711,6 +3711,9 @@ function renderCoachingSection() {
 
   const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
   const dict = TRANSLATIONS[lang];
+  const role = state.userRole || "viewer";
+  const isAdmin = role === "admin";
+  const disabledAttr = isAdmin ? "" : "disabled";
 
   // Update Section Headers
   const titleEl = document.getElementById("labelCoachingTitle");
@@ -3897,9 +3900,7 @@ function renderCoachingSection() {
       scoreBorder = "var(--border-color)";
     }
 
-    const role = state.userRole || "viewer";
-    const isAdmin = role === "admin";
-    const disabledAttr = isAdmin ? "" : "disabled";
+    // Admin checks inherited from parent scope
 
     let revisionInfoHtml = "";
     if (hasRevision) {
