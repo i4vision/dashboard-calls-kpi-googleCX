@@ -3854,8 +3854,19 @@ function renderCoachingSection() {
     let comparisonHtml = "";
 
     const hasRevision = state.agentRevisions && state.agentRevisions[agentName];
+    let revisionsList = [];
     if (hasRevision) {
-      const prevScore = state.agentRevisions[agentName].score_at_revision || "N/A";
+      revisionsList = state.agentRevisions[agentName].revisions || [];
+      if (revisionsList.length === 0 && state.agentRevisions[agentName].revision_date) {
+        revisionsList = [{
+          revision_date: state.agentRevisions[agentName].revision_date,
+          score_at_revision: state.agentRevisions[agentName].score_at_revision,
+          improvements_at_revision: state.agentRevisions[agentName].improvements_at_revision || []
+        }];
+      }
+      
+      const latestRevision = revisionsList[revisionsList.length - 1];
+      const prevScore = latestRevision ? latestRevision.score_at_revision : "N/A";
       displayScore = avgScore; // Keep the average of the total score on top (live score)
 
       const numLive = parseFloat(avgScore);
@@ -3904,8 +3915,9 @@ function renderCoachingSection() {
     // Admin checks inherited from parent scope
 
     let revisionInfoHtml = "";
-    if (hasRevision) {
-      const revDate = new Date(state.agentRevisions[agentName].revision_date);
+    if (hasRevision && revisionsList.length > 0) {
+      const latestRevision = revisionsList[revisionsList.length - 1];
+      const revDate = latestRevision ? new Date(latestRevision.revision_date) : new Date();
       const dateStr = revDate.toLocaleDateString();
       revisionInfoHtml = `
         <div style="font-size: 0.68rem; color: var(--text-muted); text-align: left; display: flex; align-items: center; justify-content: space-between; width: 100%; border-top: 1px dashed var(--border-color); padding-top: 0.4rem; margin-top: 0.25rem;">
@@ -3913,7 +3925,7 @@ function renderCoachingSection() {
             <i class="fa-solid fa-clock-rotate-left" style="font-size: 0.65rem;"></i>
             <span>${lang === "es" ? `Revisado el: ${dateStr}` : `Revised on: ${dateStr}`}</span>
           </div>
-          <button class="btn-reset-revision" data-agent="${agentName}" ${disabledAttr} style="background: none; border: none; padding: 0; color: var(--text-muted); cursor: ${isAdmin ? "pointer" : "not-allowed"}; display: flex; align-items: center; opacity: ${isAdmin ? 1 : 0.5};" title="${lang === "es" ? "Eliminar revisión" : "Reset revision"}">
+          <button class="btn-reset-revision" data-agent="${agentName}" ${disabledAttr} style="background: none; border: none; padding: 0; color: var(--text-muted); cursor: ${isAdmin ? "pointer" : "not-allowed"}; display: flex; align-items: center; opacity: ${isAdmin ? 1 : 0.5};" title="${lang === "es" ? "Eliminar revisiones" : "Reset revisions"}">
             <i class="fa-solid fa-trash-can" style="font-size: 0.68rem;"></i>
           </button>
         </div>
@@ -3940,21 +3952,34 @@ function renderCoachingSection() {
     }
 
     let oldGapsHtml = "";
-    if (hasRevision && state.agentRevisions[agentName].improvements_at_revision && state.agentRevisions[agentName].improvements_at_revision.length > 0) {
-      const oldGaps = state.agentRevisions[agentName].improvements_at_revision;
-      oldGapsHtml = `
-        <div style="margin-top: 1rem; border-top: 1px dashed var(--border-color); padding-top: 0.75rem;">
-          <h4 style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin: 0 0 0.5rem 0; display: flex; align-items: center; gap: 0.35rem; letter-spacing: 0.03em;">
-            <i class="fa-solid fa-clock-rotate-left"></i> ${lang === "es" ? "Recomendaciones Anteriores" : "Previous Recommendations"}
-          </h4>
-          ${oldGaps.map(item => `
-            <div style="font-size: 0.78rem; line-height: 1.4; color: var(--text-muted); margin-bottom: 0.35rem; display: flex; gap: 0.4rem; align-items: flex-start; opacity: 0.85;">
-              <i class="fa-solid fa-circle-check" style="color: var(--text-muted); font-size: 0.72rem; margin-top: 0.25rem;"></i>
-              <span style="text-decoration: line-through; text-decoration-color: rgba(255,255,255,0.25);">${item}</span>
-            </div>
-          `).join("")}
-        </div>
-      `;
+    if (hasRevision && revisionsList.length > 0) {
+      oldGapsHtml = `<div style="margin-top: 1.25rem; border-top: 1px dashed var(--border-color); padding-top: 0.75rem; display: flex; flex-direction: column; gap: 0.75rem;">`;
+      revisionsList.forEach((rev, idx) => {
+        const revDate = new Date(rev.revision_date);
+        const dateStr = revDate.toLocaleDateString();
+        const scoreStr = rev.score_at_revision || "N/A";
+        const oldGaps = rev.improvements_at_revision || [];
+        if (oldGaps.length === 0) return;
+        
+        oldGapsHtml += `
+          <div>
+            <h5 style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin: 0 0 0.4rem 0; display: flex; align-items: center; justify-content: space-between; letter-spacing: 0.03em;">
+              <span style="display: flex; align-items: center; gap: 0.25rem;">
+                <i class="fa-solid fa-clock-rotate-left" style="font-size: 0.65rem;"></i>
+                ${lang === "es" ? `Revisión #${idx + 1} (${dateStr})` : `Revision #${idx + 1} (${dateStr})`}
+              </span>
+              <span>Nota: ${scoreStr}</span>
+            </h5>
+            ${oldGaps.map(item => `
+              <div style="font-size: 0.75rem; line-height: 1.4; color: var(--text-muted); margin-bottom: 0.3rem; display: flex; gap: 0.4rem; align-items: flex-start; opacity: 0.8;">
+                <i class="fa-solid fa-circle-check" style="color: var(--text-muted); font-size: 0.68rem; margin-top: 0.22rem;"></i>
+                <span style="text-decoration: line-through; text-decoration-color: rgba(255,255,255,0.2);">${item}</span>
+              </div>
+            `).join("")}
+          </div>
+        `;
+      });
+      oldGapsHtml += `</div>`;
     }
 
     card.innerHTML = `
@@ -4051,8 +4076,8 @@ function renderCoachingSection() {
       }
 
       const confirmMsg = lang === "es" 
-        ? `¿Confirmas marcar a ${agent} como revisado? Esto archivará sus recomendaciones actuales para comparación, limpiará su lista para iniciar de 0 y medirá su desempeño en base a las nuevas llamadas desde este momento.`
-        : `Confirm marking ${agent} as revised? This will archive their current recommendations for comparison, clear the active list to start from 0, and benchmark performance based on new calls.`;
+        ? `¿Confirmas marcar a ${agent} como revisado? Esto archivará sus recomendaciones actuales en su historial de revisiones, limpiará su lista para iniciar de 0 y medirá su desempeño en base a las nuevas llamadas.`
+        : `Confirm marking ${agent} as revised? This will archive their current recommendations in their revision history, clear the active list to start from 0, and benchmark performance based on new calls.`;
       
       if (!confirm(confirmMsg)) return;
 
@@ -4084,11 +4109,28 @@ function renderCoachingSection() {
       }
 
       if (!state.agentRevisions) state.agentRevisions = {};
-      state.agentRevisions[agent] = {
+      
+      // Initialize or migrate revision data structure
+      if (!state.agentRevisions[agent]) {
+        state.agentRevisions[agent] = { revisions: [] };
+      } else if (!state.agentRevisions[agent].revisions) {
+        // Migrate legacy single-revision format
+        state.agentRevisions[agent].revisions = [];
+        if (state.agentRevisions[agent].revision_date) {
+          state.agentRevisions[agent].revisions.push({
+            revision_date: state.agentRevisions[agent].revision_date,
+            score_at_revision: state.agentRevisions[agent].score_at_revision,
+            improvements_at_revision: state.agentRevisions[agent].improvements_at_revision || []
+          });
+        }
+      }
+
+      // Add new revision record to the array
+      state.agentRevisions[agent].revisions.push({
         revision_date: new Date().toISOString(),
         score_at_revision: currentAvg,
         improvements_at_revision: currentImps
-      };
+      });
 
       // Disable button
       btn.disabled = true;
@@ -4155,7 +4197,7 @@ function renderCoachingSection() {
     });
   });
 
-  // Bind click listener for reset buttons
+  // Bind click listener for reset buttons (deletes revision history and restores all archived recommendations)
   const resetButtons = container.querySelectorAll(".btn-reset-revision");
   resetButtons.forEach(btn => {
     btn.addEventListener("click", async (e) => {
@@ -4169,13 +4211,33 @@ function renderCoachingSection() {
       }
 
       const confirmMsg = lang === "es"
-        ? `¿Eliminar la revisión de ${agent}? Esto restaurará sus recomendaciones anteriores a la lista activa.`
-        : `Reset revision for ${agent}? This will restore their previous recommendations to the active list.`;
+        ? `¿Eliminar el historial de revisiones de ${agent}? Esto restaurará todas sus recomendaciones archivadas a la lista activa.`
+        : `Reset revision history for ${agent}? This will restore all archived recommendations back to the active list.`;
 
       if (!confirm(confirmMsg)) return;
 
       if (state.agentRevisions && state.agentRevisions[agent]) {
-        const archivedImps = state.agentRevisions[agent].improvements_at_revision || [];
+        // Collect union of all archived recommendations
+        let revisionsList = state.agentRevisions[agent].revisions || [];
+        if (revisionsList.length === 0 && state.agentRevisions[agent].revision_date) {
+          revisionsList = [{
+            revision_date: state.agentRevisions[agent].revision_date,
+            score_at_revision: state.agentRevisions[agent].score_at_revision,
+            improvements_at_revision: state.agentRevisions[agent].improvements_at_revision || []
+          }];
+        }
+
+        const archivedImps = [];
+        revisionsList.forEach(rev => {
+          if (Array.isArray(rev.improvements_at_revision)) {
+            rev.improvements_at_revision.forEach(imp => {
+              const trimmed = String(imp).trim();
+              if (trimmed && !archivedImps.includes(trimmed)) {
+                archivedImps.push(trimmed);
+              }
+            });
+          }
+        });
 
         // 1. Restore improvements in active_agents global setting
         const agentId = Object.keys(state.canonicalAgents || {}).find(key => state.canonicalAgents[key] === agent);
