@@ -3855,26 +3855,27 @@ function renderCoachingSection() {
 
     const hasRevision = state.agentRevisions && state.agentRevisions[agentName];
     if (hasRevision) {
-      const revDate = new Date(state.agentRevisions[agentName].revision_date);
       const prevScore = state.agentRevisions[agentName].score_at_revision || "N/A";
+      displayScore = avgScore; // Keep the average of the total score on top (live score)
 
-      // Calculate post-revision score
-      const postRevCalls = calls.filter(c => getAgentName(c) === agentName && new Date(c.created_at || c.create_time || 0) > revDate);
-      let postTotal = 0, postCount = 0;
-      postRevCalls.forEach(c => {
-        const score = getAgentScoreNumber(c.agent_score);
-        if (!isNaN(score)) {
-          postTotal += score;
-          postCount++;
+      const numLive = parseFloat(avgScore);
+      const numPrev = parseFloat(prevScore);
+      let trendHtml = "";
+      if (!isNaN(numLive) && !isNaN(numPrev)) {
+        const diff = numLive - numPrev;
+        if (diff > 0) {
+          trendHtml = `<span style="color: #10b981; font-weight: 700; margin-left: 0.25rem;"><i class="fa-solid fa-arrow-trend-up"></i> +${diff.toFixed(1)}</span>`;
+        } else if (diff < 0) {
+          trendHtml = `<span style="color: #ef4444; font-weight: 700; margin-left: 0.25rem;"><i class="fa-solid fa-arrow-trend-down"></i> ${diff.toFixed(1)}</span>`;
+        } else {
+          trendHtml = `<span style="color: var(--text-muted); font-weight: 700; margin-left: 0.25rem;"><i class="fa-solid fa-arrows-left-right"></i> 0.0</span>`;
         }
-      });
-
-      const newAvg = postCount > 0 ? (postTotal / postCount).toFixed(1) : "N/A";
-      displayScore = newAvg;
+      }
 
       comparisonHtml = `
-        <span style="font-size: 0.65rem; color: var(--text-muted); font-weight: 500; margin-top: 0.15rem;">
+        <span style="font-size: 0.65rem; color: var(--text-muted); font-weight: 500; margin-top: 0.15rem; display: flex; align-items: center; justify-content: flex-end;">
           ${lang === "es" ? `Nota anterior: ${prevScore}` : `Last score: ${prevScore}`}
+          ${trendHtml}
         </span>
       `;
     }
