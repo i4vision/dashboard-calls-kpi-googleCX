@@ -4437,6 +4437,35 @@ function renderCoachingSection() {
       }
     });
   });
+
+  // Ensure hover styles exist for audio pills
+  if (!document.getElementById("audioPillStyle")) {
+    const style = document.createElement("style");
+    style.id = "audioPillStyle";
+    style.textContent = `
+      .audio-pill-link:hover {
+        background: rgba(139, 92, 246, 0.25) !important;
+        border-color: rgba(139, 92, 246, 0.6) !important;
+        box-shadow: 0 0 8px rgba(139, 92, 246, 0.15);
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // Bind click listener for audio pill links to open detail drawer
+  const audioPillLinks = container.querySelectorAll(".audio-pill-link");
+  audioPillLinks.forEach(link => {
+    link.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const audioFile = link.dataset.audio;
+      if (audioFile && state.allCalls) {
+        const matchingCall = state.allCalls.find(c => c.audio_file_name === audioFile);
+        if (matchingCall && typeof openDrawer === "function") {
+          openDrawer(matchingCall);
+        }
+      }
+    });
+  });
 }
 
 // ==========================================================================
