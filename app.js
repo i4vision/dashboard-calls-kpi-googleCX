@@ -785,9 +785,11 @@ function updateUILanguage() {
 
 let analysisPollingInterval = null;
 
+const IMPROVEMENTS_WEBHOOK_URL = "https://n8n102.i4vision.us/webhook/254b92d1-f6b1-41bb-964d-653792fcb197";
+
 async function loadRefreshSettingsFromSupabase() {
   try {
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=in.(improvements_refresh_days,improvements_webhook_url,improvements_last_refresh)`, {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=in.(improvements_refresh_days,improvements_last_refresh)`, {
       headers: {
         "apikey": SUPABASE_ANON_KEY,
         "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
@@ -796,16 +798,13 @@ async function loadRefreshSettingsFromSupabase() {
     if (response.ok) {
       const data = await response.json();
       let days = 7;
-      let url = "";
       let last = "";
       data.forEach(row => {
         if (row.setting_key === "improvements_refresh_days") days = parseInt(row.setting_value) || 7;
-        if (row.setting_key === "improvements_webhook_url") url = row.setting_value || "";
         if (row.setting_key === "improvements_last_refresh") last = row.setting_value || "";
       });
 
       state.refreshDays = days;
-      state.refreshWebhook = url;
       state.lastRefresh = last;
 
       updateRefreshControlsUI();
@@ -820,12 +819,10 @@ async function loadRefreshSettingsFromSupabase() {
 
 function updateRefreshControlsUI() {
   const inputDays = document.getElementById("inputRefreshDays");
-  const inputWebhook = document.getElementById("inputRefreshWebhook");
   const labelLast = document.getElementById("labelLastRefresh");
   const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
 
   if (inputDays) inputDays.value = state.refreshDays || 7;
-  if (inputWebhook) inputWebhook.value = state.refreshWebhook || "";
   
   if (labelLast) {
     if (state.lastRefresh) {
@@ -846,7 +843,7 @@ function updateRefreshControlsUI() {
 }
 
 async function checkAutoTriggerRefresh() {
-  if (!state.refreshWebhook || !state.lastRefresh || !state.refreshDays) return;
+  if (!state.lastRefresh || !state.refreshDays) return;
   
   const lastDate = new Date(state.lastRefresh);
   const diffDays = (Date.now() - lastDate.getTime()) / (1000 * 60 * 60 * 24);
@@ -858,12 +855,6 @@ async function checkAutoTriggerRefresh() {
 }
 
 async function executeRefreshWebhook(isAuto = false) {
-  const webhookUrl = state.refreshWebhook || (document.getElementById("inputRefreshWebhook") ? document.getElementById("inputRefreshWebhook").value : "");
-  if (!webhookUrl) {
-    if (!isAuto) alert(state.lang === "es" ? "Error: Ingrese una URL de Webhook válida." : "Error: Please enter a valid Webhook URL.");
-    return;
-  }
-
   const btn = document.getElementById("btnTriggerRefreshWebhook");
   const btnText = document.getElementById("btnTriggerRefreshText");
   let originalHtml = "";
@@ -877,7 +868,7 @@ async function executeRefreshWebhook(isAuto = false) {
   }
 
   try {
-    const res = await fetch(webhookUrl, {
+    const res = await fetch(IMPROVEMENTS_WEBHOOK_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -959,7 +950,6 @@ async function saveGlobalSettingToSupabase(key, value) {
 
 function setupRefreshControlsEventListeners() {
   const inputDays = document.getElementById("inputRefreshDays");
-  const inputWebhook = document.getElementById("inputRefreshWebhook");
   const btnSync = document.getElementById("btnTriggerRefreshWebhook");
 
   if (inputDays) {
@@ -967,14 +957,6 @@ function setupRefreshControlsEventListeners() {
       const val = parseInt(inputDays.value) || 7;
       state.refreshDays = val;
       await saveGlobalSettingToSupabase("improvements_refresh_days", val);
-    });
-  }
-
-  if (inputWebhook) {
-    inputWebhook.addEventListener("blur", async () => {
-      const val = inputWebhook.value.trim();
-      state.refreshWebhook = val;
-      await saveGlobalSettingToSupabase("improvements_webhook_url", val);
     });
   }
 
@@ -1049,8 +1031,6 @@ function enforceRBACPermissions() {
   // 6. Training Gaps Refresh controls (only editable/triggerable by admin)
   const inputDays = document.getElementById("inputRefreshDays");
   if (inputDays) inputDays.disabled = !isAdmin;
-  const inputWebhook = document.getElementById("inputRefreshWebhook");
-  if (inputWebhook) inputWebhook.disabled = !isAdmin;
   const btnSync = document.getElementById("btnTriggerRefreshWebhook");
   if (btnSync) btnSync.disabled = !isAdmin;
 }
