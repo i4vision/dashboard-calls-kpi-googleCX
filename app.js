@@ -3742,6 +3742,19 @@ function renderCoachingSection() {
   const isAdmin = role === "admin";
   const disabledAttr = isAdmin ? "" : "disabled";
 
+  // Helper to find call record by audio file name case-insensitively, stripping file extension
+  const findCallByAudioName = (audioFile) => {
+    if (!audioFile || !state.allCalls) return null;
+    const cleanTarget = String(audioFile).trim().toLowerCase().replace(/\.(mp3|mpr|m4a|wav)$/, "");
+    return state.allCalls.find(c => {
+      if (!c.audio_file_name) return false;
+      const cleanDBName = String(c.audio_file_name).trim().toLowerCase().replace(/\.(mp3|mpr|m4a|wav)$/, "");
+      return cleanDBName === cleanTarget ||
+             cleanDBName.includes(cleanTarget) ||
+             cleanTarget.includes(cleanDBName);
+    });
+  };
+
   // Update Section Headers
   const titleEl = document.getElementById("labelCoachingTitle");
   if (titleEl) titleEl.innerHTML = `<i class="fa-solid fa-graduation-cap" style="color: var(--accent-primary);"></i> ${dict.coachingTitle}`;
@@ -3754,19 +3767,31 @@ function renderCoachingSection() {
     return;
   }
 
-  // Precompute agent average scores from filtered calls
+  // Precompute agent average scores and individual KPI breakdowns from filtered calls
   const agentScores = {};
   calls.forEach(c => {
     const agentName = getAgentName(c);
     if (!agentName) return;
     if (!agentScores[agentName]) {
-      agentScores[agentName] = { total: 0, count: 0, list: [] };
+      agentScores[agentName] = { total: 0, count: 0, kpis: {} };
     }
-    const score = getAgentScoreNumber(c.agent_score);
+    const details = getAgentScoreDetails(c.agent_score);
+    const score = details.score;
     if (!isNaN(score)) {
       agentScores[agentName].total += score;
       agentScores[agentName].count++;
-      agentScores[agentName].list.push(score);
+    }
+    if (details.breakdown && typeof details.breakdown === "object") {
+      Object.entries(details.breakdown).forEach(([kpiName, kpiVal]) => {
+        const val = Number(kpiVal);
+        if (!isNaN(val)) {
+          if (!agentScores[agentName].kpis[kpiName]) {
+            agentScores[agentName].kpis[kpiName] = { sum: 0, count: 0 };
+          }
+          agentScores[agentName].kpis[kpiName].sum += val;
+          agentScores[agentName].kpis[kpiName].count++;
+        }
+      });
     }
   });
 
@@ -3876,14 +3901,22 @@ function renderCoachingSection() {
 
     const scoreInfo = agentScores[agentName];
     const avgScore = scoreInfo && scoreInfo.count > 0 ? (scoreInfo.total / scoreInfo.count).toFixed(1) : "N/A";
-    const scoreList = scoreInfo && scoreInfo.list ? scoreInfo.list : [];
+    
+    // Build KPI breakdown text for the hover tooltip
     let titleAttr = "";
-    if (scoreList.length > 0) {
-      const headerStr = lang === "es" ? "Notas individuales:" : "Individual scores:";
-      const listStr = scoreList.map((s, idx) => `  ${lang === "es" ? "Llamada" : "Call"} #${idx + 1}: ${s}`).join("\n");
+    const kpisObj = scoreInfo && scoreInfo.kpis ? scoreInfo.kpis : {};
+    const kpiEntries = Object.entries(kpisObj);
+    if (kpiEntries.length > 0) {
+      const headerStr = lang === "es" ? "Puntuación por KPI:" : "KPI Scores Breakdown:";
+      const listStr = kpiEntries
+        .map(([kpiName, data]) => {
+          const kpiAvg = data.count > 0 ? (data.sum / data.count).toFixed(1) : "0.0";
+          return `  ${kpiName}: ${kpiAvg}`;
+        })
+        .join("\n");
       titleAttr = `${headerStr}\n${listStr}`;
     } else {
-      titleAttr = lang === "es" ? "Sin notas" : "No scores";
+      titleAttr = lang === "es" ? "Sin datos de KPIs" : "No KPI data available";
     }
 
     // Dynamic scores based on revision
@@ -3992,7 +4025,18 @@ function renderCoachingSection() {
         let audioPill = "";
         if (audioFile) {
           const cleanName = audioFile.replace(/^.*[\\\/]/, '');
-          audioPill = `<span style="display: inline-block; font-size: 0.65rem; color: var(--text-muted); background: rgba(255,255,255,0.05); padding: 0.05rem 0.25rem; border-radius: 3px; margin-left: 0.35rem; border: 1px solid var(--border-color);" title="${cleanName}"><i class="fa-solid fa-file-audio" style="font-size: 0.6rem;"></i> ${cleanName}</span>`;
+          const matchingCall = findCallByAudioName(audioFile);
+          if (matchingCall) {
+            audioPill = `
+              <button class="audio-pill-link" data-audio="${audioFile}" style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.35); color: var(--accent-primary); font-size: 0.65rem; padding: 0.15rem 0.4rem; border-radius: var(--radius-sm); cursor: pointer; display: inline-flex; align-items: center; gap: 0.25rem; transition: all 0.2s; margin-left: 0.35rem;" title="${lang === "es" ? "Ver detalles de la llamada" : "View call details"}">
+                <i class="fa-solid fa-file-audio"></i>
+                <span>${cleanName}</span>
+                <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 0.55rem; opacity: 0.8;"></i>
+              </button>
+            `;
+          } else {
+            audioPill = `<span style="display: inline-block; font-size: 0.65rem; color: var(--text-muted); background: rgba(255,255,255,0.05); padding: 0.05rem 0.25rem; border-radius: 3px; margin-left: 0.35rem; border: 1px solid var(--border-color);" title="${cleanName}"><i class="fa-solid fa-file-audio" style="font-size: 0.6rem;"></i> ${cleanName}</span>`;
+          }
         }
 
         return `
@@ -4039,7 +4083,18 @@ function renderCoachingSection() {
               let audioPill = "";
               if (audioFile) {
                 const cleanName = audioFile.replace(/^.*[\\\/]/, '');
-                audioPill = `<span style="display: inline-block; font-size: 0.62rem; color: var(--text-muted); background: rgba(255,255,255,0.03); padding: 0.02rem 0.2rem; border-radius: 3px; margin-left: 0.35rem; border: 1px dashed rgba(255,255,255,0.1);" title="${cleanName}"><i class="fa-solid fa-file-audio" style="font-size: 0.58rem; opacity: 0.6;"></i> ${cleanName}</span>`;
+                const matchingCall = findCallByAudioName(audioFile);
+                if (matchingCall) {
+                  audioPill = `
+                    <button class="audio-pill-link" data-audio="${audioFile}" style="background: rgba(255, 255, 255, 0.05); border: 1px dashed rgba(255, 255, 255, 0.2); color: var(--text-muted); font-size: 0.62rem; padding: 0.1rem 0.3rem; border-radius: var(--radius-sm); cursor: pointer; display: inline-flex; align-items: center; gap: 0.2rem; transition: all 0.2s; margin-left: 0.35rem;" title="${lang === "es" ? "Ver detalles de la llamada" : "View call details"}">
+                      <i class="fa-solid fa-file-audio"></i>
+                      <span>${cleanName}</span>
+                      <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 0.5rem; opacity: 0.6;"></i>
+                    </button>
+                  `;
+                } else {
+                  audioPill = `<span style="display: inline-block; font-size: 0.62rem; color: var(--text-muted); background: rgba(255,255,255,0.03); padding: 0.02rem 0.2rem; border-radius: 3px; margin-left: 0.35rem; border: 1px dashed rgba(255,255,255,0.1);" title="${cleanName}"><i class="fa-solid fa-file-audio" style="font-size: 0.58rem; opacity: 0.6;"></i> ${cleanName}</span>`;
+                }
               }
               
               return `
@@ -4458,8 +4513,8 @@ function renderCoachingSection() {
     link.addEventListener("click", (e) => {
       e.stopPropagation();
       const audioFile = link.dataset.audio;
-      if (audioFile && state.allCalls) {
-        const matchingCall = state.allCalls.find(c => c.audio_file_name === audioFile);
+      if (audioFile) {
+        const matchingCall = findCallByAudioName(audioFile);
         if (matchingCall && typeof openDrawer === "function") {
           openDrawer(matchingCall);
         }
