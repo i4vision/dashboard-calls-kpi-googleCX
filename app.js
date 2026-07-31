@@ -3261,10 +3261,13 @@ function getCallImprovements(call) {
 // Compute canonical names for each agent ID based on the loaded calls data
 function computeCanonicalAgents(calls) {
   state.canonicalAgents = {};
-  if (!calls || !Array.isArray(calls)) return;
+  if (!calls || !Array.isArray(calls) || calls.length === 0) {
+    saveActiveAgentsToSupabase({});
+    return;
+  }
 
   const agentIdNames = {};
-  const agentImprovements = {}; // maps agentId -> Set of unique improvements
+  const agentImprovements = {}; // maps agentId -> Array of { text, audio_file }
 
   calls.forEach(call => {
     const parsedId = getAgentIdFromFilename(call.audio_file_name);
@@ -3275,7 +3278,7 @@ function computeCanonicalAgents(calls) {
     }
 
     if (!agentImprovements[parsedId]) {
-      agentImprovements[parsedId] = new Set();
+      agentImprovements[parsedId] = [];
     }
 
     // Candidate 1: Supabase agent column
@@ -3295,11 +3298,19 @@ function computeCanonicalAgents(calls) {
       agentIdNames[parsedId].push("Carol");
     }
 
-    // Gather improvements
+    // Gather improvements with corresponding audio file name
     const imps = getCallImprovements(call);
     imps.forEach(imp => {
       const trimmed = imp.trim();
-      if (trimmed) agentImprovements[parsedId].add(trimmed);
+      if (trimmed) {
+        const exists = agentImprovements[parsedId].some(item => item.text.toLowerCase() === trimmed.toLowerCase());
+        if (!exists) {
+          agentImprovements[parsedId].push({
+            text: trimmed,
+            audio_file: call.audio_file_name || ""
+          });
+        }
+      }
     });
   });
 
@@ -3340,10 +3351,10 @@ function computeCanonicalAgents(calls) {
   const activeAgentsPayload = {};
   Object.keys(state.canonicalAgents).forEach(agentId => {
     const name = state.canonicalAgents[agentId];
-    const impsSet = agentImprovements[agentId] || new Set();
+    const impsList = agentImprovements[agentId] || [];
     activeAgentsPayload[agentId] = {
       name: name,
-      improvements: Array.from(impsSet)
+      improvements: impsList
     };
   });
 
@@ -3354,6 +3365,22 @@ function computeCanonicalAgents(calls) {
 async function saveActiveAgentsToSupabase(agentsObj) {
   try {
     const agentsStr = JSON.stringify(agentsObj || {});
+
+    // If active resolved agents are empty, delete all rows from agent_improvements table in Supabase
+    if (Object.keys(agentsObj || {}).length === 0) {
+      try {
+        await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?agent_name=not.is.null`, {
+          method: "DELETE",
+          headers: {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        });
+        state.agentImprovementsTable = [];
+      } catch (err) {
+        console.warn("Failed to clear agent_improvements table on empty calls:", err);
+      }
+    }
 
     // First check if the row exists in global_settings
     const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=eq.active_agents`, {
@@ -3942,12 +3969,32 @@ function renderCoachingSection() {
     if (uniqueGaps.length === 0) {
       gapsHtml = `<div style="font-size: 0.75rem; color: var(--text-muted); font-style: italic; margin-bottom: 0.5rem;">${lang === "es" ? "No se detectaron recomendaciones." : "No recommendations identified."}</div>`;
     } else {
-      gapsHtml = uniqueGaps.map(item => `
-        <div style="font-size: 0.78rem; line-height: 1.4; color: var(--text-secondary); margin-bottom: 0.35rem; display: flex; gap: 0.4rem; align-items: flex-start;">
-          <i class="fa-solid fa-circle-exclamation" style="color: var(--color-warning); font-size: 0.72rem; margin-top: 0.25rem;"></i>
-          <span>${item}</span>
-        </div>
-      `).join("");
+      gapsHtml = uniqueGaps.map(item => {
+        let text = "";
+        let audioFile = "";
+        if (typeof item === "object" && item !== null) {
+          text = item.text || "";
+          audioFile = item.audioFile || item.audio_file || "";
+        } else {
+          text = String(item);
+        }
+        
+        let audioPill = "";
+        if (audioFile) {
+          const cleanName = audioFile.replace(/^.*[\\\/]/, '');
+          audioPill = `<span style="display: inline-block; font-size: 0.65rem; color: var(--text-muted); background: rgba(255,255,255,0.05); padding: 0.05rem 0.25rem; border-radius: 3px; margin-left: 0.35rem; border: 1px solid var(--border-color);" title="${cleanName}"><i class="fa-solid fa-file-audio" style="font-size: 0.6rem;"></i> ${cleanName}</span>`;
+        }
+
+        return `
+          <div style="font-size: 0.78rem; line-height: 1.4; color: var(--text-secondary); margin-bottom: 0.45rem; display: flex; flex-direction: column; gap: 0.15rem; align-items: flex-start;">
+            <div style="display: flex; gap: 0.4rem; align-items: flex-start;">
+              <i class="fa-solid fa-circle-exclamation" style="color: var(--color-warning); font-size: 0.72rem; margin-top: 0.25rem; flex-shrink: 0;"></i>
+              <span>${text}</span>
+            </div>
+            ${audioPill ? `<div style="padding-left: 1.1rem; margin-top: 0.1rem;">${audioPill}</div>` : ""}
+          </div>
+        `;
+      }).join("");
     }
 
     let oldGapsHtml = "";
@@ -3969,12 +4016,32 @@ function renderCoachingSection() {
               </span>
               <span>Nota: ${scoreStr}</span>
             </h5>
-            ${oldGaps.map(item => `
-              <div style="font-size: 0.75rem; line-height: 1.4; color: var(--text-muted); margin-bottom: 0.3rem; display: flex; gap: 0.4rem; align-items: flex-start; opacity: 0.8;">
-                <i class="fa-solid fa-circle-check" style="color: var(--text-muted); font-size: 0.68rem; margin-top: 0.22rem;"></i>
-                <span style="text-decoration: line-through; text-decoration-color: rgba(255,255,255,0.2);">${item}</span>
-              </div>
-            `).join("")}
+            ${oldGaps.map(item => {
+              let text = "";
+              let audioFile = "";
+              if (typeof item === "object" && item !== null) {
+                text = item.text || "";
+                audioFile = item.audio_file || item.audioFile || "";
+              } else {
+                text = String(item);
+              }
+              
+              let audioPill = "";
+              if (audioFile) {
+                const cleanName = audioFile.replace(/^.*[\\\/]/, '');
+                audioPill = `<span style="display: inline-block; font-size: 0.62rem; color: var(--text-muted); background: rgba(255,255,255,0.03); padding: 0.02rem 0.2rem; border-radius: 3px; margin-left: 0.35rem; border: 1px dashed rgba(255,255,255,0.1);" title="${cleanName}"><i class="fa-solid fa-file-audio" style="font-size: 0.58rem; opacity: 0.6;"></i> ${cleanName}</span>`;
+              }
+              
+              return `
+                <div style="font-size: 0.75rem; line-height: 1.4; color: var(--text-muted); margin-bottom: 0.4rem; display: flex; flex-direction: column; gap: 0.1rem; align-items: flex-start; opacity: 0.8;">
+                  <div style="display: flex; gap: 0.4rem; align-items: flex-start;">
+                    <i class="fa-solid fa-circle-check" style="color: var(--text-muted); font-size: 0.68rem; margin-top: 0.22rem; flex-shrink: 0;"></i>
+                    <span style="text-decoration: line-through; text-decoration-color: rgba(255,255,255,0.2);">${text}</span>
+                  </div>
+                  ${audioPill ? `<div style="padding-left: 1.1rem; margin-top: 0.05rem;">${audioPill}</div>` : ""}
+                </div>
+              `;
+            }).join("")}
           </div>
         `;
       });
@@ -4032,9 +4099,16 @@ function renderCoachingSection() {
 
       list.forEach(item => {
         if (!item) return;
-        const str = String(item).trim();
-        if (str) {
-          trainingGaps.push(str);
+        let text = "";
+        let audioFile = "";
+        if (typeof item === "object" && item !== null) {
+          text = (item.text || "").trim();
+          audioFile = (item.audio_file || "").trim();
+        } else {
+          text = String(item).trim();
+        }
+        if (text) {
+          trainingGaps.push({ text: text, audioFile: audioFile });
         }
       });
 
@@ -4052,14 +4126,27 @@ function renderCoachingSection() {
       const impVal = getImprovementsVal(call);
       if (impVal) {
         const { trainingGaps, coachingPriorities } = parseImpList(impVal);
-        agentData[agent].trainingGaps.push(...trainingGaps, ...coachingPriorities);
+        const combined = [...trainingGaps, ...coachingPriorities];
+        combined.forEach(item => {
+          if (item) {
+            const trimmed = String(item).trim();
+            if (trimmed) {
+              const exists = agentData[agent].trainingGaps.some(x => x.text.toLowerCase() === trimmed.toLowerCase());
+              if (!exists) {
+                agentData[agent].trainingGaps.push({
+                  text: trimmed,
+                  audioFile: call.audio_file_name || ""
+                });
+              }
+            }
+          }
+        });
       }
     });
 
     Object.keys(agentData).sort().forEach(agentName => {
       const info = agentData[agentName];
-      const uniqueGaps = [...new Set(info.trainingGaps)].filter(Boolean);
-      renderCard(agentName, uniqueGaps);
+      renderCard(agentName, info.trainingGaps);
     });
   }
 
@@ -4098,13 +4185,36 @@ function renderCoachingSection() {
       const dbImps = state.agentImprovementsTable || [];
       const agentImpRow = dbImps.find(row => row.agent_name === agent);
       if (agentImpRow && Array.isArray(agentImpRow.agent_improvements)) {
-        currentImps = agentImpRow.agent_improvements.map(s => String(s).trim()).filter(Boolean);
+        currentImps = agentImpRow.agent_improvements.map(item => {
+          if (typeof item === "object" && item !== null) {
+            return {
+              text: (item.text || "").trim(),
+              audio_file: (item.audio_file || "").trim()
+            };
+          }
+          return {
+            text: String(item).trim(),
+            audio_file: ""
+          };
+        }).filter(item => item.text);
       } else {
         const agentId = Object.keys(state.canonicalAgents || {}).find(key => state.canonicalAgents[key] === agent);
         if (agentId && state.activeAgentsObj && state.activeAgentsObj[agentId]) {
-          currentImps = Array.isArray(state.activeAgentsObj[agentId].improvements) 
+          const rawImps = Array.isArray(state.activeAgentsObj[agentId].improvements) 
             ? state.activeAgentsObj[agentId].improvements 
             : [];
+          currentImps = rawImps.map(item => {
+            if (typeof item === "object" && item !== null) {
+              return {
+                text: (item.text || "").trim(),
+                audio_file: (item.audio_file || "").trim()
+              };
+            }
+            return {
+              text: String(item).trim(),
+              audio_file: ""
+            };
+          }).filter(item => item.text);
         }
       }
 
@@ -4231,9 +4341,23 @@ function renderCoachingSection() {
         revisionsList.forEach(rev => {
           if (Array.isArray(rev.improvements_at_revision)) {
             rev.improvements_at_revision.forEach(imp => {
-              const trimmed = String(imp).trim();
-              if (trimmed && !archivedImps.includes(trimmed)) {
-                archivedImps.push(trimmed);
+              if (typeof imp === "object" && imp !== null) {
+                const text = String(imp.text || "").trim();
+                const file = String(imp.audio_file || imp.audioFile || "").trim();
+                if (text) {
+                  const exists = archivedImps.some(x => (typeof x === "object" ? x.text : x).toLowerCase() === text.toLowerCase());
+                  if (!exists) {
+                    archivedImps.push({ text: text, audio_file: file });
+                  }
+                }
+              } else {
+                const text = String(imp).trim();
+                if (text) {
+                  const exists = archivedImps.some(x => (typeof x === "object" ? x.text : x).toLowerCase() === text.toLowerCase());
+                  if (!exists) {
+                    archivedImps.push({ text: text, audio_file: "" });
+                  }
+                }
               }
             });
           }
