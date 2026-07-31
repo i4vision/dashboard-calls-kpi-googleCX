@@ -62,10 +62,10 @@ const TRANSLATIONS = {
     
     tabOverview: '<i class="fa-solid fa-chart-pie"></i> Overview Analytics',
     tabTrends: '<i class="fa-solid fa-chart-line"></i> Temporal Trends',
-    tabCoaching: '<i class="fa-solid fa-graduation-cap"></i> Training Gaps',
-    coachingTitle: "Training Gaps per Agent",
+    tabCoaching: '<i class="fa-solid fa-graduation-cap"></i> Recommendations',
+    coachingTitle: "Agent Recommendations",
     coachingSubtitle: "Consolidated improvement areas extracted from call records under the Gemini_Agent_Improvements KPI.",
-    coachingNoData: "No training gaps identified for this period.",
+    coachingNoData: "No recommendations identified for this period.",
     
     loginTitle: "i4vision Calls",
     loginSubtitle: "Call Analysis KPI Dashboard",
@@ -236,10 +236,10 @@ const TRANSLATIONS = {
     
     tabOverview: '<i class="fa-solid fa-chart-pie"></i> Análisis General',
     tabTrends: '<i class="fa-solid fa-chart-line"></i> Tendencias Temporales',
-    tabCoaching: '<i class="fa-solid fa-graduation-cap"></i> Brechas de Capacitación',
-    coachingTitle: "Brechas de Capacitación por Agente",
+    tabCoaching: '<i class="fa-solid fa-graduation-cap"></i> Recomendaciones',
+    coachingTitle: "Recomendaciones por Agente",
     coachingSubtitle: "Áreas de mejora consolidadas extraídas de las evaluaciones de Gemini bajo el KPI Gemini_Agent_Improvements.",
-    coachingNoData: "No se identificaron brechas de capacitación para este período.",
+    coachingNoData: "No se identificaron recomendaciones para este período.",
     
     loginTitle: "Llamadas i4vision",
     loginSubtitle: "Dashboard de Análisis de KPIs",
@@ -3719,6 +3719,21 @@ function renderCoachingSection() {
     return;
   }
 
+  // Precompute agent average scores from filtered calls
+  const agentScores = {};
+  calls.forEach(c => {
+    const agentName = getAgentName(c);
+    if (!agentName) return;
+    if (!agentScores[agentName]) {
+      agentScores[agentName] = { total: 0, count: 0 };
+    }
+    const score = getAgentScoreNumber(c.agent_score);
+    if (!isNaN(score)) {
+      agentScores[agentName].total += score;
+      agentScores[agentName].count++;
+    }
+  });
+
   // Helper to extract custom improvements KPI values
   const getImprovementsVal = (call) => {
     if (!call.kpis) return null;
@@ -3823,9 +3838,28 @@ function renderCoachingSection() {
 
     const initials = agentName.split(/\s+/).map(n => n[0]).join("").substring(0, 2).toUpperCase() || "A";
 
+    const scoreInfo = agentScores[agentName];
+    const avgScore = scoreInfo && scoreInfo.count > 0 ? (scoreInfo.total / scoreInfo.count).toFixed(1) : "N/A";
+
+    let scoreColor = "#10b981"; // Green
+    let scoreBg = "rgba(16, 185, 129, 0.1)";
+    let scoreBorder = "rgba(16, 185, 129, 0.2)";
+    const numScore = parseFloat(avgScore);
+    if (!isNaN(numScore)) {
+      if (numScore < 5.0) {
+        scoreColor = "#ef4444"; // Red
+        scoreBg = "rgba(239, 68, 68, 0.1)";
+        scoreBorder = "rgba(239, 68, 68, 0.2)";
+      } else if (numScore < 8.0) {
+        scoreColor = "#f59e0b"; // Yellow
+        scoreBg = "rgba(245, 158, 11, 0.1)";
+        scoreBorder = "rgba(245, 158, 11, 0.2)";
+      }
+    }
+
     let gapsHtml = "";
     if (uniqueGaps.length === 0) {
-      gapsHtml = `<div style="font-size: 0.75rem; color: var(--text-muted); font-style: italic; margin-bottom: 0.5rem;">${lang === "es" ? "No se detectaron brechas de capacitación." : "No training gaps identified."}</div>`;
+      gapsHtml = `<div style="font-size: 0.75rem; color: var(--text-muted); font-style: italic; margin-bottom: 0.5rem;">${lang === "es" ? "No se detectaron recomendaciones." : "No recommendations identified."}</div>`;
     } else {
       gapsHtml = uniqueGaps.map(item => `
         <div style="font-size: 0.78rem; line-height: 1.4; color: var(--text-secondary); margin-bottom: 0.35rem; display: flex; gap: 0.4rem; align-items: flex-start;">
@@ -3836,18 +3870,25 @@ function renderCoachingSection() {
     }
 
     card.innerHTML = `
-      <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
-        <div style="width: 36px; height: 36px; border-radius: 50%; background: rgba(139, 92, 246, 0.15); color: var(--accent-primary); display: flex; align-items: center; justify-content: center; font-size: 0.95rem; font-weight: 700;">
-          ${initials}
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div style="width: 36px; height: 36px; border-radius: 50%; background: rgba(139, 92, 246, 0.15); color: var(--accent-primary); display: flex; align-items: center; justify-content: center; font-size: 0.95rem; font-weight: 700;">
+            ${initials}
+          </div>
+          <div>
+            <h3 style="font-size: 0.9rem; font-weight: 700; color: var(--text-primary); margin: 0; text-align: left;">${agentName}</h3>
+          </div>
         </div>
-        <div>
-          <h3 style="font-size: 0.9rem; font-weight: 700; color: var(--text-primary); margin: 0; text-align: left;">${agentName}</h3>
+        <!-- Badge for average score -->
+        <div style="display: flex; align-items: center; gap: 0.25rem; background: ${scoreBg}; border: 1px solid ${scoreBorder}; color: ${scoreColor}; padding: 0.25rem 0.5rem; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 700;" title="${lang === "es" ? "Nota promedio del agente" : "Agent average score"}">
+          <i class="fa-solid fa-star" style="font-size: 0.7rem; color: ${scoreColor};"></i>
+          <span>${avgScore}</span>
         </div>
       </div>
       
       <div style="text-align: left; flex: 1;">
         <h4 style="font-size: 0.75rem; font-weight: 700; color: var(--color-warning); text-transform: uppercase; margin: 0 0 0.5rem 0; display: flex; align-items: center; gap: 0.35rem; letter-spacing: 0.03em;">
-          <i class="fa-solid fa-graduation-cap"></i> ${lang === "es" ? "Brechas de Capacitación" : "Training Gaps"}
+          <i class="fa-solid fa-graduation-cap"></i> ${lang === "es" ? "Recomendaciones" : "Recommendations"}
         </h4>
         ${gapsHtml}
       </div>
