@@ -3852,6 +3852,7 @@ function renderCoachingSection() {
     // Dynamic scores based on revision
     let displayScore = avgScore;
     let comparisonHtml = "";
+    let trendHtml = "";
 
     const hasRevision = state.agentRevisions && state.agentRevisions[agentName];
     let revisionsList = [];
@@ -3871,22 +3872,20 @@ function renderCoachingSection() {
 
       const numLive = parseFloat(avgScore);
       const numPrev = parseFloat(prevScore);
-      let trendHtml = "";
       if (!isNaN(numLive) && !isNaN(numPrev)) {
         const diff = numLive - numPrev;
         if (diff > 0) {
-          trendHtml = `<span style="color: #10b981; font-weight: 700; margin-left: 0.25rem;"><i class="fa-solid fa-arrow-trend-up"></i> +${diff.toFixed(1)}</span>`;
+          trendHtml = `<span style="color: #10b981; font-weight: 700; display: flex; align-items: center; gap: 0.15rem; border-left: 1px solid rgba(16, 185, 129, 0.3); padding-left: 0.35rem; margin-left: 0.25rem;" title="${lang === "es" ? "Incremento de nota" : "Score improvement"}"><i class="fa-solid fa-arrow-trend-up" style="color: #10b981; font-size: 0.65rem;"></i> +${diff.toFixed(1)}</span>`;
         } else if (diff < 0) {
-          trendHtml = `<span style="color: #ef4444; font-weight: 700; margin-left: 0.25rem;"><i class="fa-solid fa-arrow-trend-down"></i> ${diff.toFixed(1)}</span>`;
+          trendHtml = `<span style="color: #ef4444; font-weight: 700; display: flex; align-items: center; gap: 0.15rem; border-left: 1px solid rgba(239, 68, 68, 0.3); padding-left: 0.35rem; margin-left: 0.25rem;" title="${lang === "es" ? "Decremento de nota" : "Score drop"}"><i class="fa-solid fa-arrow-trend-down" style="color: #ef4444; font-size: 0.65rem;"></i> ${diff.toFixed(1)}</span>`;
         } else {
-          trendHtml = `<span style="color: var(--text-muted); font-weight: 700; margin-left: 0.25rem;"><i class="fa-solid fa-arrows-left-right"></i> 0.0</span>`;
+          trendHtml = `<span style="color: var(--text-muted); font-weight: 700; display: flex; align-items: center; gap: 0.15rem; border-left: 1px solid var(--border-color); padding-left: 0.35rem; margin-left: 0.25rem;" title="${lang === "es" ? "Sin cambios" : "No change"}"><i class="fa-solid fa-arrows-left-right" style="color: var(--text-muted); font-size: 0.65rem;"></i> 0.0</span>`;
         }
       }
 
       comparisonHtml = `
         <span style="font-size: 0.65rem; color: var(--text-muted); font-weight: 500; margin-top: 0.15rem; display: flex; align-items: center; justify-content: flex-end;">
           ${lang === "es" ? `Nota anterior: ${prevScore}` : `Last score: ${prevScore}`}
-          ${trendHtml}
         </span>
       `;
     }
@@ -3997,6 +3996,7 @@ function renderCoachingSection() {
           <div style="display: flex; align-items: center; gap: 0.25rem; background: ${scoreBg}; border: 1px solid ${scoreBorder}; color: ${scoreColor}; padding: 0.25rem 0.5rem; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 700;" title="${lang === "es" ? "Nota promedio" : "Average score"}">
             <i class="fa-solid fa-star" style="font-size: 0.7rem; color: ${scoreColor};"></i>
             <span>${displayScore}</span>
+            ${trendHtml}
           </div>
           ${comparisonHtml}
         </div>
