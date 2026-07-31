@@ -3938,6 +3938,24 @@ function renderCoachingSection() {
       `).join("");
     }
 
+    let oldGapsHtml = "";
+    if (hasRevision && state.agentRevisions[agentName].improvements_at_revision && state.agentRevisions[agentName].improvements_at_revision.length > 0) {
+      const oldGaps = state.agentRevisions[agentName].improvements_at_revision;
+      oldGapsHtml = `
+        <div style="margin-top: 1rem; border-top: 1px dashed var(--border-color); padding-top: 0.75rem;">
+          <h4 style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin: 0 0 0.5rem 0; display: flex; align-items: center; gap: 0.35rem; letter-spacing: 0.03em;">
+            <i class="fa-solid fa-clock-rotate-left"></i> ${lang === "es" ? "Recomendaciones Anteriores" : "Previous Recommendations"}
+          </h4>
+          ${oldGaps.map(item => `
+            <div style="font-size: 0.78rem; line-height: 1.4; color: var(--text-muted); margin-bottom: 0.35rem; display: flex; gap: 0.4rem; align-items: flex-start; opacity: 0.85;">
+              <i class="fa-solid fa-circle-check" style="color: var(--text-muted); font-size: 0.72rem; margin-top: 0.25rem;"></i>
+              <span style="text-decoration: line-through; text-decoration-color: rgba(255,255,255,0.25);">${item}</span>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
     card.innerHTML = `
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
@@ -3968,6 +3986,7 @@ function renderCoachingSection() {
           <i class="fa-solid fa-graduation-cap"></i> ${lang === "es" ? "Recomendaciones" : "Recommendations"}
         </h4>
         ${gapsHtml}
+        ${oldGapsHtml}
       </div>
     `;
 
@@ -4031,12 +4050,12 @@ function renderCoachingSection() {
       }
 
       const confirmMsg = lang === "es" 
-        ? `¿Confirmas marcar a ${agent} como revisado? Esto fijará su nota actual como referencia y medirá su desempeño en base a las nuevas llamadas desde este momento.`
-        : `Confirm marking ${agent} as revised? This will benchmark their current score and track performance based on new calls from this moment forward.`;
+        ? `¿Confirmas marcar a ${agent} como revisado? Esto archivará sus recomendaciones actuales para comparación, limpiará su lista para iniciar de 0 y medirá su desempeño en base a las nuevas llamadas desde este momento.`
+        : `Confirm marking ${agent} as revised? This will archive their current recommendations for comparison, clear the active list to start from 0, and benchmark performance based on new calls.`;
       
       if (!confirm(confirmMsg)) return;
 
-      // Calculate current average score to save
+      // 1. Calculate current average score to save
       const agentCalls = calls.filter(c => getAgentName(c) === agent);
       let total = 0, count = 0;
       agentCalls.forEach(c => {
@@ -4048,19 +4067,89 @@ function renderCoachingSection() {
       });
       const currentAvg = count > 0 ? (total / count).toFixed(1) : "N/A";
 
+      // 2. Gather current recommendations to archive
+      let currentImps = [];
+      const dbImps = state.agentImprovementsTable || [];
+      const agentImpRow = dbImps.find(row => row.agent_name === agent);
+      if (agentImpRow && Array.isArray(agentImpRow.agent_improvements)) {
+        currentImps = agentImpRow.agent_improvements.map(s => String(s).trim()).filter(Boolean);
+      } else {
+        const agentId = Object.keys(state.canonicalAgents || {}).find(key => state.canonicalAgents[key] === agent);
+        if (agentId && state.activeAgentsObj && state.activeAgentsObj[agentId]) {
+          currentImps = Array.isArray(state.activeAgentsObj[agentId].improvements) 
+            ? state.activeAgentsObj[agentId].improvements 
+            : [];
+        }
+      }
+
       if (!state.agentRevisions) state.agentRevisions = {};
       state.agentRevisions[agent] = {
         revision_date: new Date().toISOString(),
-        score_at_revision: currentAvg
+        score_at_revision: currentAvg,
+        improvements_at_revision: currentImps
       };
 
-      // Save to Supabase
+      // Disable button
       btn.disabled = true;
       btn.querySelector("span").textContent = lang === "es" ? "Guardando..." : "Saving...";
-      
+
+      // 3. Save agent revisions to Supabase
       await saveGlobalSettingToSupabase("agent_revisions", JSON.stringify(state.agentRevisions));
+
+      // 4. Empty out active_agents improvements in global_settings
+      const agentId = Object.keys(state.canonicalAgents || {}).find(key => state.canonicalAgents[key] === agent);
+      if (agentId) {
+        try {
+          const activeAgentsRes = await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=eq.active_agents`, {
+            headers: {
+              "apikey": SUPABASE_ANON_KEY,
+              "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+            }
+          });
+          if (activeAgentsRes.ok) {
+            const data = await activeAgentsRes.json();
+            if (data && data.length > 0) {
+              const activeAgentsObj = JSON.parse(data[0].setting_value) || {};
+              if (activeAgentsObj[agentId]) {
+                activeAgentsObj[agentId].improvements = [];
+                
+                await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=eq.active_agents`, {
+                  method: "PATCH",
+                  headers: {
+                    "apikey": SUPABASE_ANON_KEY,
+                    "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+                    "Content-Type": "application/json"
+                  },
+                  body: JSON.stringify({ setting_value: JSON.stringify(activeAgentsObj), updated_at: new Date().toISOString() })
+                });
+              }
+            }
+          }
+        } catch (err) {
+          console.warn("Failed to clear improvements in active_agents global setting:", err);
+        }
+      }
+
+      // 5. Empty out agent_improvements row in database
+      try {
+        await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?agent_name=eq.${encodeURIComponent(agent)}`, {
+          method: "PATCH",
+          headers: {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ agent_improvements: [] })
+        });
+
+        if (state.agentImprovementsTable) {
+          const row = state.agentImprovementsTable.find(r => r.agent_name === agent);
+          if (row) row.agent_improvements = [];
+        }
+      } catch (err) {
+        console.warn("Failed to clear agent_improvements table row:", err);
+      }
       
-      // Re-render
       renderCoachingSection();
     });
   });
@@ -4079,12 +4168,72 @@ function renderCoachingSection() {
       }
 
       const confirmMsg = lang === "es"
-        ? `¿Eliminar la revisión de ${agent}? Volverá a mostrar su nota promedio histórica.`
-        : `Reset revision for ${agent}? This will restore their historical average score.`;
+        ? `¿Eliminar la revisión de ${agent}? Esto restaurará sus recomendaciones anteriores a la lista activa.`
+        : `Reset revision for ${agent}? This will restore their previous recommendations to the active list.`;
 
       if (!confirm(confirmMsg)) return;
 
-      if (state.agentRevisions) {
+      if (state.agentRevisions && state.agentRevisions[agent]) {
+        const archivedImps = state.agentRevisions[agent].improvements_at_revision || [];
+
+        // 1. Restore improvements in active_agents global setting
+        const agentId = Object.keys(state.canonicalAgents || {}).find(key => state.canonicalAgents[key] === agent);
+        if (agentId) {
+          try {
+            const activeAgentsRes = await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=eq.active_agents`, {
+              headers: {
+                "apikey": SUPABASE_ANON_KEY,
+                "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+              }
+            });
+            if (activeAgentsRes.ok) {
+              const data = await activeAgentsRes.json();
+              if (data && data.length > 0) {
+                const activeAgentsObj = JSON.parse(data[0].setting_value) || {};
+                if (activeAgentsObj[agentId]) {
+                  activeAgentsObj[agentId].improvements = archivedImps;
+                  
+                  await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=eq.active_agents`, {
+                    method: "PATCH",
+                    headers: {
+                      "apikey": SUPABASE_ANON_KEY,
+                      "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+                      "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ setting_value: JSON.stringify(activeAgentsObj), updated_at: new Date().toISOString() })
+                  });
+                }
+              }
+            }
+          } catch (err) {
+            console.warn("Failed to restore active_agents global setting:", err);
+          }
+        }
+
+        // 2. Restore improvements in agent_improvements table row
+        try {
+          await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?agent_name=eq.${encodeURIComponent(agent)}`, {
+            method: "PATCH",
+            headers: {
+              "apikey": SUPABASE_ANON_KEY,
+              "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ agent_improvements: archivedImps })
+          });
+
+          if (state.agentImprovementsTable) {
+            const row = state.agentImprovementsTable.find(r => r.agent_name === agent);
+            if (row) {
+              row.agent_improvements = archivedImps;
+            } else {
+              state.agentImprovementsTable.push({ agent_name: agent, agent_improvements: archivedImps });
+            }
+          }
+        } catch (err) {
+          console.warn("Failed to restore agent_improvements table row:", err);
+        }
+
         delete state.agentRevisions[agent];
         await saveGlobalSettingToSupabase("agent_revisions", JSON.stringify(state.agentRevisions));
         renderCoachingSection();
