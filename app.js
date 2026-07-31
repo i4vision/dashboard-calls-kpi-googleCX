@@ -3760,12 +3760,13 @@ function renderCoachingSection() {
     const agentName = getAgentName(c);
     if (!agentName) return;
     if (!agentScores[agentName]) {
-      agentScores[agentName] = { total: 0, count: 0 };
+      agentScores[agentName] = { total: 0, count: 0, list: [] };
     }
     const score = getAgentScoreNumber(c.agent_score);
     if (!isNaN(score)) {
       agentScores[agentName].total += score;
       agentScores[agentName].count++;
+      agentScores[agentName].list.push(score);
     }
   });
 
@@ -3875,6 +3876,15 @@ function renderCoachingSection() {
 
     const scoreInfo = agentScores[agentName];
     const avgScore = scoreInfo && scoreInfo.count > 0 ? (scoreInfo.total / scoreInfo.count).toFixed(1) : "N/A";
+    const scoreList = scoreInfo && scoreInfo.list ? scoreInfo.list : [];
+    let titleAttr = "";
+    if (scoreList.length > 0) {
+      const headerStr = lang === "es" ? "Notas individuales:" : "Individual scores:";
+      const listStr = scoreList.map((s, idx) => `  ${lang === "es" ? "Llamada" : "Call"} #${idx + 1}: ${s}`).join("\n");
+      titleAttr = `${headerStr}\n${listStr}`;
+    } else {
+      titleAttr = lang === "es" ? "Sin notas" : "No scores";
+    }
 
     // Dynamic scores based on revision
     let displayScore = avgScore;
@@ -4060,7 +4070,7 @@ function renderCoachingSection() {
         </div>
         <!-- Badge for average score -->
         <div style="display: flex; flex-direction: column; align-items: flex-end;">
-          <div style="display: flex; align-items: center; gap: 0.25rem; background: ${scoreBg}; border: 1px solid ${scoreBorder}; color: ${scoreColor}; padding: 0.25rem 0.5rem; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 700;" title="${lang === "es" ? "Nota promedio" : "Average score"}">
+          <div style="display: flex; align-items: center; gap: 0.25rem; background: ${scoreBg}; border: 1px solid ${scoreBorder}; color: ${scoreColor}; padding: 0.25rem 0.5rem; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 700; cursor: help;" title="${titleAttr}">
             <i class="fa-solid fa-star" style="font-size: 0.7rem; color: ${scoreColor};"></i>
             <span>${displayScore}</span>
             ${trendHtml}
