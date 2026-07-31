@@ -868,18 +868,10 @@ async function executeRefreshWebhook(isAuto = false) {
   }
 
   try {
-    // Use no-cors mode and text/plain content type to bypass browser CORS preflight check on n8n webhook
+    // Webhook expects a GET request, which is a simple request and avoids CORS preflight checks
     const res = await fetch(IMPROVEMENTS_WEBHOOK_URL, {
-      method: "POST",
-      mode: "no-cors",
-      headers: {
-        "Content-Type": "text/plain"
-      },
-      body: JSON.stringify({
-        triggered_by: "dashboard_calliq",
-        type: isAuto ? "auto" : "manual",
-        timestamp: new Date().toISOString()
-      })
+      method: "GET",
+      mode: "no-cors"
     });
 
     // In no-cors mode, a successful request results in an opaque response (status 0)
