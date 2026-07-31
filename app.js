@@ -789,7 +789,7 @@ const IMPROVEMENTS_WEBHOOK_URL = "https://n8n102.i4vision.us/webhook/254b92d1-f6
 
 async function loadRefreshSettingsFromSupabase() {
   try {
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=in.(improvements_refresh_days,improvements_last_refresh)`, {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=in.(improvements_refresh_days,improvements_last_refresh,agent_revisions)`, {
       headers: {
         "apikey": SUPABASE_ANON_KEY,
         "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
@@ -799,13 +799,18 @@ async function loadRefreshSettingsFromSupabase() {
       const data = await response.json();
       let days = 7;
       let last = "";
+      let revisions = {};
       data.forEach(row => {
         if (row.setting_key === "improvements_refresh_days") days = parseInt(row.setting_value) || 7;
         if (row.setting_key === "improvements_last_refresh") last = row.setting_value || "";
+        if (row.setting_key === "agent_revisions") {
+          try { revisions = JSON.parse(row.setting_value) || {}; } catch(e) { revisions = {}; }
+        }
       });
 
       state.refreshDays = days;
       state.lastRefresh = last;
+      state.agentRevisions = revisions;
 
       updateRefreshControlsUI();
       
@@ -3880,18 +3885,24 @@ function renderCoachingSection() {
           </div>
         </div>
         <!-- Badge for average score -->
-        <div style="display: flex; align-items: center; gap: 0.25rem; background: ${scoreBg}; border: 1px solid ${scoreBorder}; color: ${scoreColor}; padding: 0.25rem 0.5rem; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 700;" title="${lang === "es" ? "Nota promedio del agente" : "Agent average score"}">
-          <i class="fa-solid fa-star" style="font-size: 0.7rem; color: ${scoreColor};"></i>
-          <span>${avgScore}</span>
+        <div style="display: flex; flex-direction: column; align-items: flex-end;">
+          <div style="display: flex; align-items: center; gap: 0.25rem; background: ${scoreBg}; border: 1px solid ${scoreBorder}; color: ${scoreColor}; padding: 0.25rem 0.5rem; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 700;" title="${lang === "es" ? "Nota promedio" : "Average score"}">
+            <i class="fa-solid fa-star" style="font-size: 0.7rem; color: ${scoreColor};"></i>
+            <span>${displayScore}</span>
+          </div>
+          ${comparisonHtml}
         </div>
       </div>
       
-      <div style="text-align: left; flex: 1;">
+      <div style="text-align: left; margin-bottom: 1rem;">
         <h4 style="font-size: 0.75rem; font-weight: 700; color: var(--color-warning); text-transform: uppercase; margin: 0 0 0.5rem 0; display: flex; align-items: center; gap: 0.35rem; letter-spacing: 0.03em;">
           <i class="fa-solid fa-graduation-cap"></i> ${lang === "es" ? "Recomendaciones" : "Recommendations"}
         </h4>
         ${gapsHtml}
       </div>
+
+      ${btnHtml}
+      ${revisionInfoHtml}
     `;
 
     container.appendChild(card);
@@ -3940,6 +3951,80 @@ function renderCoachingSection() {
       renderCard(agentName, uniqueGaps);
     });
   }
+
+  // Bind click listener for revision buttons
+  const revisionButtons = container.querySelectorAll(".btn-revision");
+  revisionButtons.forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      const agent = btn.dataset.agent;
+      if (!agent) return;
+
+      if (!isAdmin) {
+        alert(lang === "es" ? "Acceso denegado: Solo administradores pueden realizar esta acción." : "Access Denied: Only administrators can perform this action.");
+        return;
+      }
+
+      const confirmMsg = lang === "es" 
+        ? `¿Confirmas marcar a ${agent} como revisado? Esto fijará su nota actual como referencia y medirá su desempeño en base a las nuevas llamadas desde este momento.`
+        : `Confirm marking ${agent} as revised? This will benchmark their current score and track performance based on new calls from this moment forward.`;
+      
+      if (!confirm(confirmMsg)) return;
+
+      // Calculate current average score to save
+      const agentCalls = calls.filter(c => getAgentName(c) === agent);
+      let total = 0, count = 0;
+      agentCalls.forEach(c => {
+        const score = getAgentScoreNumber(c.agent_score);
+        if (!isNaN(score)) {
+          total += score;
+          count++;
+        }
+      });
+      const currentAvg = count > 0 ? (total / count).toFixed(1) : "N/A";
+
+      if (!state.agentRevisions) state.agentRevisions = {};
+      state.agentRevisions[agent] = {
+        revision_date: new Date().toISOString(),
+        score_at_revision: currentAvg
+      };
+
+      // Save to Supabase
+      btn.disabled = true;
+      btn.querySelector("span").textContent = lang === "es" ? "Guardando..." : "Saving...";
+      
+      await saveGlobalSettingToSupabase("agent_revisions", JSON.stringify(state.agentRevisions));
+      
+      // Re-render
+      renderCoachingSection();
+    });
+  });
+
+  // Bind click listener for reset buttons
+  const resetButtons = container.querySelectorAll(".btn-reset-revision");
+  resetButtons.forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const agent = btn.dataset.agent;
+      if (!agent) return;
+
+      if (!isAdmin) {
+        alert(lang === "es" ? "Acceso denegado: Solo administradores pueden realizar esta acción." : "Access Denied: Only administrators can perform this action.");
+        return;
+      }
+
+      const confirmMsg = lang === "es"
+        ? `¿Eliminar la revisión de ${agent}? Volverá a mostrar su nota promedio histórica.`
+        : `Reset revision for ${agent}? This will restore their historical average score.`;
+
+      if (!confirm(confirmMsg)) return;
+
+      if (state.agentRevisions) {
+        delete state.agentRevisions[agent];
+        await saveGlobalSettingToSupabase("agent_revisions", JSON.stringify(state.agentRevisions));
+        renderCoachingSection();
+      }
+    });
+  });
 }
 
 // ==========================================================================
