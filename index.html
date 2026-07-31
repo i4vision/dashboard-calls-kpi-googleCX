@@ -280,14 +280,44 @@
 
     <!-- Coaching & Training Section Container -->
     <section id="coachingSection" class="explorer-card" style="display: none; padding: 1.5rem; margin-bottom: 2rem;" aria-label="Coaching and Training Gaps">
-      <div style="margin-bottom: 1.25rem;">
-        <h2 id="labelCoachingTitle" class="chart-title" style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">
-          <i class="fa-solid fa-graduation-cap" style="color: var(--accent-primary);"></i>
-          Training Gaps & Coaching Priorities per Agent
-        </h2>
-        <p id="labelCoachingSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin: 0.25rem 0 0 0;">
-          Consolidated improvement areas extracted from call records under the Gemini_Agent_Improvements KPI.
-        </p>
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem; padding-bottom: 1.25rem; border-bottom: 1px dashed var(--border-color);">
+        <!-- Title & Subtitle -->
+        <div style="flex: 1; min-width: 250px;">
+          <h2 id="labelCoachingTitle" class="chart-title" style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+            <i class="fa-solid fa-graduation-cap" style="color: var(--accent-primary);"></i>
+            Training Gaps per Agent
+          </h2>
+          <p id="labelCoachingSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin: 0.25rem 0 0 0;">
+            Consolidated improvement areas extracted from call records under the Gemini_Agent_Improvements KPI.
+          </p>
+        </div>
+
+        <!-- Refresh Webhook Controls -->
+        <div id="coachingControls" style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; background: rgba(255,255,255,0.02); padding: 0.5rem 0.75rem; border: 1px solid var(--border-color); border-radius: var(--radius-md); box-shadow: var(--shadow-sm);">
+          <div style="display: flex; align-items: center; gap: 0.35rem;">
+            <span style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Refresh:</span>
+            <input type="number" id="inputRefreshDays" value="7" min="1" max="365" style="width: 50px; height: 28px; text-align: center; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 0.75rem; font-weight: 600; outline: none;">
+            <span style="font-size: 0.75rem; color: var(--text-secondary);">days</span>
+          </div>
+
+          <div style="height: 16px; width: 1px; background-color: var(--border-color);"></div>
+
+          <div style="display: flex; align-items: center; gap: 0.35rem;">
+            <span style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Webhook:</span>
+            <input type="text" id="inputRefreshWebhook" placeholder="https://..." style="width: 180px; height: 28px; padding: 0 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 0.75rem; outline: none;" title="The n8n webhook URL to trigger recalculation">
+          </div>
+
+          <div style="height: 16px; width: 1px; background-color: var(--border-color);"></div>
+
+          <div id="labelLastRefresh" style="font-size: 0.7rem; color: var(--text-muted); font-weight: 500;">
+            Last: N/A
+          </div>
+
+          <button id="btnTriggerRefreshWebhook" class="btn-primary" style="height: 28px; padding: 0 0.75rem; font-size: 0.72rem; display: flex; align-items: center; gap: 0.35rem; font-weight: 600; border-radius: var(--radius-sm);" title="Run consolidation webhook manually">
+            <i class="fa-solid fa-rotate"></i>
+            <span id="btnTriggerRefreshText">Sync Now</span>
+          </button>
+        </div>
       </div>
       <div id="coachingContainer" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.25rem;">
         <!-- Dynamically populated per agent card -->

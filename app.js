@@ -785,6 +785,206 @@ function updateUILanguage() {
 
 let analysisPollingInterval = null;
 
+async function loadRefreshSettingsFromSupabase() {
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=in.(improvements_refresh_days,improvements_webhook_url,improvements_last_refresh)`, {
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+    if (response.ok) {
+      const data = await response.json();
+      let days = 7;
+      let url = "";
+      let last = "";
+      data.forEach(row => {
+        if (row.setting_key === "improvements_refresh_days") days = parseInt(row.setting_value) || 7;
+        if (row.setting_key === "improvements_webhook_url") url = row.setting_value || "";
+        if (row.setting_key === "improvements_last_refresh") last = row.setting_value || "";
+      });
+
+      state.refreshDays = days;
+      state.refreshWebhook = url;
+      state.lastRefresh = last;
+
+      updateRefreshControlsUI();
+      
+      // Auto-trigger check if loaded
+      checkAutoTriggerRefresh();
+    }
+  } catch (err) {
+    console.warn("Could not load refresh settings from Supabase:", err);
+  }
+}
+
+function updateRefreshControlsUI() {
+  const inputDays = document.getElementById("inputRefreshDays");
+  const inputWebhook = document.getElementById("inputRefreshWebhook");
+  const labelLast = document.getElementById("labelLastRefresh");
+  const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
+
+  if (inputDays) inputDays.value = state.refreshDays || 7;
+  if (inputWebhook) inputWebhook.value = state.refreshWebhook || "";
+  
+  if (labelLast) {
+    if (state.lastRefresh) {
+      const date = new Date(state.lastRefresh);
+      const diffMs = Date.now() - date.getTime();
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      if (diffDays === 0) {
+        labelLast.textContent = lang === "es" ? "Último: Hoy" : "Last: Today";
+      } else {
+        labelLast.textContent = lang === "es" ? `Último: hace ${diffDays} días` : `Last: ${diffDays}d ago`;
+      }
+      labelLast.title = date.toLocaleString();
+    } else {
+      labelLast.textContent = lang === "es" ? "Último: Nunca" : "Last: Never";
+      labelLast.title = "";
+    }
+  }
+}
+
+async function checkAutoTriggerRefresh() {
+  if (!state.refreshWebhook || !state.lastRefresh || !state.refreshDays) return;
+  
+  const lastDate = new Date(state.lastRefresh);
+  const diffDays = (Date.now() - lastDate.getTime()) / (1000 * 60 * 60 * 24);
+  
+  if (diffDays >= state.refreshDays) {
+    console.log(`Auto-triggering refresh webhook: last sync was ${diffDays.toFixed(1)} days ago (refresh interval: ${state.refreshDays} days)`);
+    await executeRefreshWebhook(true);
+  }
+}
+
+async function executeRefreshWebhook(isAuto = false) {
+  const webhookUrl = state.refreshWebhook || (document.getElementById("inputRefreshWebhook") ? document.getElementById("inputRefreshWebhook").value : "");
+  if (!webhookUrl) {
+    if (!isAuto) alert(state.lang === "es" ? "Error: Ingrese una URL de Webhook válida." : "Error: Please enter a valid Webhook URL.");
+    return;
+  }
+
+  const btn = document.getElementById("btnTriggerRefreshWebhook");
+  const btnText = document.getElementById("btnTriggerRefreshText");
+  let originalHtml = "";
+  if (btn) originalHtml = btn.innerHTML;
+
+  if (btn && btnText) {
+    btn.disabled = true;
+    btnText.textContent = state.lang === "es" ? "Sincronizando..." : "Syncing...";
+    const icon = btn.querySelector("i");
+    if (icon) icon.className = "fa-solid fa-rotate fa-spin";
+  }
+
+  try {
+    const res = await fetch(webhookUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        triggered_by: "dashboard_calliq",
+        type: isAuto ? "auto" : "manual",
+        timestamp: new Date().toISOString()
+      })
+    });
+
+    if (res.ok) {
+      const nowStr = new Date().toISOString();
+      state.lastRefresh = nowStr;
+      
+      await saveGlobalSettingToSupabase("improvements_last_refresh", nowStr);
+      updateRefreshControlsUI();
+
+      if (!isAuto) {
+        alert(state.lang === "es" 
+          ? "Sincronización de brechas iniciada correctamente en n8n." 
+          : "Training gaps sync successfully triggered in n8n.");
+      }
+    } else {
+      throw new Error(`Server returned status ${res.status}`);
+    }
+  } catch (err) {
+    console.error("Failed to execute refresh webhook:", err);
+    if (!isAuto) {
+      alert(state.lang === "es" 
+        ? "Error al conectar con el webhook de n8n." 
+        : "Failed to connect to the n8n webhook.");
+    }
+  } finally {
+    if (btn && btnText) {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    }
+  }
+}
+
+async function saveGlobalSettingToSupabase(key, value) {
+  try {
+    const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=eq.${key}`, {
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+
+    if (checkRes.ok) {
+      const data = await checkRes.json();
+      if (data && data.length > 0) {
+        await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=eq.${key}`, {
+          method: "PATCH",
+          headers: {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ setting_value: String(value), updated_at: new Date().toISOString() })
+        });
+      } else {
+        await fetch(`${SUPABASE_URL}/rest/v1/global_settings`, {
+          method: "POST",
+          headers: {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ setting_key: key, setting_value: String(value) })
+        });
+      }
+    }
+  } catch (err) {
+    console.warn(`Could not save ${key} to global_settings:`, err);
+  }
+}
+
+function setupRefreshControlsEventListeners() {
+  const inputDays = document.getElementById("inputRefreshDays");
+  const inputWebhook = document.getElementById("inputRefreshWebhook");
+  const btnSync = document.getElementById("btnTriggerRefreshWebhook");
+
+  if (inputDays) {
+    inputDays.addEventListener("change", async () => {
+      const val = parseInt(inputDays.value) || 7;
+      state.refreshDays = val;
+      await saveGlobalSettingToSupabase("improvements_refresh_days", val);
+    });
+  }
+
+  if (inputWebhook) {
+    inputWebhook.addEventListener("blur", async () => {
+      const val = inputWebhook.value.trim();
+      state.refreshWebhook = val;
+      await saveGlobalSettingToSupabase("improvements_webhook_url", val);
+    });
+  }
+
+  if (btnSync) {
+    btnSync.addEventListener("click", () => {
+      executeRefreshWebhook(false);
+    });
+  }
+}
+
 // Bootstrap dashboard services for authenticated sessions
 async function bootstrapAppServices() {
   initTheme();
@@ -794,6 +994,8 @@ async function bootstrapAppServices() {
   setupGCSEventListeners();
   fetchCallData();
   await syncGCSSettingsWithSupabase();
+  await loadRefreshSettingsFromSupabase();
+  setupRefreshControlsEventListeners();
   renderGCSAuth();
   enforceRBACPermissions();
 }
@@ -843,6 +1045,14 @@ function enforceRBACPermissions() {
   if (bulkActions) {
     bulkActions.style.display = isViewer ? "none" : "flex";
   }
+
+  // 6. Training Gaps Refresh controls (only editable/triggerable by admin)
+  const inputDays = document.getElementById("inputRefreshDays");
+  if (inputDays) inputDays.disabled = !isAdmin;
+  const inputWebhook = document.getElementById("inputRefreshWebhook");
+  if (inputWebhook) inputWebhook.disabled = !isAdmin;
+  const btnSync = document.getElementById("btnTriggerRefreshWebhook");
+  if (btnSync) btnSync.disabled = !isAdmin;
 }
 
 function setupSettingsTabs() {
