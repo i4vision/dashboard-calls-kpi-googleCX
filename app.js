@@ -3839,17 +3839,47 @@ function renderCoachingSection() {
   const renderCard = (agentName, uniqueGaps) => {
     const card = document.createElement("div");
     card.className = "chart-card";
-    card.style.cssText = "display: flex; flex-direction: column; padding: 1.25rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); min-height: 180px;";
+    card.style.cssText = "display: flex; flex-direction: column; padding: 1.25rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); min-height: 220px;";
 
     const initials = agentName.split(/\s+/).map(n => n[0]).join("").substring(0, 2).toUpperCase() || "A";
 
     const scoreInfo = agentScores[agentName];
     const avgScore = scoreInfo && scoreInfo.count > 0 ? (scoreInfo.total / scoreInfo.count).toFixed(1) : "N/A";
 
+    // Dynamic scores based on revision
+    let displayScore = avgScore;
+    let comparisonHtml = "";
+
+    const hasRevision = state.agentRevisions && state.agentRevisions[agentName];
+    if (hasRevision) {
+      const revDate = new Date(state.agentRevisions[agentName].revision_date);
+      const prevScore = state.agentRevisions[agentName].score_at_revision || "N/A";
+
+      // Calculate post-revision score
+      const postRevCalls = calls.filter(c => getAgentName(c) === agentName && new Date(c.created_at || c.create_time || 0) > revDate);
+      let postTotal = 0, postCount = 0;
+      postRevCalls.forEach(c => {
+        const score = getAgentScoreNumber(c.agent_score);
+        if (!isNaN(score)) {
+          postTotal += score;
+          postCount++;
+        }
+      });
+
+      const newAvg = postCount > 0 ? (postTotal / postCount).toFixed(1) : "N/A";
+      displayScore = newAvg;
+
+      comparisonHtml = `
+        <span style="font-size: 0.65rem; color: var(--text-muted); font-weight: 500; margin-top: 0.15rem;">
+          ${lang === "es" ? `Nota anterior: ${prevScore}` : `Last score: ${prevScore}`}
+        </span>
+      `;
+    }
+
     let scoreColor = "#10b981"; // Green
     let scoreBg = "rgba(16, 185, 129, 0.1)";
     let scoreBorder = "rgba(16, 185, 129, 0.2)";
-    const numScore = parseFloat(avgScore);
+    const numScore = parseFloat(displayScore);
     if (!isNaN(numScore)) {
       if (numScore < 5.0) {
         scoreColor = "#ef4444"; // Red
@@ -3860,7 +3890,40 @@ function renderCoachingSection() {
         scoreBg = "rgba(245, 158, 11, 0.1)";
         scoreBorder = "rgba(245, 158, 11, 0.2)";
       }
+    } else if (displayScore === "N/A" && hasRevision) {
+      // Gray for N/A if waiting for new calls
+      scoreColor = "var(--text-muted)";
+      scoreBg = "rgba(255, 255, 255, 0.05)";
+      scoreBorder = "var(--border-color)";
     }
+
+    const role = state.userRole || "viewer";
+    const isAdmin = role === "admin";
+    const disabledAttr = isAdmin ? "" : "disabled";
+
+    let revisionInfoHtml = "";
+    if (hasRevision) {
+      const revDate = new Date(state.agentRevisions[agentName].revision_date);
+      const dateStr = revDate.toLocaleDateString();
+      revisionInfoHtml = `
+        <div style="font-size: 0.68rem; color: var(--text-muted); text-align: left; margin-top: 0.75rem; display: flex; align-items: center; justify-content: space-between; width: 100%; border-top: 1px dashed var(--border-color); padding-top: 0.5rem;">
+          <div style="display: flex; align-items: center; gap: 0.25rem;">
+            <i class="fa-solid fa-clock-rotate-left" style="font-size: 0.65rem;"></i>
+            <span>${lang === "es" ? `Revisado el: ${dateStr}` : `Revised on: ${dateStr}`}</span>
+          </div>
+          <button class="btn-reset-revision" data-agent="${agentName}" ${disabledAttr} style="background: none; border: none; padding: 0; color: var(--text-muted); cursor: ${isAdmin ? "pointer" : "not-allowed"}; display: flex; align-items: center; opacity: ${isAdmin ? 1 : 0.5};" title="${lang === "es" ? "Eliminar revisión" : "Reset revision"}">
+            <i class="fa-solid fa-trash-can" style="font-size: 0.68rem;"></i>
+          </button>
+        </div>
+      `;
+    }
+
+    const btnHtml = `
+      <button class="btn-secondary btn-revision" data-agent="${agentName}" ${disabledAttr} style="margin-top: auto; width: 100%; height: 28px; font-size: 0.72rem; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 0.35rem; border-radius: var(--radius-sm); cursor: ${isAdmin ? "pointer" : "not-allowed"}; opacity: ${isAdmin ? 1 : 0.6}; padding: 0;">
+        <i class="fa-solid fa-check-double" style="font-size: 0.7rem;"></i>
+        <span>${lang === "es" ? "Marcar como Revisado" : "Mark as Revised"}</span>
+      </button>
+    `;
 
     let gapsHtml = "";
     if (uniqueGaps.length === 0) {
