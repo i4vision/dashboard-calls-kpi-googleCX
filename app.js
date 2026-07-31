@@ -3906,7 +3906,7 @@ function renderCoachingSection() {
       const revDate = new Date(state.agentRevisions[agentName].revision_date);
       const dateStr = revDate.toLocaleDateString();
       revisionInfoHtml = `
-        <div style="font-size: 0.68rem; color: var(--text-muted); text-align: left; margin-top: 0.75rem; display: flex; align-items: center; justify-content: space-between; width: 100%; border-top: 1px dashed var(--border-color); padding-top: 0.5rem;">
+        <div style="font-size: 0.68rem; color: var(--text-muted); text-align: left; display: flex; align-items: center; justify-content: space-between; width: 100%; border-top: 1px dashed var(--border-color); padding-top: 0.4rem; margin-top: 0.25rem;">
           <div style="display: flex; align-items: center; gap: 0.25rem;">
             <i class="fa-solid fa-clock-rotate-left" style="font-size: 0.65rem;"></i>
             <span>${lang === "es" ? `Revisado el: ${dateStr}` : `Revised on: ${dateStr}`}</span>
@@ -3919,7 +3919,7 @@ function renderCoachingSection() {
     }
 
     const btnHtml = `
-      <button class="btn-secondary btn-revision" data-agent="${agentName}" ${disabledAttr} style="margin-top: auto; width: 100%; height: 28px; font-size: 0.72rem; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 0.35rem; border-radius: var(--radius-sm); cursor: ${isAdmin ? "pointer" : "not-allowed"}; opacity: ${isAdmin ? 1 : 0.6}; padding: 0;">
+      <button class="btn-secondary btn-revision" data-agent="${agentName}" ${disabledAttr} style="margin: 0; width: 100%; height: 28px; font-size: 0.72rem; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 0.35rem; border-radius: var(--radius-sm); cursor: ${isAdmin ? "pointer" : "not-allowed"}; opacity: ${isAdmin ? 1 : 0.6}; padding: 0;">
         <i class="fa-solid fa-check-double" style="font-size: 0.7rem;"></i>
         <span>${lang === "es" ? "Marcar como Revisado" : "Mark as Revised"}</span>
       </button>
@@ -3938,7 +3938,7 @@ function renderCoachingSection() {
     }
 
     card.innerHTML = `
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
           <div style="width: 36px; height: 36px; border-radius: 50%; background: rgba(139, 92, 246, 0.15); color: var(--accent-primary); display: flex; align-items: center; justify-content: center; font-size: 0.95rem; font-weight: 700;">
             ${initials}
@@ -3956,16 +3956,18 @@ function renderCoachingSection() {
           ${comparisonHtml}
         </div>
       </div>
+
+      <div style="margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.4rem;">
+        ${btnHtml}
+        ${revisionInfoHtml}
+      </div>
       
-      <div style="text-align: left; margin-bottom: 1rem;">
+      <div style="text-align: left; flex: 1;">
         <h4 style="font-size: 0.75rem; font-weight: 700; color: var(--color-warning); text-transform: uppercase; margin: 0 0 0.5rem 0; display: flex; align-items: center; gap: 0.35rem; letter-spacing: 0.03em;">
           <i class="fa-solid fa-graduation-cap"></i> ${lang === "es" ? "Recomendaciones" : "Recommendations"}
         </h4>
         ${gapsHtml}
       </div>
-
-      ${btnHtml}
-      ${revisionInfoHtml}
     `;
 
     container.appendChild(card);
