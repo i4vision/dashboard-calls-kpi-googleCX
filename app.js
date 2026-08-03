@@ -859,6 +859,66 @@ async function checkAutoTriggerRefresh() {
   }
 }
 
+async function archiveActiveImprovementsBeforeSync() {
+  try {
+    const impResponse = await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?select=*`, {
+      method: "GET",
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+    if (!impResponse.ok) return;
+    const dbImps = await impResponse.json();
+
+    for (const row of dbImps) {
+      const activeImps = Array.isArray(row.ai_agent_improvements) 
+        ? row.ai_agent_improvements 
+        : (Array.isArray(row.agent_improvements) ? row.agent_improvements : []);
+
+      if (activeImps.length > 0) {
+        const currentPeriod = (row.period_number !== null && row.period_number !== undefined) 
+          ? Number(row.period_number) 
+          : 1;
+        const nextPeriod = currentPeriod + 1;
+
+        let rawHistory = [];
+        if (row.raw_improvements) {
+          try {
+            rawHistory = Array.isArray(row.raw_improvements) 
+              ? row.raw_improvements 
+              : (typeof row.raw_improvements === "object" ? Object.values(row.raw_improvements) : []);
+          } catch (e) {
+            rawHistory = [];
+          }
+        }
+        
+        rawHistory.push({
+          period_number: nextPeriod,
+          date: new Date().toISOString(),
+          improvements: activeImps
+        });
+
+        await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?id=eq.${row.id}`, {
+          method: "PATCH",
+          headers: {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            ai_agent_improvements: [], // Clear active so n8n starts fresh
+            period_number: nextPeriod,
+            raw_improvements: rawHistory
+          })
+        });
+      }
+    }
+  } catch (err) {
+    console.warn("Failed to archive active improvements before sync:", err);
+  }
+}
+
 async function executeRefreshWebhook(isAuto = false) {
   const btn = document.getElementById("btnTriggerRefreshWebhook");
   const btnText = document.getElementById("btnTriggerRefreshText");
@@ -871,6 +931,9 @@ async function executeRefreshWebhook(isAuto = false) {
     const icon = btn.querySelector("i");
     if (icon) icon.className = "fa-solid fa-rotate fa-spin";
   }
+
+  // 1. Archive active recommendations and increment period number in database before triggering n8n webhook
+  await archiveActiveImprovementsBeforeSync();
 
   try {
     const res = await fetch(IMPROVEMENTS_WEBHOOK_URL, {
@@ -4426,29 +4489,8 @@ function renderCoachingSection() {
         }
       }
 
-      // 5. Update agent_improvements (ai_agent_improvements, period_number, raw_improvements) row in database
+      // 5. Clear ai_agent_improvements in database (don't increment period_number or raw_improvements here)
       try {
-        const currentPeriod = (agentImpRow && agentImpRow.period_number !== null && agentImpRow.period_number !== undefined) 
-          ? Number(agentImpRow.period_number) 
-          : 1;
-        const nextPeriod = currentPeriod + 1;
-
-        let rawHistory = [];
-        if (agentImpRow && agentImpRow.raw_improvements) {
-          try {
-            rawHistory = Array.isArray(agentImpRow.raw_improvements) 
-              ? agentImpRow.raw_improvements 
-              : (typeof agentImpRow.raw_improvements === "object" ? Object.values(agentImpRow.raw_improvements) : []);
-          } catch (e) {
-            rawHistory = [];
-          }
-        }
-        rawHistory.push({
-          period_number: nextPeriod,
-          date: new Date().toISOString(),
-          improvements: currentImps
-        });
-
         await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?agent_name=eq.${encodeURIComponent(agent)}`, {
           method: "PATCH",
           headers: {
@@ -4457,9 +4499,7 @@ function renderCoachingSection() {
             "Content-Type": "application/json"
           },
           body: JSON.stringify({ 
-            ai_agent_improvements: [],
-            period_number: nextPeriod,
-            raw_improvements: rawHistory
+            ai_agent_improvements: []
           })
         });
 
@@ -4467,12 +4507,10 @@ function renderCoachingSection() {
           const row = state.agentImprovementsTable.find(r => r.agent_name === agent);
           if (row) {
             row.ai_agent_improvements = [];
-            row.period_number = nextPeriod;
-            row.raw_improvements = rawHistory;
           }
         }
       } catch (err) {
-        console.warn("Failed to update agent_improvements table row:", err);
+        console.warn("Failed to clear ai_agent_improvements table row:", err);
       }
       
       renderCoachingSection();
@@ -4569,7 +4607,7 @@ function renderCoachingSection() {
           }
         }
 
-        // 2. Restore improvements in agent_improvements table row
+        // 2. Restore improvements in agent_improvements table row (just ai_agent_improvements)
         try {
           await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?agent_name=eq.${encodeURIComponent(agent)}`, {
             method: "PATCH",
@@ -4579,9 +4617,7 @@ function renderCoachingSection() {
               "Content-Type": "application/json"
             },
             body: JSON.stringify({ 
-              ai_agent_improvements: archivedImps,
-              period_number: 1,
-              raw_improvements: []
+              ai_agent_improvements: archivedImps
             })
           });
 
@@ -4589,14 +4625,10 @@ function renderCoachingSection() {
             const row = state.agentImprovementsTable.find(r => r.agent_name === agent);
             if (row) {
               row.ai_agent_improvements = archivedImps;
-              row.period_number = 1;
-              row.raw_improvements = [];
             } else {
               state.agentImprovementsTable.push({ 
                 agent_name: agent, 
-                ai_agent_improvements: archivedImps,
-                period_number: 1,
-                raw_improvements: []
+                ai_agent_improvements: archivedImps
               });
             }
           }
