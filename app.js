@@ -4431,7 +4431,6 @@ function renderCoachingSection() {
           },
           body: JSON.stringify({ 
             ai_agent_improvements: [],
-            agent_improvements: [], // Clear legacy fallback too
             period_number: nextPeriod,
             raw_improvements: rawHistory
           })
@@ -4441,7 +4440,6 @@ function renderCoachingSection() {
           const row = state.agentImprovementsTable.find(r => r.agent_name === agent);
           if (row) {
             row.ai_agent_improvements = [];
-            row.agent_improvements = [];
             row.period_number = nextPeriod;
             row.raw_improvements = rawHistory;
           }
@@ -4555,7 +4553,6 @@ function renderCoachingSection() {
             },
             body: JSON.stringify({ 
               ai_agent_improvements: archivedImps,
-              agent_improvements: archivedImps, // Restore legacy fallback too
               period_number: 1,
               raw_improvements: []
             })
@@ -4565,14 +4562,12 @@ function renderCoachingSection() {
             const row = state.agentImprovementsTable.find(r => r.agent_name === agent);
             if (row) {
               row.ai_agent_improvements = archivedImps;
-              row.agent_improvements = archivedImps;
               row.period_number = 1;
               row.raw_improvements = [];
             } else {
               state.agentImprovementsTable.push({ 
                 agent_name: agent, 
                 ai_agent_improvements: archivedImps,
-                agent_improvements: archivedImps,
                 period_number: 1,
                 raw_improvements: []
               });
