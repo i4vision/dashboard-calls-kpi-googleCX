@@ -881,9 +881,9 @@ async function executeRefreshWebhook(isAuto = false) {
       body: JSON.stringify({
         date: new Date().toISOString(),
         now: new Date().toISOString(),
-        refresh: Number(state.refreshDays) || 3,
-        refresh_number: Number(state.refreshDays) || 3,
-        refresh_days: Number(state.refreshDays) || 3
+        period: Number(state.refreshDays) || 3,
+        period_number: Number(state.refreshDays) || 3,
+        period_days: Number(state.refreshDays) || 3
       })
     });
 
