@@ -4206,7 +4206,9 @@ function renderCoachingSection() {
   if (filteredDbImps.length > 0) {
     filteredDbImps.sort((a, b) => a.agent_name.localeCompare(b.agent_name)).forEach(row => {
       const agentName = row.agent_name;
-      const list = Array.isArray(row.agent_improvements) ? row.agent_improvements : [];
+      const list = Array.isArray(row.ai_agent_improvements) 
+        ? row.ai_agent_improvements 
+        : (Array.isArray(row.agent_improvements) ? row.agent_improvements : []);
       
       const trainingGaps = [];
 
@@ -4297,8 +4299,9 @@ function renderCoachingSection() {
       let currentImps = [];
       const dbImps = state.agentImprovementsTable || [];
       const agentImpRow = dbImps.find(row => row.agent_name === agent);
-      if (agentImpRow && Array.isArray(agentImpRow.agent_improvements)) {
-        currentImps = agentImpRow.agent_improvements.map(item => {
+      if (agentImpRow && (Array.isArray(agentImpRow.ai_agent_improvements) || Array.isArray(agentImpRow.agent_improvements))) {
+        const rawList = Array.isArray(agentImpRow.ai_agent_improvements) ? agentImpRow.ai_agent_improvements : agentImpRow.agent_improvements;
+        currentImps = rawList.map(item => {
           if (typeof item === "object" && item !== null) {
             return {
               text: (item.text || "").trim(),
@@ -4396,8 +4399,29 @@ function renderCoachingSection() {
         }
       }
 
-      // 5. Empty out agent_improvements row in database
+      // 5. Update agent_improvements (ai_agent_improvements, period_number, raw_improvements) row in database
       try {
+        const currentPeriod = (agentImpRow && agentImpRow.period_number !== null && agentImpRow.period_number !== undefined) 
+          ? Number(agentImpRow.period_number) 
+          : 1;
+        const nextPeriod = currentPeriod + 1;
+
+        let rawHistory = [];
+        if (agentImpRow && agentImpRow.raw_improvements) {
+          try {
+            rawHistory = Array.isArray(agentImpRow.raw_improvements) 
+              ? agentImpRow.raw_improvements 
+              : (typeof agentImpRow.raw_improvements === "object" ? Object.values(agentImpRow.raw_improvements) : []);
+          } catch (e) {
+            rawHistory = [];
+          }
+        }
+        rawHistory.push({
+          period_number: nextPeriod,
+          date: new Date().toISOString(),
+          improvements: currentImps
+        });
+
         await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?agent_name=eq.${encodeURIComponent(agent)}`, {
           method: "PATCH",
           headers: {
@@ -4405,15 +4429,25 @@ function renderCoachingSection() {
             "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
             "Content-Type": "application/json"
           },
-          body: JSON.stringify({ agent_improvements: [] })
+          body: JSON.stringify({ 
+            ai_agent_improvements: [],
+            agent_improvements: [], // Clear legacy fallback too
+            period_number: nextPeriod,
+            raw_improvements: rawHistory
+          })
         });
 
         if (state.agentImprovementsTable) {
           const row = state.agentImprovementsTable.find(r => r.agent_name === agent);
-          if (row) row.agent_improvements = [];
+          if (row) {
+            row.ai_agent_improvements = [];
+            row.agent_improvements = [];
+            row.period_number = nextPeriod;
+            row.raw_improvements = rawHistory;
+          }
         }
       } catch (err) {
-        console.warn("Failed to clear agent_improvements table row:", err);
+        console.warn("Failed to update agent_improvements table row:", err);
       }
       
       renderCoachingSection();
@@ -4519,15 +4553,29 @@ function renderCoachingSection() {
               "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
               "Content-Type": "application/json"
             },
-            body: JSON.stringify({ agent_improvements: archivedImps })
+            body: JSON.stringify({ 
+              ai_agent_improvements: archivedImps,
+              agent_improvements: archivedImps, // Restore legacy fallback too
+              period_number: 1,
+              raw_improvements: []
+            })
           });
 
           if (state.agentImprovementsTable) {
             const row = state.agentImprovementsTable.find(r => r.agent_name === agent);
             if (row) {
+              row.ai_agent_improvements = archivedImps;
               row.agent_improvements = archivedImps;
+              row.period_number = 1;
+              row.raw_improvements = [];
             } else {
-              state.agentImprovementsTable.push({ agent_name: agent, agent_improvements: archivedImps });
+              state.agentImprovementsTable.push({ 
+                agent_name: agent, 
+                ai_agent_improvements: archivedImps,
+                agent_improvements: archivedImps,
+                period_number: 1,
+                raw_improvements: []
+              });
             }
           }
         } catch (err) {
