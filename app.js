@@ -873,14 +873,21 @@ async function executeRefreshWebhook(isAuto = false) {
   }
 
   try {
-    // Webhook expects a GET request, which is a simple request and avoids CORS preflight checks
     const res = await fetch(IMPROVEMENTS_WEBHOOK_URL, {
-      method: "GET",
-      mode: "no-cors"
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        date: new Date().toISOString(),
+        now: new Date().toISOString(),
+        refresh: Number(state.refreshDays) || 3,
+        refresh_number: Number(state.refreshDays) || 3,
+        refresh_days: Number(state.refreshDays) || 3
+      })
     });
 
-    // In no-cors mode, a successful request results in an opaque response (status 0)
-    if (res.ok || res.type === "opaque" || res.status === 0) {
+    if (res.ok || res.status === 0) {
       const nowStr = new Date().toISOString();
       state.lastRefresh = nowStr;
       
