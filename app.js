@@ -3810,6 +3810,26 @@ function renderCoachingSection() {
     });
   };
 
+  // Helper to detect audio filenames inside recommendation text and convert them to inline clickables
+  const linkifyAudioFilenames = (text, lang = "es") => {
+    if (!text) return "";
+    const regex = /\b([\w\-]+\.(?:mp3|mpr|wav|m4a))\b/gi;
+    return text.replace(regex, (match) => {
+      const cleanName = match.trim();
+      const matchingCall = findCallByAudioName(cleanName);
+      if (matchingCall) {
+        return `
+          <button class="audio-pill-link inline-audio-link" data-audio="${cleanName}" style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.35); color: var(--accent-primary); font-size: 0.72rem; padding: 0.05rem 0.25rem; border-radius: var(--radius-sm); cursor: pointer; display: inline-flex; align-items: center; gap: 0.15rem; transition: all 0.2s;" title="${lang === "es" ? "Ver detalles de la llamada" : "View call details"}">
+            <i class="fa-solid fa-file-audio" style="font-size: 0.65rem;"></i>
+            <span>${cleanName}</span>
+            <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 0.52rem; opacity: 0.8;"></i>
+          </button>
+        `;
+      }
+      return match;
+    });
+  };
+
   // Update Section Headers
   const titleEl = document.getElementById("labelCoachingTitle");
   if (titleEl) titleEl.innerHTML = `<i class="fa-solid fa-graduation-cap" style="color: var(--accent-primary);"></i> ${dict.coachingTitle}`;
@@ -4098,7 +4118,7 @@ function renderCoachingSection() {
           <div style="font-size: 0.78rem; line-height: 1.4; color: var(--text-secondary); margin-bottom: 0.45rem; display: flex; flex-direction: column; gap: 0.15rem; align-items: flex-start;">
             <div style="display: flex; gap: 0.4rem; align-items: flex-start;">
               <i class="fa-solid fa-circle-exclamation" style="color: var(--color-warning); font-size: 0.72rem; margin-top: 0.25rem; flex-shrink: 0;"></i>
-              <span>${text}</span>
+              <span>${linkifyAudioFilenames(text, lang)}</span>
             </div>
             ${audioPill ? `<div style="padding-left: 1.1rem; margin-top: 0.1rem;">${audioPill}</div>` : ""}
           </div>
@@ -4156,7 +4176,7 @@ function renderCoachingSection() {
                 <div style="font-size: 0.75rem; line-height: 1.4; color: var(--text-muted); margin-bottom: 0.4rem; display: flex; flex-direction: column; gap: 0.1rem; align-items: flex-start; opacity: 0.8;">
                   <div style="display: flex; gap: 0.4rem; align-items: flex-start;">
                     <i class="fa-solid fa-circle-check" style="color: var(--text-muted); font-size: 0.68rem; margin-top: 0.22rem; flex-shrink: 0;"></i>
-                    <span style="text-decoration: line-through; text-decoration-color: rgba(255,255,255,0.2);">${text}</span>
+                    <span style="text-decoration: line-through; text-decoration-color: rgba(255,255,255,0.2);">${linkifyAudioFilenames(text, lang)}</span>
                   </div>
                   ${audioPill ? `<div style="padding-left: 1.1rem; margin-top: 0.05rem;">${audioPill}</div>` : ""}
                 </div>
