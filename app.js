@@ -3287,27 +3287,42 @@ function getAgentIdFromFilename(audioFileName) {
 }
 
 function getCallImprovements(call) {
-  if (!call || !call.kpis) return [];
-  let parsed = call.kpis;
-  if (typeof parsed === "string") {
-    try { parsed = JSON.parse(parsed); } catch (e) { parsed = null; }
-  }
-  let kpiObj = null;
-  if (Array.isArray(parsed) && parsed.length > 0) {
-    kpiObj = parsed[0];
-  } else if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-    kpiObj = parsed;
-  }
-  if (!kpiObj) return [];
-  
+  if (!call) return [];
+
   let val = null;
-  for (const key of Object.keys(kpiObj)) {
+
+  // 1. Check direct root columns on call object first
+  for (const key of Object.keys(call)) {
     const k = key.toLowerCase();
     if (k === "gemini_agent_improvements" || k === "gemini agent improvements" || k === "agent_improvements" || k === "improvements") {
-      val = kpiObj[key];
+      val = call[key];
       break;
     }
   }
+
+  // 2. Fallback to nested kpis property
+  if (!val && call.kpis) {
+    let parsed = call.kpis;
+    if (typeof parsed === "string") {
+      try { parsed = JSON.parse(parsed); } catch (e) { parsed = null; }
+    }
+    let kpiObj = null;
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      kpiObj = parsed[0];
+    } else if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      kpiObj = parsed;
+    }
+    if (kpiObj) {
+      for (const key of Object.keys(kpiObj)) {
+        const k = key.toLowerCase();
+        if (k === "gemini_agent_improvements" || k === "gemini agent improvements" || k === "agent_improvements" || k === "improvements") {
+          val = kpiObj[key];
+          break;
+        }
+      }
+    }
+  }
+
   if (!val) return [];
 
   let parsedVal = val;
@@ -3935,22 +3950,35 @@ function renderCoachingSection() {
 
   // Helper to extract custom improvements KPI values
   const getImprovementsVal = (call) => {
-    if (!call.kpis) return null;
-    let parsed = call.kpis;
-    if (typeof parsed === "string") {
-      try { parsed = JSON.parse(parsed); } catch (e) { parsed = null; }
-    }
-    let kpiObj = null;
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      kpiObj = parsed[0];
-    } else if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      kpiObj = parsed;
-    }
-    if (!kpiObj) return null;
-    for (const key of Object.keys(kpiObj)) {
+    if (!call) return null;
+
+    // 1. Check direct root columns first
+    for (const key of Object.keys(call)) {
       const k = key.toLowerCase();
       if (k === "gemini_agent_improvements" || k === "gemini agent improvements" || k === "agent_improvements" || k === "improvements") {
-        return kpiObj[key];
+        return call[key];
+      }
+    }
+
+    // 2. Check kpis nested object
+    if (call.kpis) {
+      let parsed = call.kpis;
+      if (typeof parsed === "string") {
+        try { parsed = JSON.parse(parsed); } catch (e) { parsed = null; }
+      }
+      let kpiObj = null;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        kpiObj = parsed[0];
+      } else if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        kpiObj = parsed;
+      }
+      if (kpiObj) {
+        for (const key of Object.keys(kpiObj)) {
+          const k = key.toLowerCase();
+          if (k === "gemini_agent_improvements" || k === "gemini agent improvements" || k === "agent_improvements" || k === "improvements") {
+            return kpiObj[key];
+          }
+        }
       }
     }
     return null;
