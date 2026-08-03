@@ -3479,22 +3479,70 @@ function processParsedScore(parsed) {
     if (keys.length === 0) {
       return { score: NaN, breakdown: {} };
     }
-    
-    let sum = 0;
-    let validCount = 0;
+
+    // Helper to find KPI definition case-insensitively, ignoring spaces and underscores
+    const findKpiDefinition = (key) => {
+      if (!state.customKpis || !Array.isArray(state.customKpis)) return null;
+      const cleanKey = String(key).trim().toLowerCase().replace(/[\s_]+/g, "");
+      return state.customKpis.find(kpi => {
+        if (!kpi || !kpi.name) return false;
+        const cleanKpiName = String(kpi.name).trim().toLowerCase().replace(/[\s_]+/g, "");
+        return cleanKpiName === cleanKey;
+      });
+    };
+
+    let simpleSum = 0;
+    let simpleCount = 0;
+    let weightedSum = 0;
+    let totalWeight = 0;
+    let hasWeightedKpi = false;
     const breakdown = {};
-    
+
     keys.forEach(key => {
-      const val = Number(parsed[key]);
-      if (!isNaN(val)) {
-        sum += val;
-        validCount++;
-        breakdown[key] = val;
+      let actualScore = NaN;
+      const rawVal = parsed[key];
+      
+      if (typeof rawVal === "boolean") {
+        actualScore = rawVal ? 1 : 0;
+      } else if (typeof rawVal === "number") {
+        actualScore = rawVal;
+      } else if (typeof rawVal === "string") {
+        const str = rawVal.trim().toLowerCase();
+        if (str === "true" || str === "yes" || str === "sí" || str === "si" || str === "1") {
+          actualScore = 1;
+        } else if (str === "false" || str === "no" || str === "0") {
+          actualScore = 0;
+        } else {
+          actualScore = Number(str);
+        }
+      }
+
+      if (!isNaN(actualScore)) {
+        breakdown[key] = actualScore;
+        simpleSum += actualScore;
+        simpleCount++;
+
+        // Try to match KPI definition for weight
+        const def = findKpiDefinition(key);
+        if (def) {
+          const weightVal = def.weight !== undefined ? Number(def.weight) : (def.score !== undefined ? Number(def.score) : NaN);
+          if (!isNaN(weightVal) && weightVal > 0) {
+            weightedSum += actualScore * weightVal;
+            totalWeight += weightVal;
+            hasWeightedKpi = true;
+          }
+        }
       }
     });
-    
-    if (validCount > 0) {
-      const avg = sum / validCount;
+
+    if (hasWeightedKpi && totalWeight > 0) {
+      const finalScore = (weightedSum * 10) / totalWeight;
+      return { score: finalScore, breakdown };
+    }
+
+    if (simpleCount > 0) {
+      // Fallback to standard average if no custom KPIs have weight
+      const avg = simpleSum / simpleCount;
       return { score: avg, breakdown };
     }
     return { score: NaN, breakdown };
