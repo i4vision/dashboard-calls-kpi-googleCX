@@ -1106,59 +1106,119 @@ async function bootstrapAppServices() {
   enforceRBACPermissions();
 }
 
+function initRoleSwitcher() {
+  const container = document.getElementById("roleSwitcherContainer");
+  const select = document.getElementById("roleSwitcherSelect");
+  if (!container || !select) return;
+
+  const userEmail = (state.userEmail || localStorage.getItem("dashboard_user_email") || "").toLowerCase().trim();
+  const isI4VisionBase = (state.actualRole === "i4vision" || userEmail.endsWith("@i4vision.com"));
+
+  if (isI4VisionBase) {
+    container.style.display = "inline-flex";
+    select.value = state.userRole || "i4vision";
+
+    select.onchange = (e) => {
+      const selectedRole = e.target.value;
+      state.userRole = selectedRole;
+      localStorage.setItem("dashboard_simulated_role", selectedRole);
+
+      enforceRBACPermissions();
+      updateKPICards();
+      renderCallTable();
+      renderCoachingSection();
+    };
+  } else {
+    container.style.display = "none";
+  }
+}
+
 // Enforce Role-Based Access Control permissions on UI controls and page actions
 function enforceRBACPermissions() {
-  const role = state.userRole || "viewer";
-  const isAdmin = role === "admin";
-  const isEditor = role === "editor";
-  const isViewer = role === "viewer";
+  const role = state.userRole || "user";
+  const isI4Vision = (role === "i4vision");
+  const isAdmin = (role === "admin");
+  const isAdminOrI4Vision = (role === "admin" || role === "i4vision");
+  const isManagerOrHigher = (role === "admin" || role === "i4vision" || role === "manager");
 
-  console.log(`Enforcing RBAC permissions for user role: ${role}`);
+  console.log(`Enforcing RBAC permissions. Effective Role: ${role}, Base Role: ${state.actualRole}`);
 
-  // 1. Settings button (only visible to admin)
-  const btnSettings = document.getElementById("btnOpenSettings");
-  if (btnSettings) {
-    btnSettings.style.display = isAdmin ? "block" : "none";
+  // 1. Role Switcher initialization
+  initRoleSwitcher();
+
+  // 2. Cost & Price Visibility (ONLY i4vision role sees cost metrics and cost breakdown)
+  const costKpiCard = document.getElementById("kpiTotalCost")?.closest(".kpi-card");
+  if (costKpiCard) {
+    costKpiCard.style.display = isI4Vision ? "flex" : "none";
   }
 
-  // 2. Settings tabs & cards visibility
+  const drawerCostSec = document.getElementById("drawerSecCost")?.closest(".drawer-section");
+  if (drawerCostSec) {
+    drawerCostSec.style.display = isI4Vision ? "block" : "none";
+  }
+
+  const costBreakdownBox = document.querySelector(".cost-breakdown-box");
+  if (costBreakdownBox) {
+    costBreakdownBox.style.display = isI4Vision ? "block" : "none";
+  }
+
+  const thCost = document.getElementById("thCostHeader");
+  if (thCost) {
+    thCost.style.display = isI4Vision ? "table-cell" : "none";
+  }
+
+  document.querySelectorAll(".col-cost").forEach(td => {
+    td.style.display = isI4Vision ? "table-cell" : "none";
+  });
+
+  // 3. Settings button (admin or i4vision)
+  const btnSettings = document.getElementById("btnOpenSettings");
+  if (btnSettings) {
+    btnSettings.style.display = isAdminOrI4Vision ? "inline-flex" : "none";
+  }
+
+  // Settings tabs & cards visibility
   const userEmail = state.userEmail || localStorage.getItem("dashboard_user_email") || "";
-  updateSettingsDrawerTabsVisibility(isAdmin, userEmail);
+  updateSettingsDrawerTabsVisibility(isAdminOrI4Vision, userEmail);
 
-  // 3. GCS processing parameter configuration fields (only editable by admin)
+  // GCS parameters, STT models (editable by admin or i4vision)
   const paramMinCallLength = document.getElementById("paramMinCallLength");
-  if (paramMinCallLength) paramMinCallLength.disabled = !isAdmin;
+  if (paramMinCallLength) paramMinCallLength.disabled = !isAdminOrI4Vision;
   const paramMaxCallLength = document.getElementById("paramMaxCallLength");
-  if (paramMaxCallLength) paramMaxCallLength.disabled = !isAdmin;
+  if (paramMaxCallLength) paramMaxCallLength.disabled = !isAdminOrI4Vision;
   const btnSaveParameters = document.getElementById("btnSaveParameters");
-  if (btnSaveParameters) btnSaveParameters.disabled = !isAdmin;
+  if (btnSaveParameters) btnSaveParameters.disabled = !isAdminOrI4Vision;
 
-  // 4. STT provider engine & model selectors (only editable by admin)
   const sttProviderSelect = document.getElementById("sttProviderSelect");
-  if (sttProviderSelect) sttProviderSelect.disabled = !isAdmin;
+  if (sttProviderSelect) sttProviderSelect.disabled = !isAdminOrI4Vision;
   const sttModelSelect = document.getElementById("sttModelSelect");
-  if (sttModelSelect) sttModelSelect.disabled = !isAdmin;
+  if (sttModelSelect) sttModelSelect.disabled = !isAdminOrI4Vision;
   const googleCxAnalyzeSelect = document.getElementById("googleCxAnalyzeSelect");
-  if (googleCxAnalyzeSelect) googleCxAnalyzeSelect.disabled = !isAdmin;
+  if (googleCxAnalyzeSelect) googleCxAnalyzeSelect.disabled = !isAdminOrI4Vision;
 
-  // 5. GCS bulk checkbox selector & select quantity inputs (only active/visible for admin and editor)
+  // GCS bulk controls
   const selectQtyInput = document.getElementById("inputSelectQuantity");
-  if (selectQtyInput) selectQtyInput.disabled = isViewer;
+  if (selectQtyInput) selectQtyInput.disabled = (role === "user");
   const btnApplySelectQty = document.getElementById("btnApplySelectQuantity");
-  if (btnApplySelectQty) btnApplySelectQty.disabled = isViewer;
+  if (btnApplySelectQty) btnApplySelectQty.disabled = (role === "user");
 
   const bulkActions = document.getElementById("gcsBulkActions");
   if (bulkActions) {
-    bulkActions.style.display = isViewer ? "none" : "flex";
+    bulkActions.style.display = (role === "user") ? "none" : "flex";
   }
 
-  // 6. Training Gaps Refresh controls (only editable/triggerable by admin)
+  // Refresh controls
   const settingsInputDays = document.getElementById("settingsRefreshDaysInput");
-  if (settingsInputDays) settingsInputDays.disabled = !isAdmin;
+  if (settingsInputDays) settingsInputDays.disabled = !isAdminOrI4Vision;
   const btnSync = document.getElementById("btnTriggerRefreshWebhook");
   if (btnSync) {
-    btnSync.style.display = isAdmin ? "flex" : "none";
+    btnSync.style.display = isAdminOrI4Vision ? "flex" : "none";
   }
+
+  // 4. Mark as Reviewed button in Coaching Card (i4vision, admin, manager)
+  document.querySelectorAll(".btn-mark-reviewed").forEach(btn => {
+    btn.style.display = isManagerOrHigher ? "inline-flex" : "none";
+  });
 }
 
 function setupSettingsTabs() {
@@ -1469,9 +1529,9 @@ function initAuthentication() {
         state.userEmail = email;
 
         // Fetch user metadata (name and role) if exists in allowed_users
-        let role = "viewer"; // Default fallback
+        let baseRole = "user"; // Default fallback
         if (email.endsWith("@i4vision.com")) {
-          role = "admin"; // Internal domain default is always admin
+          baseRole = "i4vision"; // Internal domain default is always i4vision
         }
         try {
           const fetchUserRes = await fetch(`${SUPABASE_URL}/rest/v1/allowed_users?email=eq.${encodeURIComponent(email)}&limit=1`, {
@@ -1486,24 +1546,26 @@ function initAuthentication() {
               if (userData[0].name) {
                 localStorage.setItem("dashboard_user_name", userData[0].name);
               }
-              if (userData[0].role) {
-                role = userData[0].role.toLowerCase();
+              if (!email.endsWith("@i4vision.com") && userData[0].role) {
+                baseRole = userData[0].role.toLowerCase();
               }
             }
           }
         } catch(e) {}
 
-        localStorage.setItem("dashboard_user_role", role);
-        state.userRole = role;
+        localStorage.setItem("dashboard_user_role", baseRole);
+        state.actualRole = baseRole;
+        if (baseRole === "i4vision") {
+          const simRole = localStorage.getItem("dashboard_simulated_role");
+          state.userRole = (simRole && ["i4vision", "admin", "manager", "user"].includes(simRole)) ? simRole : "i4vision";
+        } else {
+          state.userRole = baseRole;
+        }
 
         // Transition to main dashboard wrapper
         setTimeout(() => {
           loginScreen.style.display = "none";
           appWrapper.style.display = "block";
-          
-          // Re-evaluate Settings tabs & cards visibility
-          const isAdmin = role === "admin";
-          updateSettingsDrawerTabsVisibility(isAdmin, email);
           
           // Boot complete application services
           bootstrapAppServices();
@@ -1662,11 +1724,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     state.userEmail = userEmail;
     
     // Retrieve role (domain fallback takes priority)
-    let role = localStorage.getItem("dashboard_user_role") || "viewer";
+    let baseRole = localStorage.getItem("dashboard_user_role") || "user";
     if (userEmail.toLowerCase().endsWith("@i4vision.com")) {
-      role = "admin";
+      baseRole = "i4vision";
     }
-    state.userRole = role;
+    state.actualRole = baseRole;
+
+    if (baseRole === "i4vision") {
+      const simRole = localStorage.getItem("dashboard_simulated_role");
+      state.userRole = (simRole && ["i4vision", "admin", "manager", "user"].includes(simRole)) ? simRole : "i4vision";
+    } else {
+      state.userRole = baseRole;
+    }
 
     document.getElementById("loginScreen").style.display = "none";
     document.getElementById("appWrapper").style.display = "block";
@@ -2635,7 +2704,7 @@ function renderTable() {
       <td>${riskHtml}</td>
       <td>${resHtml}</td>
       <td>${scoreHtml}</td>
-      <td>${costHtml}</td>
+      <td class="col-cost" style="display: ${state.userRole === 'i4vision' ? 'table-cell' : 'none'};">${costHtml}</td>
       <td style="color: var(--text-secondary); font-size: 0.85rem;">${dateFormatted}</td>
     `;
     
@@ -7139,11 +7208,16 @@ async function triggerBulkCallAnalysisWebhook() {
 }
 
 function convertToCSV(arr) {
-  const headers = [
+  const isI4Vision = (state.userRole === "i4vision");
+  const headers = isI4Vision ? [
     "Call ID", "Audio Filename", "Agent Name", "Duration (Min)", 
     "Sentiment", "Risk Level", "Resolution Status", "Agent Score (0-10)", 
     "Total Cost (USD)", "Category", 
     "STT Provider", "STT Model", "STT Minutes", "STT Cost (USD)", "Total Processing Cost (USD)", "Created At"
+  ] : [
+    "Call ID", "Audio Filename", "Agent Name", "Duration (Min)", 
+    "Sentiment", "Risk Level", "Resolution Status", "Agent Score (0-10)", 
+    "Category", "STT Provider", "STT Model", "STT Minutes", "Created At"
   ];
   
   const rows = arr.map(c => {
@@ -7151,7 +7225,7 @@ function convertToCSV(arr) {
     const scoreNum = getAgentScoreNumber(c.agent_score);
     const score = !isNaN(scoreNum) ? scoreNum.toFixed(1) : "N/A";
     
-    return [
+    const row = isI4Vision ? [
       c.conversation_name || "",
       c.audio_file_name || "",
       agentName,
@@ -7168,7 +7242,23 @@ function convertToCSV(arr) {
       c.stt_cost_usd || "",
       c.total_processing_cost_usd || "",
       c.created_at || ""
-    ].map(val => {
+    ] : [
+      c.conversation_name || "",
+      c.audio_file_name || "",
+      agentName,
+      c.audio_duration_minutes || "",
+      c.sentiment || "",
+      c.risk_level || "",
+      c.resolution_status || "",
+      score,
+      c.category || "",
+      c.stt_provider || "",
+      c.stt_model || "",
+      c.stt_minutes || "",
+      c.created_at || ""
+    ];
+
+    return row.map(val => {
       let str = String(val).replace(/"/g, '""');
       if (str.includes(",") || str.includes("\n") || str.includes('"')) {
         str = `"${str}"`;

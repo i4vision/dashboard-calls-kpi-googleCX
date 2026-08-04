@@ -106,6 +106,17 @@
       <button id="btnOpenChat" class="btn-primary" style="height: 38px; display: flex; align-items: center; gap: 0.5rem; padding: 0 1rem; font-size: 0.85rem;" title="Ask AI about calls">
         <i class="fa-solid fa-comments"></i> Ask AI
       </button>
+      <!-- Role Switcher for i4vision users -->
+      <div id="roleSwitcherContainer" style="display: none; align-items: center; gap: 0.35rem; background: rgba(139, 92, 246, 0.15); border: 1px solid rgba(139, 92, 246, 0.4); padding: 0.2rem 0.5rem; border-radius: var(--radius-md); margin-right: 0.25rem;" title="Simular vista de rol / Simulate role view">
+        <i class="fa-solid fa-user-gear" style="color: var(--accent-primary); font-size: 0.78rem;"></i>
+        <span style="font-size: 0.72rem; font-weight: 700; color: var(--accent-primary); text-transform: uppercase; letter-spacing: 0.03em;">Rol:</span>
+        <select id="roleSwitcherSelect" style="background: transparent; border: none; color: var(--text-primary); font-size: 0.78rem; font-weight: 700; cursor: pointer; outline: none;">
+          <option value="i4vision" style="background: var(--bg-card); color: var(--text-primary);">i4vision (Costos y Precios)</option>
+          <option value="admin" style="background: var(--bg-card); color: var(--text-primary);">admin</option>
+          <option value="manager" style="background: var(--bg-card); color: var(--text-primary);">manager</option>
+          <option value="user" style="background: var(--bg-card); color: var(--text-primary);">user</option>
+        </select>
+      </div>
       <button id="btnOpenSettings" class="btn-icon" title="General Settings" aria-label="General Settings" style="margin-right: 0.25rem;">
         <i class="fa-solid fa-gear"></i>
       </button>
@@ -434,7 +445,7 @@
               <th>Risk Level</th>
               <th>Resolution</th>
               <th>Agent Score</th>
-              <th>Cost</th>
+              <th id="thCostHeader">Cost</th>
               <th>Created At</th>
             </tr>
           </thead>
@@ -923,9 +934,10 @@
             <div>
               <label class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">ROLE / ROL</label>
               <select id="selectInviteRole" class="gcs-input" style="width: 100%; height: 32px; padding: 0 0.5rem; font-size: 0.75rem; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color); outline: none; cursor: pointer;">
-                <option value="admin">Admin / Administrador</option>
-                <option value="editor">Editor / Editor</option>
-                <option value="viewer" selected>Viewer / Visor</option>
+                <option value="user" selected>user (Usuario Regular)</option>
+                <option value="manager">manager (Gerente)</option>
+                <option value="admin">admin (Administrador)</option>
+                <option value="i4vision">i4vision (i4vision)</option>
               </select>
             </div>
           </div>
