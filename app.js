@@ -4285,7 +4285,7 @@ function renderCoachingSection() {
   };
 
   // Helper function to render a single coaching card
-  const renderCard = (agentName, uniqueGaps) => {
+  const renderCard = (agentName, row) => {
     const card = document.createElement("div");
     card.className = "chart-card";
     card.style.cssText = "display: flex; flex-direction: column; padding: 1.25rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); min-height: 220px;";
@@ -4394,21 +4394,161 @@ function renderCoachingSection() {
       `;
     }
 
-    const btnHtml = `
-      <button class="btn-secondary btn-revision" data-agent="${agentName}" ${disabledAttr} style="margin: 0; width: 100%; height: 28px; font-size: 0.72rem; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 0.35rem; border-radius: var(--radius-sm); cursor: ${isAdmin ? "pointer" : "not-allowed"}; opacity: ${isAdmin ? 1 : 0.6}; padding: 0;">
-        <i class="fa-solid fa-check-double" style="font-size: 0.7rem;"></i>
-        <span>${lang === "es" ? "Marcar como Revisado" : "Mark as Revised"}</span>
-      </button>
-    `;
+    // Compile period versions
+    const versions = [];
+    let historyList = [];
+    if (row && row.improvements_history) {
+      try {
+        historyList = Array.isArray(row.improvements_history)
+          ? row.improvements_history
+          : (typeof row.improvements_history === "object" ? Object.values(row.improvements_history) : []);
+      } catch (e) {
+        historyList = [];
+      }
+    }
 
+    historyList.forEach((entry, idx) => {
+      const periodNum = entry.period_number ? (Number(entry.period_number) - 1) : (idx + 1);
+      versions.push({
+        id: `history_${idx}`,
+        period: periodNum,
+        date: entry.date,
+        improvements: entry.improvements,
+        isActive: false
+      });
+    });
+
+    const currentPeriod = row ? Number(row.period_number || 1) : 1;
+    const activeImps = row ? (row.ai_agent_improvements || row.agent_improvements || []) : [];
+    let activePayload = activeImps;
+
+    if (Array.isArray(activeImps)) {
+      activePayload = [];
+      activeImps.forEach(item => {
+        if (!item) return;
+        let text = "";
+        let audioFile = "";
+        if (typeof item === "object" && item !== null) {
+          text = (item.text || "").trim();
+          audioFile = (item.audio_file || "").trim();
+        } else {
+          text = String(item).trim();
+        }
+        if (text) {
+          activePayload.push({ text, audioFile });
+        }
+      });
+    }
+
+    let hasActive = false;
+    if (typeof activePayload === "string" && activePayload.trim().length > 0) hasActive = true;
+    if (Array.isArray(activePayload) && activePayload.length > 0) hasActive = true;
+
+    if (hasActive) {
+      versions.push({
+        id: "active",
+        period: currentPeriod,
+        date: null,
+        improvements: activePayload,
+        isActive: true
+      });
+    }
+
+    versions.sort((a, b) => a.period - b.period);
+
+    if (versions.length === 0) {
+      versions.push({
+        id: "active",
+        period: currentPeriod,
+        date: null,
+        improvements: [],
+        isActive: true
+      });
+    }
+
+    state.coachingSelectedVersions = state.coachingSelectedVersions || {};
+    let selectedVersion = versions.find(v => v.id === state.coachingSelectedVersions[agentName]) || versions[versions.length - 1];
+    state.coachingSelectedVersions[agentName] = selectedVersion.id;
+
+    // Navigation HTML
+    let navHtml = "";
+    if (versions.length > 1) {
+      const currentIndex = versions.findIndex(v => v.id === selectedVersion.id);
+      const hasPrev = currentIndex > 0;
+      const hasNext = currentIndex < versions.length - 1;
+
+      navHtml = `
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); padding: 0.35rem 0.6rem; border-radius: var(--radius-sm);">
+          <span style="font-size: 0.72rem; font-weight: 700; color: ${selectedVersion.isActive ? 'var(--color-warning)' : 'var(--text-muted)'}; display: flex; align-items: center; gap: 0.35rem;">
+            <i class="fa-solid ${selectedVersion.isActive ? 'fa-graduation-cap' : 'fa-clock-rotate-left'}" style="font-size: 0.72rem;"></i>
+            ${selectedVersion.isActive 
+              ? (lang === 'es' ? `Periodo Actual (${selectedVersion.period})` : `Current Period (${selectedVersion.period})`)
+              : (lang === 'es' ? `Historial: Periodo ${selectedVersion.period}` : `History: Period ${selectedVersion.period}`)}
+          </span>
+          <div style="display: flex; gap: 0.4rem; align-items: center;">
+            <button class="period-nav-btn" data-agent="${agentName}" data-dir="prev" ${hasPrev ? "" : "disabled"} style="background: ${hasPrev ? 'rgba(255,255,255,0.08)' : 'transparent'}; border: 1px solid ${hasPrev ? 'var(--border-color)' : 'rgba(255,255,255,0.05)'}; color: ${hasPrev ? 'var(--text-primary)' : 'var(--text-muted)'}; padding: 0.15rem 0.35rem; border-radius: 4px; cursor: ${hasPrev ? 'pointer' : 'not-allowed'}; font-size: 0.65rem; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center;" title="${lang === 'es' ? 'Periodo anterior' : 'Previous period'}">
+              <i class="fa-solid fa-chevron-left"></i>
+            </button>
+            <button class="period-nav-btn" data-agent="${agentName}" data-dir="next" ${hasNext ? "" : "disabled"} style="background: ${hasNext ? 'rgba(255,255,255,0.08)' : 'transparent'}; border: 1px solid ${hasNext ? 'var(--border-color)' : 'rgba(255,255,255,0.05)'}; color: ${hasNext ? 'var(--text-primary)' : 'var(--text-muted)'}; padding: 0.15rem 0.35rem; border-radius: 4px; cursor: ${hasNext ? 'pointer' : 'not-allowed'}; font-size: 0.65rem; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center;" title="${lang === 'es' ? 'Periodo siguiente' : 'Next period'}">
+              <i class="fa-solid fa-chevron-right"></i>
+            </button>
+          </div>
+        </div>
+      `;
+    } else {
+      navHtml = `
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; background: rgba(255,255,255,0.02); border: 1px dashed var(--border-color); padding: 0.35rem 0.6rem; border-radius: var(--radius-sm);">
+          <span style="font-size: 0.72rem; font-weight: 700; color: var(--color-warning); display: flex; align-items: center; gap: 0.35rem;">
+            <i class="fa-solid fa-graduation-cap" style="font-size: 0.72rem;"></i>
+            ${lang === 'es' ? `Periodo Actual (${selectedVersion.period})` : `Current Period (${selectedVersion.period})`}
+          </span>
+        </div>
+      `;
+    }
+
+    let btnHtml = "";
+    if (selectedVersion.isActive) {
+      if (hasRevision) {
+        const latestRevision = revisionsList[revisionsList.length - 1];
+        const revDate = latestRevision ? new Date(latestRevision.revision_date) : new Date();
+        const dateStr = revDate.toLocaleDateString();
+        btnHtml = `
+          <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); padding: 0.4rem 0.6rem; border-radius: var(--radius-sm); font-size: 0.72rem; color: #10b981; font-weight: 600; width: 100%;">
+            <div style="display: flex; align-items: center; gap: 0.35rem;">
+              <i class="fa-solid fa-circle-check"></i>
+              <span>${lang === "es" ? `Revisado el: ${dateStr}` : `Revised on: ${dateStr}`}</span>
+            </div>
+            <button class="btn-reset-revision" data-agent="${agentName}" ${disabledAttr} style="background: none; border: none; padding: 0; color: var(--text-muted); cursor: ${isAdmin ? "pointer" : "not-allowed"}; display: flex; align-items: center; opacity: ${isAdmin ? 1 : 0.5};" title="${lang === "es" ? "Eliminar revisiones" : "Reset revisions"}">
+              <i class="fa-solid fa-trash-can" style="font-size: 0.68rem;"></i>
+            </button>
+          </div>
+        `;
+      } else {
+        btnHtml = `
+          <button class="btn-secondary btn-revision" data-agent="${agentName}" ${disabledAttr} style="margin: 0; width: 100%; height: 28px; font-size: 0.72rem; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 0.35rem; border-radius: var(--radius-sm); cursor: ${isAdmin ? "pointer" : "not-allowed"}; opacity: ${isAdmin ? 1 : 0.6}; padding: 0;">
+            <i class="fa-solid fa-check-double" style="font-size: 0.7rem;"></i>
+            <span>${lang === "es" ? "Marcar como Revisado" : "Mark as Revised"}</span>
+          </button>
+        `;
+      }
+    } else {
+      btnHtml = `
+        <div style="text-align: center; font-size: 0.72rem; color: var(--text-muted); padding: 0.35rem 0.5rem; background: rgba(255,255,255,0.02); border: 1px dashed var(--border-color); border-radius: var(--radius-sm); font-style: italic; display: flex; align-items: center; justify-content: center; gap: 0.3rem; width: 100%;">
+          <i class="fa-solid fa-box-archive" style="font-size: 0.68rem;"></i>
+          <span>${lang === "es" ? "Historial Archivado" : "Archived History"}</span>
+        </div>
+      `;
+    }
+
+    const displayImps = selectedVersion.improvements;
     let gapsHtml = "";
-    if (typeof uniqueGaps === "string") {
-      gapsHtml = `<div style="font-size: 0.78rem; line-height: 1.4; color: var(--text-secondary); margin-bottom: 0.45rem;">${linkifyAudioFilenames(uniqueGaps, lang)}</div>`;
-    } else if (Array.isArray(uniqueGaps)) {
-      if (uniqueGaps.length === 0) {
+    if (typeof displayImps === "string") {
+      gapsHtml = `<div style="font-size: 0.78rem; line-height: 1.4; color: var(--text-secondary); margin-bottom: 0.45rem;">${linkifyAudioFilenames(displayImps, lang)}</div>`;
+    } else if (Array.isArray(displayImps)) {
+      if (displayImps.length === 0) {
         gapsHtml = `<div style="font-size: 0.75rem; color: var(--text-muted); font-style: italic; margin-bottom: 0.5rem;">${lang === "es" ? "No se detectaron recomendaciones." : "No recommendations identified."}</div>`;
       } else {
-        gapsHtml = uniqueGaps.map(item => {
+        gapsHtml = displayImps.map(item => {
           let text = "";
           let audioFile = "";
           if (typeof item === "object" && item !== null) {
@@ -4451,7 +4591,7 @@ function renderCoachingSection() {
     }
 
     let oldGapsHtml = "";
-    if (hasRevision && revisionsList.length > 0) {
+    if (selectedVersion.isActive && hasRevision && revisionsList.length > 0) {
       oldGapsHtml = `<div style="margin-top: 1.25rem; border-top: 1px dashed var(--border-color); padding-top: 0.75rem; display: flex; flex-direction: column; gap: 0.75rem;">`;
       revisionsList.forEach((rev, idx) => {
         const revDate = new Date(rev.revision_date);
@@ -4546,9 +4686,7 @@ function renderCoachingSection() {
       </div>
       
       <div style="text-align: left; flex: 1;">
-        <h4 style="font-size: 0.75rem; font-weight: 700; color: var(--color-warning); text-transform: uppercase; margin: 0 0 0.5rem 0; display: flex; align-items: center; gap: 0.35rem; letter-spacing: 0.03em;">
-          <i class="fa-solid fa-graduation-cap"></i> ${lang === "es" ? "Recomendaciones" : "Recommendations"}
-        </h4>
+        ${navHtml}
         ${gapsHtml}
         ${oldGapsHtml}
       </div>
@@ -4563,31 +4701,7 @@ function renderCoachingSection() {
 
   if (filteredDbImps.length > 0) {
     filteredDbImps.sort((a, b) => a.agent_name.localeCompare(b.agent_name)).forEach(row => {
-      const agentName = row.agent_name;
-      const list = row.ai_agent_improvements || row.agent_improvements;
-      
-      if (typeof list === "string") {
-        renderCard(agentName, list);
-      } else if (Array.isArray(list)) {
-        const trainingGaps = [];
-        list.forEach(item => {
-          if (!item) return;
-          let text = "";
-          let audioFile = "";
-          if (typeof item === "object" && item !== null) {
-            text = (item.text || "").trim();
-            audioFile = (item.audio_file || "").trim();
-          } else {
-            text = String(item).trim();
-          }
-          if (text) {
-            trainingGaps.push({ text: text, audioFile: audioFile });
-          }
-        });
-        renderCard(agentName, trainingGaps);
-      } else {
-        renderCard(agentName, []);
-      }
+      renderCard(row.agent_name, row);
     });
   } else {
     // Fallback: Group call improvements by Agent Name (original logic)
@@ -4621,7 +4735,13 @@ function renderCoachingSection() {
 
     Object.keys(agentData).sort().forEach(agentName => {
       const info = agentData[agentName];
-      renderCard(agentName, info.trainingGaps);
+      const mockRow = {
+        agent_name: agentName,
+        ai_agent_improvements: info.trainingGaps,
+        period_number: 1,
+        improvements_history: []
+      };
+      renderCard(agentName, mockRow);
     });
   }
 
@@ -4844,6 +4964,79 @@ function renderCoachingSection() {
 
         delete state.agentRevisions[agent];
         await saveGlobalSettingToSupabase("agent_revisions", JSON.stringify(state.agentRevisions));
+        renderCoachingSection();
+      }
+    });
+  });
+
+  // Bind click listener for period navigation buttons
+  const periodNavButtons = container.querySelectorAll(".period-nav-btn");
+  periodNavButtons.forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const agentName = btn.dataset.agent;
+      const direction = btn.dataset.dir;
+      
+      const dbRow = dbImprovements.find(row => row.agent_name === agentName) || {
+        agent_name: agentName,
+        ai_agent_improvements: [],
+        period_number: 1,
+        improvements_history: []
+      };
+      
+      const versions = [];
+      let historyList = [];
+      if (dbRow.improvements_history) {
+        try {
+          historyList = Array.isArray(dbRow.improvements_history)
+            ? dbRow.improvements_history
+            : (typeof dbRow.improvements_history === "object" ? Object.values(dbRow.improvements_history) : []);
+        } catch (e) {
+          historyList = [];
+        }
+      }
+      historyList.forEach((entry, idx) => {
+        const periodNum = entry.period_number ? (Number(entry.period_number) - 1) : (idx + 1);
+        versions.push({ id: `history_${idx}`, period: periodNum });
+      });
+      
+      const activeImps = dbRow.ai_agent_improvements || dbRow.agent_improvements || [];
+      let activePayload = activeImps;
+      if (Array.isArray(activeImps)) {
+        activePayload = [];
+        activeImps.forEach(item => {
+          if (!item) return;
+          let text = "";
+          let audioFile = "";
+          if (typeof item === "object" && item !== null) {
+            text = (item.text || "").trim();
+            audioFile = (item.audio_file || "").trim();
+          } else {
+            text = String(item).trim();
+          }
+          if (text) {
+            activePayload.push({ text, audioFile });
+          }
+        });
+      }
+
+      let hasActive = false;
+      if (typeof activePayload === "string" && activePayload.trim().length > 0) hasActive = true;
+      if (Array.isArray(activePayload) && activePayload.length > 0) hasActive = true;
+
+      if (hasActive) {
+        versions.push({ id: "active", period: Number(dbRow.period_number || 1) });
+      }
+      versions.sort((a, b) => a.period - b.period);
+      
+      state.coachingSelectedVersions = state.coachingSelectedVersions || {};
+      const currentId = state.coachingSelectedVersions[agentName] || (versions.length > 0 ? versions[versions.length - 1].id : "active");
+      const currentIndex = versions.findIndex(v => v.id === currentId);
+      
+      if (direction === "prev" && currentIndex > 0) {
+        state.coachingSelectedVersions[agentName] = versions[currentIndex - 1].id;
+        renderCoachingSection();
+      } else if (direction === "next" && currentIndex < versions.length - 1) {
+        state.coachingSelectedVersions[agentName] = versions[currentIndex + 1].id;
         renderCoachingSection();
       }
     });
