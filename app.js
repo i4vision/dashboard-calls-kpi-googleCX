@@ -1123,10 +1123,8 @@ function initRoleSwitcher() {
       state.userRole = selectedRole;
       localStorage.setItem("dashboard_simulated_role", selectedRole);
 
+      applyFilters();
       enforceRBACPermissions();
-      updateKPICards();
-      renderCallTable();
-      renderCoachingSection();
     };
   } else {
     container.style.display = "none";
@@ -1170,6 +1168,12 @@ function enforceRBACPermissions() {
   document.querySelectorAll(".col-cost").forEach(td => {
     td.style.display = isI4Vision ? "table-cell" : "none";
   });
+
+  // Hide team leaderboard comparison for individual user (agent) role
+  const leaderboardCard = document.getElementById("chartAgentScore")?.closest(".chart-card");
+  if (leaderboardCard) {
+    leaderboardCard.style.display = (role === "user") ? "none" : "block";
+  }
 
   // 3. Settings button (admin or i4vision)
   const btnSettings = document.getElementById("btnOpenSettings");
