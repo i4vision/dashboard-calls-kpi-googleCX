@@ -2085,7 +2085,16 @@ function applyFilters() {
     // Clickable Agent filter
     const selectedAgentMatch = !state.selectedAgentFilter || getAgentName(call) === state.selectedAgentFilter;
 
-    return dateMatch && searchMatch && audioSearchMatch && sentimentMatch && riskMatch && resolutionMatch && categoryMatch && durationMatch && scoreMatch && selectedCategoryMatch && selectedAgentMatch;
+    // User Role Agent Filter (Agents with user role only see their own calls)
+    let userRoleMatch = true;
+    if (state.userRole === "user") {
+      const userAgent = getCurrentUserAgentName();
+      if (userAgent) {
+        userRoleMatch = getAgentName(call).toLowerCase().trim() === userAgent.toLowerCase().trim();
+      }
+    }
+
+    return dateMatch && searchMatch && audioSearchMatch && sentimentMatch && riskMatch && resolutionMatch && categoryMatch && durationMatch && scoreMatch && selectedCategoryMatch && selectedAgentMatch && userRoleMatch;
   });
 
   // Toggle chart reset buttons based on active selections
@@ -3947,6 +3956,41 @@ function getAgentScoreNumber(agentScore) {
 }
 
 // Extract Agent Name from Entities or Transcript (falling back to Hashed Deterministic Names if not found)
+function getCurrentUserAgentName() {
+  const userEmail = (state.userEmail || localStorage.getItem("dashboard_user_email") || "").toLowerCase().trim();
+  const userName = (localStorage.getItem("dashboard_user_name") || "").toLowerCase().trim();
+  
+  if (!userEmail && !userName) return null;
+
+  const allAgentNames = [...new Set((state.allCalls || []).map(c => getAgentName(c)).filter(Boolean))];
+  if (allAgentNames.length === 0) return null;
+
+  // 1. Direct or partial match on user's name
+  if (userName) {
+    const match = allAgentNames.find(a => a.toLowerCase().trim() === userName);
+    if (match) return match;
+
+    const partialMatch = allAgentNames.find(a => {
+      const cleanA = a.toLowerCase().trim();
+      return userName.includes(cleanA) || cleanA.includes(userName);
+    });
+    if (partialMatch) return partialMatch;
+  }
+
+  // 2. Match on email local part (before @)
+  const emailPart = userEmail.split("@")[0].replace(/[^a-zA-Z0-9]/g, " ").trim();
+  if (emailPart) {
+    const matchEmail = allAgentNames.find(a => {
+      const cleanA = a.toLowerCase().replace(/[^a-zA-Z0-9]/g, " ").trim();
+      return cleanA.includes(emailPart) || emailPart.includes(cleanA);
+    });
+    if (matchEmail) return matchEmail;
+  }
+
+  // 3. Fallback for role simulation when testing
+  return allAgentNames[0] || null;
+}
+
 function getAgentName(call) {
   const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
   const unknownLabel = lang === 'es' ? 'Agente Desconocido' : 'Unknown Agent';
@@ -4826,7 +4870,14 @@ function renderCoachingSection() {
 
   const activeAgentNames = new Set(calls.map(call => getAgentName(call)).filter(Boolean));
   const dbImprovements = state.agentImprovementsTable || [];
-  const filteredDbImps = dbImprovements.filter(row => activeAgentNames.has(row.agent_name));
+  let filteredDbImps = dbImprovements.filter(row => activeAgentNames.has(row.agent_name));
+
+  if (state.userRole === "user") {
+    const userAgent = getCurrentUserAgentName();
+    if (userAgent) {
+      filteredDbImps = filteredDbImps.filter(row => row.agent_name.toLowerCase().trim() === userAgent.toLowerCase().trim());
+    }
+  }
 
   if (filteredDbImps.length > 0) {
     filteredDbImps.sort((a, b) => a.agent_name.localeCompare(b.agent_name)).forEach(row => {
