@@ -1927,9 +1927,9 @@ select.gcs-input {
   height: 580px !important;
   max-height: calc(100vh - 7.5rem) !important;
   border-radius: 16px !important;
-  border: 1px solid rgba(139, 92, 246, 0.4) !important;
-  background: var(--bg-card) !important;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55), 0 0 35px rgba(139, 92, 246, 0.2) !important;
+  border: 1px solid rgba(139, 92, 246, 0.45) !important;
+  background: #0f172a !important; /* Solid 100% opaque background */
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85), 0 0 40px rgba(139, 92, 246, 0.25) !important;
   transform: scale(0.88) translateY(20px) !important;
   opacity: 0 !important;
   pointer-events: none !important;
@@ -1944,4 +1944,45 @@ select.gcs-input {
   transform: scale(1) translateY(0) !important;
   opacity: 1 !important;
   pointer-events: auto !important;
+}
+
+.drawer-right.floating-chat .drawer-header {
+  background: #1e293b !important;
+  border-bottom: 1px solid rgba(139, 92, 246, 0.3) !important;
+}
+
+.drawer-right.floating-chat .drawer-body {
+  background: #0f172a !important;
+}
+
+.drawer-right.floating-chat .chat-message-log {
+  background: #0f172a !important;
+}
+
+.drawer-right.floating-chat #chatQuestionsSelectorContainer {
+  background: #1e293b !important;
+  border-top: 1px solid rgba(139, 92, 246, 0.25) !important;
+}
+
+.drawer-right.floating-chat .chat-input-bar {
+  background: #1e293b !important;
+  border-top: 1px solid rgba(139, 92, 246, 0.25) !important;
+}
+
+/* Light mode override for floating chat */
+[data-theme="light"] .drawer-right.floating-chat {
+  background: #ffffff !important;
+  border-color: rgba(139, 92, 246, 0.35) !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25), 0 0 30px rgba(139, 92, 246, 0.15) !important;
+}
+
+[data-theme="light"] .drawer-right.floating-chat .drawer-header,
+[data-theme="light"] .drawer-right.floating-chat #chatQuestionsSelectorContainer,
+[data-theme="light"] .drawer-right.floating-chat .chat-input-bar {
+  background: #f8fafc !important;
+}
+
+[data-theme="light"] .drawer-right.floating-chat .drawer-body,
+[data-theme="light"] .drawer-right.floating-chat .chat-message-log {
+  background: #ffffff !important;
 }
