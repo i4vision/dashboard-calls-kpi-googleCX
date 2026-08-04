@@ -2151,7 +2151,7 @@ function applyFilters() {
 function getAgentAverageScore(agentName) {
   if (!state.allCalls) return 0;
   const agentCalls = state.allCalls.filter(c => getAgentName(c) === agentName);
-  const scores = agentCalls.map(c => getAgentScoreNumber(c.agent_score)).filter(s => !isNaN(s));
+  const scores = agentCalls.map(c => getAgentScoreNumber(c)).filter(s => !isNaN(s));
   if (scores.length === 0) return 0;
   return scores.reduce((a, b) => a + b, 0) / scores.length;
 }
@@ -2275,7 +2275,7 @@ function updateKPIs() {
   }
 
   // 1. Average Agent Score (Scale 0-10)
-  const validScores = state.filteredCalls.map(c => getAgentScoreNumber(c.agent_score)).filter(s => !isNaN(s));
+  const validScores = state.filteredCalls.map(c => getAgentScoreNumber(c)).filter(s => !isNaN(s));
   const avgScore = validScores.reduce((acc, curr) => acc + curr, 0) / validScores.length;
   document.getElementById("kpiAvgScore").textContent = avgScore.toFixed(1);
 
@@ -2474,7 +2474,7 @@ function renderOverviewCharts() {
     if (!agentScores[agent]) {
       agentScores[agent] = { total: 0, count: 0 };
     }
-    const score = getAgentScoreNumber(c.agent_score);
+    const score = getAgentScoreNumber(c);
     if (!isNaN(score)) {
       agentScores[agent].total += score;
       agentScores[agent].count++;
@@ -2621,7 +2621,7 @@ function renderOverviewCharts() {
     if (!categoryScores[parentCat]) {
       categoryScores[parentCat] = { total: 0, count: 0 };
     }
-    const score = getAgentScoreNumber(c.agent_score);
+    const score = getAgentScoreNumber(c);
     if (!isNaN(score)) {
       categoryScores[parentCat].total += score;
       categoryScores[parentCat].count++;
@@ -2724,7 +2724,7 @@ function renderTable() {
     const resHtml = `<span class="badge ${resClass}">${getLocalizedResolution(call.resolution_status)}</span>`;
 
     // Agent score pill representation
-    const scoreNum = getAgentScoreNumber(call.agent_score);
+    const scoreNum = getAgentScoreNumber(call);
     const scoreHtml = !isNaN(scoreNum)
       ? `<span class="badge" style="background: rgba(139, 92, 246, 0.12); color: var(--accent-secondary); border-color: rgba(139, 92, 246, 0.25); font-family: var(--font-mono); font-weight: bold; font-size: 0.85rem;">${scoreNum.toFixed(1)} / 10</span>`
       : `<span style="color: var(--text-muted); font-size: 0.85rem;">-</span>`;
@@ -2799,7 +2799,7 @@ function openDrawer(call) {
   category.textContent = `${localizedParent} (${rawCat})`;
 
   // Performance stats
-  const scoreDetails = getAgentScoreDetails(call.agent_score);
+  const scoreDetails = getAgentScoreDetails(call);
   const drawerScoreNum = scoreDetails.score;
   document.getElementById("drawerScore").textContent = !isNaN(drawerScoreNum) ? `${drawerScoreNum.toFixed(1)} / 10` : "N/A";
 
@@ -3857,47 +3857,103 @@ async function saveActiveAgentsToSupabase(agentsObj) {
   }
 }
 
-function getAgentScoreDetails(agentScore) {
-  if (agentScore === null || agentScore === undefined) {
+function getCallKpiObject(callOrScore) {
+  if (callOrScore === null || callOrScore === undefined) return {};
+
+  if (typeof callOrScore === "number") {
+    return { "Agent Score": callOrScore };
+  }
+
+  if (typeof callOrScore === "string") {
+    const trimmed = callOrScore.trim();
+    if (!isNaN(trimmed) && trimmed !== "") {
+      return { "Agent Score": Number(trimmed) };
+    }
+    try {
+      let cleanStr = trimmed.startsWith("[Object:") ? trimmed.substring(8, trimmed.length - 1).trim() : trimmed;
+      const parsed = JSON.parse(cleanStr);
+      const obj = Array.isArray(parsed) ? parsed[0] : parsed;
+      if (obj && typeof obj === "object") return obj;
+    } catch (e) {}
+    return {};
+  }
+
+  const call = callOrScore;
+  let merged = {};
+
+  // 1. Check call.agent_score
+  if (call.agent_score !== undefined && call.agent_score !== null) {
+    if (typeof call.agent_score === "object" && !Array.isArray(call.agent_score)) {
+      Object.assign(merged, call.agent_score);
+    } else if (typeof call.agent_score === "number") {
+      merged["Gemini_Agent_Score"] = call.agent_score;
+    } else if (typeof call.agent_score === "string") {
+      const trimmed = call.agent_score.trim();
+      if (!isNaN(trimmed) && trimmed !== "") {
+        merged["Gemini_Agent_Score"] = Number(trimmed);
+      } else {
+        try {
+          let cleanStr = trimmed.startsWith("[Object:") ? trimmed.substring(8, trimmed.length - 1).trim() : trimmed;
+          const parsed = JSON.parse(cleanStr);
+          const obj = Array.isArray(parsed) ? parsed[0] : parsed;
+          if (obj && typeof obj === "object") Object.assign(merged, obj);
+        } catch (e) {}
+      }
+    }
+  }
+
+  // 2. Check call.kpis
+  if (call.kpis !== undefined && call.kpis !== null) {
+    let parsedKpis = call.kpis;
+    if (typeof parsedKpis === "string") {
+      try {
+        parsedKpis = JSON.parse(parsedKpis);
+      } catch (e) {}
+    }
+    const obj = Array.isArray(parsedKpis) ? parsedKpis[0] : parsedKpis;
+    if (obj && typeof obj === "object") {
+      Object.assign(merged, obj);
+    }
+  }
+
+  // 3. Check configured custom KPIs matching fields on call directly
+  if (Array.isArray(state.customKpis)) {
+    state.customKpis.forEach(kpi => {
+      if (kpi && kpi.name) {
+        const name = kpi.name.trim();
+        const lowerName = name.toLowerCase().replace(/[\s_]+/g, "");
+        Object.keys(call).forEach(key => {
+          if (key.toLowerCase().replace(/[\s_]+/g, "") === lowerName) {
+            const val = call[key];
+            if (val !== undefined && val !== null) {
+              merged[name] = val;
+            }
+          }
+        });
+      }
+    });
+  }
+
+  return merged;
+}
+
+function getAgentScoreDetails(callOrScore) {
+  if (callOrScore === null || callOrScore === undefined) {
     return { score: NaN, breakdown: null };
   }
 
-  // If it's already a number
-  if (typeof agentScore === "number") {
-    return { score: agentScore, breakdown: null };
-  }
-  
-  if (typeof agentScore === "string") {
-    const trimmed = agentScore.trim();
-    if (!isNaN(trimmed) && trimmed !== "") {
-      return { score: Number(trimmed), breakdown: null };
-    }
-    
-    let cleanStr = trimmed;
-    // Clean up "[Object: ...]" or similar wrappers if present
-    if (cleanStr.startsWith("[Object:") && cleanStr.endsWith("]")) {
-      cleanStr = cleanStr.substring(8, cleanStr.length - 1).trim();
-    }
-    
-    try {
-      const parsed = JSON.parse(cleanStr);
-      return processParsedScore(parsed);
-    } catch (e) {
-      const jsonMatch = cleanStr.match(/\{.*\}/);
-      if (jsonMatch) {
-        try {
-          const parsed = JSON.parse(jsonMatch[0]);
-          return processParsedScore(parsed);
-        } catch (e2) {
-          // Ignore
-        }
-      }
-    }
-  } else if (typeof agentScore === "object") {
-    return processParsedScore(agentScore);
+  let kpiObj = {};
+  if (typeof callOrScore === "object" && !Array.isArray(callOrScore)) {
+    kpiObj = getCallKpiObject(callOrScore);
+  } else {
+    return processParsedScore(callOrScore);
   }
 
-  return { score: NaN, breakdown: null };
+  if (Object.keys(kpiObj).length === 0) {
+    return { score: NaN, breakdown: {} };
+  }
+
+  return processParsedScore(kpiObj);
 }
 
 function processParsedScore(parsed) {
@@ -3914,7 +3970,6 @@ function processParsedScore(parsed) {
       return { score: NaN, breakdown: {} };
     }
 
-    // Helper to find KPI definition case-insensitively, ignoring spaces and underscores
     const findKpiDefinition = (key) => {
       if (!state.customKpis || !Array.isArray(state.customKpis)) return null;
       const cleanKey = String(key).trim().toLowerCase().replace(/[\s_]+/g, "");
@@ -3935,19 +3990,22 @@ function processParsedScore(parsed) {
     keys.forEach(key => {
       let actualScore = NaN;
       const rawVal = parsed[key];
-      
+
       if (typeof rawVal === "boolean") {
-        actualScore = rawVal ? 1 : 0;
+        actualScore = rawVal ? 10 : 0;
       } else if (typeof rawVal === "number") {
-        actualScore = rawVal;
+        actualScore = (rawVal >= 0 && rawVal <= 1) ? (rawVal * 10) : rawVal;
       } else if (typeof rawVal === "string") {
         const str = rawVal.trim().toLowerCase();
         if (str === "true" || str === "yes" || str === "sí" || str === "si" || str === "1") {
-          actualScore = 1;
+          actualScore = 10;
         } else if (str === "false" || str === "no" || str === "0") {
           actualScore = 0;
         } else {
-          actualScore = Number(str);
+          const num = Number(str);
+          if (!isNaN(num)) {
+            actualScore = (num >= 0 && num <= 1) ? (num * 10) : num;
+          }
         }
       }
 
@@ -3956,7 +4014,6 @@ function processParsedScore(parsed) {
         simpleSum += actualScore;
         simpleCount++;
 
-        // Try to match KPI definition for weight
         const def = findKpiDefinition(key);
         if (def) {
           const weightVal = def.weight !== undefined ? Number(def.weight) : (def.score !== undefined ? Number(def.score) : NaN);
@@ -3970,12 +4027,11 @@ function processParsedScore(parsed) {
     });
 
     if (hasWeightedKpi && totalWeight > 0) {
-      const finalScore = (weightedSum * 10) / totalWeight;
+      const finalScore = weightedSum / totalWeight;
       return { score: finalScore, breakdown };
     }
 
     if (simpleCount > 0) {
-      // Fallback to standard average if no custom KPIs have weight
       const avg = simpleSum / simpleCount;
       return { score: avg, breakdown };
     }
@@ -3984,14 +4040,14 @@ function processParsedScore(parsed) {
 
   const num = Number(parsed);
   if (!isNaN(num)) {
-    return { score: num, breakdown: null };
+    return { score: (num >= 0 && num <= 1) ? (num * 10) : num, breakdown: null };
   }
 
   return { score: NaN, breakdown: null };
 }
 
-function getAgentScoreNumber(agentScore) {
-  return getAgentScoreDetails(agentScore).score;
+function getAgentScoreNumber(callOrScore) {
+  return getAgentScoreDetails(callOrScore).score;
 }
 
 // Extract Agent Name from Entities or Transcript (falling back to Hashed Deterministic Names if not found)
@@ -4321,7 +4377,7 @@ function renderCoachingSection() {
     if (!agentScores[agentName]) {
       agentScores[agentName] = { total: 0, count: 0, kpis: {} };
     }
-    const details = getAgentScoreDetails(c.agent_score);
+    const details = getAgentScoreDetails(c);
     const score = details.score;
     if (!isNaN(score)) {
       agentScores[agentName].total += score;
@@ -4986,7 +5042,7 @@ function renderCoachingSection() {
       const agentCalls = calls.filter(c => getAgentName(c) === agent);
       let total = 0, count = 0;
       agentCalls.forEach(c => {
-        const score = getAgentScoreNumber(c.agent_score);
+        const score = getAgentScoreNumber(c);
         if (!isNaN(score)) {
           total += score;
           count++;
@@ -7312,7 +7368,7 @@ function convertToCSV(arr) {
   
   const rows = arr.map(c => {
     const agentName = getAgentName(c);
-    const scoreNum = getAgentScoreNumber(c.agent_score);
+    const scoreNum = getAgentScoreNumber(c);
     const score = !isNaN(scoreNum) ? scoreNum.toFixed(1) : "N/A";
     
     const row = isI4Vision ? [
@@ -8834,7 +8890,7 @@ function compileOKFCallsContext() {
     const cat = call.category || "N/A";
     const sent = call.sentiment || "N/A";
     const risk = call.risk_level || "N/A";
-    const scoreNum = getAgentScoreNumber(call.agent_score);
+    const scoreNum = getAgentScoreNumber(call);
     const score = !isNaN(scoreNum) ? `${scoreNum.toFixed(1)}/10` : "N/A";
     const cost = call.total_cost_usd !== null && call.total_cost_usd !== undefined ? `$${Number(call.total_cost_usd).toFixed(3)}` : "N/A";
     
