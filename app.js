@@ -860,7 +860,6 @@ async function checkAutoTriggerRefresh() {
 }
 
 async function archiveActiveImprovementsBeforeSync() {
-  const agentsList = [];
   try {
     const impResponse = await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?select=*`, {
       method: "GET",
@@ -869,23 +868,18 @@ async function archiveActiveImprovementsBeforeSync() {
         "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
       }
     });
-    if (!impResponse.ok) return [];
+    if (!impResponse.ok) return;
     const dbImps = await impResponse.json();
 
     for (const row of dbImps) {
-      // Resolve agent ID corresponding to this agent name
-      const agentId = Object.keys(state.canonicalAgents || {}).find(key => state.canonicalAgents[key] === row.agent_name);
-      if (!agentId) continue;
-
       const activeImps = Array.isArray(row.ai_agent_improvements) 
         ? row.ai_agent_improvements 
         : (Array.isArray(row.agent_improvements) ? row.agent_improvements : []);
 
-      let currentPeriod = (row.period_number !== null && row.period_number !== undefined) 
-        ? Number(row.period_number) 
-        : 1;
-
       if (activeImps.length > 0) {
+        const currentPeriod = (row.period_number !== null && row.period_number !== undefined) 
+          ? Number(row.period_number) 
+          : 1;
         const nextPeriod = currentPeriod + 1;
 
         let history = [];
@@ -918,20 +912,11 @@ async function archiveActiveImprovementsBeforeSync() {
             improvements_history: history
           })
         });
-
-        currentPeriod = nextPeriod;
       }
-
-      agentsList.push({
-        id: agentId,
-        name: row.agent_name,
-        period_number: currentPeriod
-      });
     }
   } catch (err) {
     console.warn("Failed to archive active improvements before sync:", err);
   }
-  return agentsList;
 }
 
 async function executeRefreshWebhook(isAuto = false) {
@@ -948,7 +933,7 @@ async function executeRefreshWebhook(isAuto = false) {
   }
 
   // 1. Archive active recommendations and increment period number in database before triggering n8n webhook
-  const agentsData = await archiveActiveImprovementsBeforeSync();
+  await archiveActiveImprovementsBeforeSync();
 
   try {
     const res = await fetch(IMPROVEMENTS_WEBHOOK_URL, {
@@ -961,8 +946,7 @@ async function executeRefreshWebhook(isAuto = false) {
         now: new Date().toISOString(),
         period: Number(state.refreshDays) || 3,
         period_number: Number(state.refreshDays) || 3,
-        period_days: Number(state.refreshDays) || 3,
-        agents: agentsData
+        period_days: Number(state.refreshDays) || 3
       })
     });
 
