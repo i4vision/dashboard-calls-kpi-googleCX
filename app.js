@@ -4484,74 +4484,46 @@ function renderCoachingSection() {
     let selectedVersion = versions.find(v => v.id === state.coachingSelectedVersions[agentName]) || versions[versions.length - 1];
     state.coachingSelectedVersions[agentName] = selectedVersion.id;
 
-    // Calculate date range for selected version
+    // Calculate date range for selected version using period archive/creation timestamps
     let dateRangeStr = "";
-    const versionImps = selectedVersion.improvements;
-    const audioTimestamps = [];
-
-    const extractDatesFromImps = (imps) => {
-      let rawString = "";
-      if (typeof imps === "string") {
-        rawString = imps;
-      } else if (Array.isArray(imps)) {
-        imps.forEach(item => {
-          if (typeof item === "object" && item !== null) {
-            if (item.audio_file || item.audioFile) rawString += " " + (item.audio_file || item.audioFile);
-            if (item.text) rawString += " " + item.text;
-          } else {
-            rawString += " " + String(item);
-          }
-        });
-      }
-
-      // Match filenames like 20260706-080439_... or 20260706_...
-      const filenameDateMatches = rawString.match(/\b(20\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\b/g);
-      if (filenameDateMatches) {
-        filenameDateMatches.forEach(m => {
-          const y = parseInt(m.substring(0, 4), 10);
-          const month = parseInt(m.substring(4, 6), 10) - 1;
-          const d = parseInt(m.substring(6, 8), 10);
-          const dt = new Date(Date.UTC(y, month, d));
-          if (!isNaN(dt.getTime())) audioTimestamps.push(dt.getTime());
-        });
-      }
-
-      // Match call object dates if audio filenames match calls
-      const audioMatches = rawString.match(/\b([\w\-]+\.(?:mp3|mpr|wav|m4a))\b/gi);
-      if (audioMatches) {
-        audioMatches.forEach(f => {
-          const c = findCallByAudioName(f.trim());
-          if (c && (c.create_time || c.created_at)) {
-            const dt = new Date(c.create_time || c.created_at);
-            if (!isNaN(dt.getTime())) audioTimestamps.push(dt.getTime());
-          }
-        });
-      }
-    };
-
-    extractDatesFromImps(versionImps);
 
     const formatDateShort = (d) => {
+      if (!d) return "";
       const dt = new Date(d);
+      if (isNaN(dt.getTime())) return "";
       const day = String(dt.getDate()).padStart(2, '0');
       const month = String(dt.getMonth() + 1).padStart(2, '0');
       const year = dt.getFullYear();
       return `${day}/${month}/${year}`;
     };
 
-    if (audioTimestamps.length > 0) {
-      audioTimestamps.sort((a, b) => a - b);
-      const minDate = formatDateShort(audioTimestamps[0]);
-      const maxDate = formatDateShort(audioTimestamps[audioTimestamps.length - 1]);
-      if (minDate === maxDate) {
-        dateRangeStr = selectedVersion.isActive ? `${minDate} - ${lang === "es" ? "Presente" : "Present"}` : minDate;
-      } else {
-        dateRangeStr = `${minDate} - ${maxDate}`;
-      }
+    const selectedIdx = versions.findIndex(v => v.id === selectedVersion.id);
+
+    // End date of this period
+    let endDateStr = "";
+    if (selectedVersion.isActive) {
+      endDateStr = lang === "es" ? "Presente" : "Present";
     } else if (selectedVersion.date) {
-      dateRangeStr = formatDateShort(selectedVersion.date);
-    } else if (selectedVersion.isActive) {
-      dateRangeStr = lang === "es" ? "Periodo Actual" : "Current Period";
+      endDateStr = formatDateShort(selectedVersion.date);
+    }
+
+    // Start date of this period (end date of previous period or row creation date)
+    let startDateStr = "";
+    if (selectedIdx > 0 && versions[selectedIdx - 1].date) {
+      startDateStr = formatDateShort(versions[selectedIdx - 1].date);
+    } else if (row && row.created_at) {
+      const createdStr = formatDateShort(row.created_at);
+      if (createdStr && createdStr !== endDateStr) {
+        startDateStr = createdStr;
+      }
+    }
+
+    if (startDateStr && endDateStr) {
+      dateRangeStr = `${startDateStr} - ${endDateStr}`;
+    } else if (endDateStr) {
+      dateRangeStr = endDateStr;
+    } else if (startDateStr) {
+      dateRangeStr = startDateStr;
     }
 
     // Navigation HTML
