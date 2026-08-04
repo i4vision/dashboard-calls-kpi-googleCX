@@ -4084,8 +4084,18 @@ function renderCoachingSection() {
   // Helper to detect audio filenames inside recommendation text and convert them to inline clickables
   const linkifyAudioFilenames = (text, lang = "es") => {
     if (!text) return "";
+    
+    // Preprocess: merge filenames split by HTML tags (like <em> or <i>)
+    // E.g. "20260706-<em>08073442862226856PRE1RAS-all</em>856.mp3" -> "20260706-_08073442862226856PRE1RAS-all_856.mp3"
+    let processedText = text;
+    const taggedRegex = /\b([\w\-]+(?:<[a-z\/]+>[\w\-]+)+?\.(?:mp3|mpr|wav|m4a))\b/gi;
+    processedText = processedText.replace(taggedRegex, (match) => {
+      // Convert italic tags (em/i) back to underscores and strip all other tags
+      return match.replace(/<\/?(em|i)>/gi, "_").replace(/<[^>]+>/g, "");
+    });
+
     const regex = /\b([\w\-]+\.(?:mp3|mpr|wav|m4a))\b/gi;
-    return text.replace(regex, (match) => {
+    return processedText.replace(regex, (match) => {
       const cleanName = match.trim();
       const matchingCall = findCallByAudioName(cleanName);
       if (matchingCall) {
