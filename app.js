@@ -913,14 +913,19 @@ async function archiveActiveImprovementsBeforeSync() {
     const dbImps = await impResponse.json();
 
     for (const row of dbImps) {
-      const activeImps = Array.isArray(row.ai_agent_improvements) 
+      const activeImps = (Array.isArray(row.ai_agent_improvements) || typeof row.ai_agent_improvements === "string") 
         ? row.ai_agent_improvements 
-        : (Array.isArray(row.agent_improvements) ? row.agent_improvements : []);
+        : ((Array.isArray(row.agent_improvements) || typeof row.agent_improvements === "string") ? row.agent_improvements : []);
 
-      if (activeImps.length > 0) {
-        const currentPeriod = (row.period_number !== null && row.period_number !== undefined) 
-          ? Number(row.period_number) 
-          : 1;
+      let hasActive = false;
+      if (Array.isArray(activeImps) && activeImps.length > 0) hasActive = true;
+      if (typeof activeImps === "string" && activeImps.trim().length > 0) hasActive = true;
+
+      let currentPeriod = (row.period_number !== null && row.period_number !== undefined) 
+        ? Number(row.period_number) 
+        : 1;
+
+      if (hasActive) {
         const nextPeriod = currentPeriod + 1;
 
         let history = [];
@@ -948,7 +953,7 @@ async function archiveActiveImprovementsBeforeSync() {
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
-            ai_agent_improvements: [], // Clear active so n8n starts fresh
+            ai_agent_improvements: typeof activeImps === "string" ? "" : [], // Clear active so n8n starts fresh
             period_number: nextPeriod,
             improvements_history: history
           })
@@ -4363,46 +4368,52 @@ function renderCoachingSection() {
     `;
 
     let gapsHtml = "";
-    if (uniqueGaps.length === 0) {
-      gapsHtml = `<div style="font-size: 0.75rem; color: var(--text-muted); font-style: italic; margin-bottom: 0.5rem;">${lang === "es" ? "No se detectaron recomendaciones." : "No recommendations identified."}</div>`;
-    } else {
-      gapsHtml = uniqueGaps.map(item => {
-        let text = "";
-        let audioFile = "";
-        if (typeof item === "object" && item !== null) {
-          text = item.text || "";
-          audioFile = item.audioFile || item.audio_file || "";
-        } else {
-          text = String(item);
-        }
-        
-        let audioPill = "";
-        if (audioFile) {
-          const cleanName = audioFile.replace(/^.*[\\\/]/, '');
-          const matchingCall = findCallByAudioName(audioFile);
-          if (matchingCall) {
-            audioPill = `
-              <button class="audio-pill-link" data-audio="${audioFile}" style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.35); color: var(--accent-primary); font-size: 0.65rem; padding: 0.15rem 0.4rem; border-radius: var(--radius-sm); cursor: pointer; display: inline-flex; align-items: center; gap: 0.25rem; transition: all 0.2s; margin-left: 0.35rem;" title="${lang === "es" ? "Ver detalles de la llamada" : "View call details"}">
-                <i class="fa-solid fa-file-audio"></i>
-                <span>${cleanName}</span>
-                <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 0.55rem; opacity: 0.8;"></i>
-              </button>
-            `;
+    if (typeof uniqueGaps === "string") {
+      gapsHtml = `<div style="font-size: 0.78rem; line-height: 1.4; color: var(--text-secondary); margin-bottom: 0.45rem;">${linkifyAudioFilenames(uniqueGaps, lang)}</div>`;
+    } else if (Array.isArray(uniqueGaps)) {
+      if (uniqueGaps.length === 0) {
+        gapsHtml = `<div style="font-size: 0.75rem; color: var(--text-muted); font-style: italic; margin-bottom: 0.5rem;">${lang === "es" ? "No se detectaron recomendaciones." : "No recommendations identified."}</div>`;
+      } else {
+        gapsHtml = uniqueGaps.map(item => {
+          let text = "";
+          let audioFile = "";
+          if (typeof item === "object" && item !== null) {
+            text = item.text || "";
+            audioFile = item.audioFile || item.audio_file || "";
           } else {
-            audioPill = `<span style="display: inline-block; font-size: 0.65rem; color: var(--text-muted); background: rgba(255,255,255,0.05); padding: 0.05rem 0.25rem; border-radius: 3px; margin-left: 0.35rem; border: 1px solid var(--border-color);" title="${cleanName}"><i class="fa-solid fa-file-audio" style="font-size: 0.6rem;"></i> ${cleanName}</span>`;
+            text = String(item);
           }
-        }
+          
+          let audioPill = "";
+          if (audioFile) {
+            const cleanName = audioFile.replace(/^.*[\\\/]/, '');
+            const matchingCall = findCallByAudioName(audioFile);
+            if (matchingCall) {
+              audioPill = `
+                <button class="audio-pill-link" data-audio="${audioFile}" style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.35); color: var(--accent-primary); font-size: 0.65rem; padding: 0.15rem 0.4rem; border-radius: var(--radius-sm); cursor: pointer; display: inline-flex; align-items: center; gap: 0.25rem; transition: all 0.2s; margin-left: 0.35rem;" title="${lang === "es" ? "Ver detalles de la llamada" : "View call details"}">
+                  <i class="fa-solid fa-file-audio"></i>
+                  <span>${cleanName}</span>
+                  <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 0.55rem; opacity: 0.8;"></i>
+                </button>
+              `;
+            } else {
+              audioPill = `<span style="display: inline-block; font-size: 0.65rem; color: var(--text-muted); background: rgba(255,255,255,0.05); padding: 0.05rem 0.25rem; border-radius: 3px; margin-left: 0.35rem; border: 1px solid var(--border-color);" title="${cleanName}"><i class="fa-solid fa-file-audio" style="font-size: 0.6rem;"></i> ${cleanName}</span>`;
+            }
+          }
 
-        return `
-          <div style="font-size: 0.78rem; line-height: 1.4; color: var(--text-secondary); margin-bottom: 0.45rem; display: flex; flex-direction: column; gap: 0.15rem; align-items: flex-start;">
-            <div style="display: flex; gap: 0.4rem; align-items: flex-start;">
-              <i class="fa-solid fa-circle-exclamation" style="color: var(--color-warning); font-size: 0.72rem; margin-top: 0.25rem; flex-shrink: 0;"></i>
-              <span>${linkifyAudioFilenames(text, lang)}</span>
+          return `
+            <div style="font-size: 0.78rem; line-height: 1.4; color: var(--text-secondary); margin-bottom: 0.45rem; display: flex; flex-direction: column; gap: 0.15rem; align-items: flex-start;">
+              <div style="display: flex; gap: 0.4rem; align-items: flex-start;">
+                <i class="fa-solid fa-circle-exclamation" style="color: var(--color-warning); font-size: 0.72rem; margin-top: 0.25rem; flex-shrink: 0;"></i>
+                <span>${linkifyAudioFilenames(text, lang)}</span>
+              </div>
+              ${audioPill ? `<div style="padding-left: 1.1rem; margin-top: 0.1rem;">${audioPill}</div>` : ""}
             </div>
-            ${audioPill ? `<div style="padding-left: 1.1rem; margin-top: 0.1rem;">${audioPill}</div>` : ""}
-          </div>
-        `;
-      }).join("");
+          `;
+        }).join("");
+      }
+    } else {
+      gapsHtml = `<div style="font-size: 0.75rem; color: var(--text-muted); font-style: italic; margin-bottom: 0.5rem;">${lang === "es" ? "No se detectaron recomendaciones." : "No recommendations identified."}</div>`;
     }
 
     let oldGapsHtml = "";
@@ -4424,7 +4435,14 @@ function renderCoachingSection() {
               </span>
               <span>Nota: ${scoreStr}</span>
             </h5>
-            ${oldGaps.map(item => {
+            ${typeof oldGaps === "string" ? `
+              <div style="font-size: 0.75rem; line-height: 1.4; color: var(--text-muted); margin-bottom: 0.45rem; display: flex; flex-direction: column; gap: 0.1rem; align-items: flex-start; opacity: 0.8;">
+                <div style="display: flex; gap: 0.4rem; align-items: flex-start;">
+                  <i class="fa-solid fa-circle-check" style="color: var(--text-muted); font-size: 0.68rem; margin-top: 0.22rem; flex-shrink: 0;"></i>
+                  <span style="text-decoration: line-through; text-decoration-color: rgba(255,255,255,0.2);">${linkifyAudioFilenames(oldGaps, lang)}</span>
+                </div>
+              </div>
+            ` : (Array.isArray(oldGaps) ? oldGaps.map(item => {
               let text = "";
               let audioFile = "";
               if (typeof item === "object" && item !== null) {
@@ -4460,7 +4478,7 @@ function renderCoachingSection() {
                   ${audioPill ? `<div style="padding-left: 1.1rem; margin-top: 0.05rem;">${audioPill}</div>` : ""}
                 </div>
               `;
-            }).join("")}
+            }).join("") : "")}
           </div>
         `;
       });
@@ -4512,28 +4530,30 @@ function renderCoachingSection() {
   if (filteredDbImps.length > 0) {
     filteredDbImps.sort((a, b) => a.agent_name.localeCompare(b.agent_name)).forEach(row => {
       const agentName = row.agent_name;
-      const list = Array.isArray(row.ai_agent_improvements) 
-        ? row.ai_agent_improvements 
-        : (Array.isArray(row.agent_improvements) ? row.agent_improvements : []);
+      const list = row.ai_agent_improvements || row.agent_improvements;
       
-      const trainingGaps = [];
-
-      list.forEach(item => {
-        if (!item) return;
-        let text = "";
-        let audioFile = "";
-        if (typeof item === "object" && item !== null) {
-          text = (item.text || "").trim();
-          audioFile = (item.audio_file || "").trim();
-        } else {
-          text = String(item).trim();
-        }
-        if (text) {
-          trainingGaps.push({ text: text, audioFile: audioFile });
-        }
-      });
-
-      renderCard(agentName, trainingGaps);
+      if (typeof list === "string") {
+        renderCard(agentName, list);
+      } else if (Array.isArray(list)) {
+        const trainingGaps = [];
+        list.forEach(item => {
+          if (!item) return;
+          let text = "";
+          let audioFile = "";
+          if (typeof item === "object" && item !== null) {
+            text = (item.text || "").trim();
+            audioFile = (item.audio_file || "").trim();
+          } else {
+            text = String(item).trim();
+          }
+          if (text) {
+            trainingGaps.push({ text: text, audioFile: audioFile });
+          }
+        });
+        renderCard(agentName, trainingGaps);
+      } else {
+        renderCard(agentName, []);
+      }
     });
   } else {
     // Fallback: Group call improvements by Agent Name (original logic)
