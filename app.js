@@ -790,8 +790,6 @@ function updateUILanguage() {
   }
 
   // Translate Date Range filter elements
-  const optDateAll = document.getElementById("optDateAll");
-  if (optDateAll) optDateAll.textContent = lang === "es" ? "Todo el tiempo" : "All Time";
   const optDateLastWeek = document.getElementById("optDateLastWeek");
   if (optDateLastWeek) optDateLastWeek.textContent = lang === "es" ? "Última semana" : "Last Week";
   const optDateLastMonth = document.getElementById("optDateLastMonth");
@@ -2107,7 +2105,7 @@ function resetFilters() {
   document.getElementById("filterDuration").value = "all";
   
   const dateRangeFilter = document.getElementById("filterDateRange");
-  if (dateRangeFilter) dateRangeFilter.value = "all";
+  if (dateRangeFilter) dateRangeFilter.value = "last-month";
   const customInputs = document.getElementById("customDateRangeInputs");
   if (customInputs) customInputs.style.display = "none";
   const startInput = document.getElementById("inputStartDate");

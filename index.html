@@ -192,18 +192,17 @@
           <span style="font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Range:</span>
         </div>
         <select id="filterDateRange" class="filter-control" style="height: 30px; font-size: 0.75rem; font-weight: 600; padding: 0 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; outline: none; min-width: 120px;">
-          <option value="all" id="optDateAll">All Time</option>
           <option value="last-week" id="optDateLastWeek">Last Week</option>
-          <option value="last-month" id="optDateLastMonth">Last Month</option>
+          <option value="last-month" id="optDateLastMonth" selected>Last Month</option>
           <option value="last-year" id="optDateLastYear">Last Year</option>
           <option value="custom" id="optDateCustom">Custom Range...</option>
         </select>
         
         <!-- Custom Date Range inputs (hidden by default) -->
         <div id="customDateRangeInputs" style="display: none; align-items: center; gap: 0.35rem;">
-          <input type="date" id="inputStartDate" class="filter-control" style="height: 30px; font-size: 0.75rem; padding: 0 0.4rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); outline: none;">
+          <input type="date" id="inputStartDate" class="filter-control" onclick="this.showPicker()" style="height: 30px; font-size: 0.75rem; padding: 0 0.4rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); outline: none; cursor: pointer;">
           <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 500;">to</span>
-          <input type="date" id="inputEndDate" class="filter-control" style="height: 30px; font-size: 0.75rem; padding: 0 0.4rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); outline: none;">
+          <input type="date" id="inputEndDate" class="filter-control" onclick="this.showPicker()" style="height: 30px; font-size: 0.75rem; padding: 0 0.4rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); outline: none; cursor: pointer;">
         </div>
       </div>
     </nav>
