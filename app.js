@@ -8426,13 +8426,36 @@ function setupChatDrawer() {
   if (btnCloseChatTableModal) {
     btnCloseChatTableModal.addEventListener("click", closeChatTableModal);
   }
-  if (chatTableModal) {
-    chatTableModal.addEventListener("click", (e) => {
-      if (e.target === chatTableModal) {
-        closeChatTableModal();
-      }
-    });
-  }
+  // Setup outside click/touch & scroll auto-dismiss handlers
+  setupAutoDismissFloatingChat();
+}
+
+function setupAutoDismissFloatingChat() {
+  const chatDrawer = document.getElementById("chatDrawer");
+  const btnFloatingChat = document.getElementById("btnFloatingChat");
+
+  // Dismiss on clicking or touching outside
+  document.addEventListener("pointerdown", (e) => {
+    if (!chatDrawer || !chatDrawer.classList.contains("active")) return;
+
+    const isInsideChat = chatDrawer.contains(e.target);
+    const isInsideFab = btnFloatingChat && btnFloatingChat.contains(e.target);
+    const isInsideModal = document.getElementById("chatTableModal")?.contains(e.target);
+
+    if (!isInsideChat && !isInsideFab && !isInsideModal) {
+      closeChatDrawer();
+    }
+  });
+
+  // Dismiss on scrolling outside the chat popup
+  window.addEventListener("scroll", (e) => {
+    if (!chatDrawer || !chatDrawer.classList.contains("active")) return;
+
+    // Ignore scrolling inside the chat drawer itself
+    if (e.target && (chatDrawer.contains(e.target) || e.target === chatDrawer)) return;
+
+    closeChatDrawer();
+  }, { passive: true, capture: true });
 }
 
 function toggleChatDrawer() {
