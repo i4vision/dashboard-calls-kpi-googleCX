@@ -214,7 +214,10 @@ const TRANSLATIONS = {
     settingsLabelRealName: "REAL NAME",
     settingsBtnAddMap: '<i class="fa-solid fa-plus"></i> Add Mapping',
     settingsBtnSave: '<i class="fa-solid fa-floppy-disk"></i> Save Mappings',
-    settingsSavedStatus: '<i class="fa-solid fa-circle-check"></i> Agent mappings saved successfully!'
+    settingsSavedStatus: '<i class="fa-solid fa-circle-check"></i> Agent mappings saved successfully!',
+    settingsRefreshTitle: '<i class="fa-solid fa-arrows-rotate" style="color: var(--accent-secondary);"></i> Refresh Settings',
+    settingsRefreshSub: "Define the automatic refresh period (in days) to consolidated recommendations.",
+    settingsRefreshLabel: "REFRESH INTERVAL (DAYS)"
   },
   es: {
     brandName: "Llamadas i4vision",
@@ -388,7 +391,10 @@ const TRANSLATIONS = {
     settingsLabelRealName: "NOMBRE REAL",
     settingsBtnAddMap: '<i class="fa-solid fa-plus"></i> Agregar Mapeo',
     settingsBtnSave: '<i class="fa-solid fa-floppy-disk"></i> Guardar Mapeos',
-    settingsSavedStatus: '<i class="fa-solid fa-circle-check"></i> ¡Mapeos de agentes guardados exitosamente!'
+    settingsSavedStatus: '<i class="fa-solid fa-circle-check"></i> ¡Mapeos de agentes guardados exitosamente!',
+    settingsRefreshTitle: '<i class="fa-solid fa-arrows-rotate" style="color: var(--accent-secondary);"></i> Configuración de Actualización',
+    settingsRefreshSub: "Define el período de actualización automática (en días) para consolidar recomendaciones.",
+    settingsRefreshLabel: "INTERVALO DE ACTUALIZACIÓN (DÍAS)"
   }
 };
 
@@ -764,6 +770,15 @@ function updateUILanguage() {
   const saveGeneralSettingsStatus = document.getElementById("generalSettingsSaveStatus");
   if (saveGeneralSettingsStatus) saveGeneralSettingsStatus.innerHTML = dict.settingsSavedStatus;
 
+  const settingsRefreshTitleEl = document.getElementById("settingsRefreshTitle");
+  if (settingsRefreshTitleEl) settingsRefreshTitleEl.innerHTML = dict.settingsRefreshTitle;
+
+  const settingsRefreshSubEl = document.getElementById("settingsRefreshSub");
+  if (settingsRefreshSubEl) settingsRefreshSubEl.textContent = dict.settingsRefreshSub;
+
+  const settingsRefreshLabelEl = document.getElementById("settingsRefreshLabel");
+  if (settingsRefreshLabelEl) settingsRefreshLabelEl.textContent = dict.settingsRefreshLabel;
+
   const labelNewKpiWeight = document.getElementById("labelNewKpiWeight");
   if (labelNewKpiWeight) {
     labelNewKpiWeight.textContent = lang === "es" ? "PESO KPI (0 o 1 a 10)" : "KPI WEIGHT (0 or 1 to 10)";
@@ -824,10 +839,21 @@ async function loadRefreshSettingsFromSupabase() {
 
 function updateRefreshControlsUI() {
   const inputDays = document.getElementById("inputRefreshDays");
+  const settingsInputDays = document.getElementById("settingsRefreshDaysInput");
   const labelLast = document.getElementById("labelLastRefresh");
   const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
 
-  if (inputDays) inputDays.value = state.refreshDays || 7;
+  if (inputDays) {
+    if (inputDays.tagName === "INPUT") {
+      inputDays.value = state.refreshDays || 7;
+    } else {
+      inputDays.textContent = state.refreshDays || 7;
+    }
+  }
+
+  if (settingsInputDays) {
+    settingsInputDays.value = state.refreshDays || 7;
+  }
   
   if (labelLast) {
     if (state.lastRefresh) {
@@ -1020,12 +1046,20 @@ async function saveGlobalSettingToSupabase(key, value) {
 
 function setupRefreshControlsEventListeners() {
   const inputDays = document.getElementById("inputRefreshDays");
+  const settingsInputDays = document.getElementById("settingsRefreshDaysInput");
   const btnSync = document.getElementById("btnTriggerRefreshWebhook");
 
-  if (inputDays) {
-    inputDays.addEventListener("change", async () => {
-      const val = parseInt(inputDays.value) || 7;
+  if (settingsInputDays) {
+    settingsInputDays.addEventListener("change", async () => {
+      const val = parseInt(settingsInputDays.value) || 7;
       state.refreshDays = val;
+      if (inputDays) {
+        if (inputDays.tagName === "INPUT") {
+          inputDays.value = val;
+        } else {
+          inputDays.textContent = val;
+        }
+      }
       await saveGlobalSettingToSupabase("improvements_refresh_days", val);
     });
   }
@@ -1099,10 +1133,12 @@ function enforceRBACPermissions() {
   }
 
   // 6. Training Gaps Refresh controls (only editable/triggerable by admin)
-  const inputDays = document.getElementById("inputRefreshDays");
-  if (inputDays) inputDays.disabled = !isAdmin;
+  const settingsInputDays = document.getElementById("settingsRefreshDaysInput");
+  if (settingsInputDays) settingsInputDays.disabled = !isAdmin;
   const btnSync = document.getElementById("btnTriggerRefreshWebhook");
-  if (btnSync) btnSync.disabled = !isAdmin;
+  if (btnSync) {
+    btnSync.style.display = isAdmin ? "flex" : "none";
+  }
 }
 
 function setupSettingsTabs() {
