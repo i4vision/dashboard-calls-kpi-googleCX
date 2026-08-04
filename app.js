@@ -3432,14 +3432,12 @@ function computeCanonicalAgents(calls) {
     state.canonicalAgents[agentId] = bestCandidate;
   });
 
-  // Build the dynamic payload storing agent id, name, and all improvements
+  // Build the dynamic payload storing agent id and name
   const activeAgentsPayload = {};
   Object.keys(state.canonicalAgents).forEach(agentId => {
     const name = state.canonicalAgents[agentId];
-    const impsList = agentImprovements[agentId] || [];
     activeAgentsPayload[agentId] = {
-      name: name,
-      improvements: impsList
+      name: name
     };
   });
 
@@ -4559,39 +4557,7 @@ function renderCoachingSection() {
       // 3. Save agent revisions to Supabase
       await saveGlobalSettingToSupabase("agent_revisions", JSON.stringify(state.agentRevisions));
 
-      // 4. Empty out active_agents improvements in global_settings
-      const agentId = Object.keys(state.canonicalAgents || {}).find(key => state.canonicalAgents[key] === agent);
-      if (agentId) {
-        try {
-          const activeAgentsRes = await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=eq.active_agents`, {
-            headers: {
-              "apikey": SUPABASE_ANON_KEY,
-              "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
-            }
-          });
-          if (activeAgentsRes.ok) {
-            const data = await activeAgentsRes.json();
-            if (data && data.length > 0) {
-              const activeAgentsObj = JSON.parse(data[0].setting_value) || {};
-              if (activeAgentsObj[agentId]) {
-                activeAgentsObj[agentId].improvements = [];
-                
-                await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=eq.active_agents`, {
-                  method: "PATCH",
-                  headers: {
-                    "apikey": SUPABASE_ANON_KEY,
-                    "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-                    "Content-Type": "application/json"
-                  },
-                  body: JSON.stringify({ setting_value: JSON.stringify(activeAgentsObj), updated_at: new Date().toISOString() })
-                });
-              }
-            }
-          }
-        } catch (err) {
-          console.warn("Failed to clear improvements in active_agents global setting:", err);
-        }
-      }
+      // 4. Active agents updates removed as active_agents cache only stores ID and Name mapping.
 
       // 5. Clear ai_agent_improvements in database (don't increment period_number or raw_improvements here)
       try {
@@ -4677,39 +4643,7 @@ function renderCoachingSection() {
           }
         });
 
-        // 1. Restore improvements in active_agents global setting
-        const agentId = Object.keys(state.canonicalAgents || {}).find(key => state.canonicalAgents[key] === agent);
-        if (agentId) {
-          try {
-            const activeAgentsRes = await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=eq.active_agents`, {
-              headers: {
-                "apikey": SUPABASE_ANON_KEY,
-                "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
-              }
-            });
-            if (activeAgentsRes.ok) {
-              const data = await activeAgentsRes.json();
-              if (data && data.length > 0) {
-                const activeAgentsObj = JSON.parse(data[0].setting_value) || {};
-                if (activeAgentsObj[agentId]) {
-                  activeAgentsObj[agentId].improvements = archivedImps;
-                  
-                  await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=eq.active_agents`, {
-                    method: "PATCH",
-                    headers: {
-                      "apikey": SUPABASE_ANON_KEY,
-                      "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-                      "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({ setting_value: JSON.stringify(activeAgentsObj), updated_at: new Date().toISOString() })
-                  });
-                }
-              }
-            }
-          } catch (err) {
-            console.warn("Failed to restore active_agents global setting:", err);
-          }
-        }
+        // 1. Restore active agents updates removed as active_agents cache only stores ID and Name mapping.
 
         // 2. Restore improvements in agent_improvements table row (just ai_agent_improvements)
         try {
