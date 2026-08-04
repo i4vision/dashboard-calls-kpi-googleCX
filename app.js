@@ -2805,9 +2805,10 @@ function openDrawer(call) {
 
   const breakdownEl = document.getElementById("drawerScoreBreakdown");
   if (breakdownEl) {
-    if (scoreDetails.breakdown && Object.keys(scoreDetails.breakdown).length > 0) {
+    const validBreakdown = scoreDetails.breakdown ? Object.entries(scoreDetails.breakdown).filter(([k]) => !isKpiZeroWeight(k)) : [];
+    if (validBreakdown.length > 0) {
       breakdownEl.style.display = "flex";
-      breakdownEl.innerHTML = Object.entries(scoreDetails.breakdown).map(([k, v]) => {
+      breakdownEl.innerHTML = validBreakdown.map(([k, v]) => {
         const name = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
         return `<div style="display: flex; justify-content: space-between; font-size: 0.75rem; width: 100%;">
           <span style="color: var(--text-secondary);">${name}:</span>
@@ -3857,6 +3858,21 @@ async function saveActiveAgentsToSupabase(agentsObj) {
   }
 }
 
+function isKpiZeroWeight(name) {
+  if (!state.customKpis || !Array.isArray(state.customKpis)) return false;
+  const cleanName = String(name).trim().toLowerCase().replace(/[\s_]+/g, "");
+  const found = state.customKpis.find(kpi => {
+    if (!kpi || !kpi.name) return false;
+    const cleanKpiName = String(kpi.name).trim().toLowerCase().replace(/[\s_]+/g, "");
+    return cleanKpiName === cleanName;
+  });
+  if (found) {
+    const weightVal = found.weight !== undefined ? Number(found.weight) : (found.score !== undefined ? Number(found.score) : NaN);
+    return weightVal === 0;
+  }
+  return false;
+}
+
 function parseSingleKpiValue(rawVal) {
   if (rawVal === null || rawVal === undefined) return NaN;
   if (typeof rawVal === "boolean") return rawVal ? 10 : 0;
@@ -4587,7 +4603,7 @@ function renderCoachingSection() {
     // Build KPI breakdown text for the hover tooltip
     let titleAttr = "";
     const kpisObj = scoreInfo && scoreInfo.kpis ? scoreInfo.kpis : {};
-    const kpiEntries = Object.entries(kpisObj);
+    const kpiEntries = Object.entries(kpisObj).filter(([kpiName]) => !isKpiZeroWeight(kpiName));
     if (kpiEntries.length > 0) {
       const headerStr = lang === "es" ? "Puntuación por KPI:" : "KPI Scores Breakdown:";
       const listStr = kpiEntries
