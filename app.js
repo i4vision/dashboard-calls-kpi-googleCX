@@ -2376,12 +2376,12 @@ function renderOverviewCharts() {
   const agentDataValues = sortedAgents.map(a => a.average);
   state.currentAgentLabels = agentLabels;
 
-  // Dynamically size the chart container based on number of agents
-  // Each row needs ~36px of height. Minimum 280px.
-  const agentChartBody = document.getElementById("chartAgentScore")?.parentElement;
-  if (agentChartBody) {
-    const dynamicHeight = Math.max(280, agentLabels.length * 36 + 40);
-    agentChartBody.style.height = dynamicHeight + "px";
+  // Set the canvas height dynamically so each bar has ~28px.
+  // The wrapper div in index.html is a fixed-height scroll container.
+  const agentCanvas = document.getElementById("chartAgentScore");
+  if (agentCanvas) {
+    agentCanvas.style.height = Math.max(280, agentLabels.length * 28 + 20) + "px";
+    agentCanvas.style.width = "100%";
   }
 
   // Build a color palette that cycles so every bar gets a color regardless of count
