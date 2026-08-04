@@ -3857,6 +3857,76 @@ async function saveActiveAgentsToSupabase(agentsObj) {
   }
 }
 
+function parseSingleKpiValue(rawVal) {
+  if (rawVal === null || rawVal === undefined) return NaN;
+  if (typeof rawVal === "boolean") return rawVal ? 10 : 0;
+  if (typeof rawVal === "number") return (rawVal >= 0 && rawVal <= 1) ? (rawVal * 10) : rawVal;
+  if (typeof rawVal === "string") {
+    const str = rawVal.trim().toLowerCase();
+    if (str === "true" || str === "yes" || str === "sí" || str === "si" || str === "1") return 10;
+    if (str === "false" || str === "no" || str === "0") return 0;
+    const num = Number(str);
+    if (!isNaN(num)) return (num >= 0 && num <= 1) ? (num * 10) : num;
+  }
+  return NaN;
+}
+
+function getKpiScoreForCall(kpi, call, rawParsedObj) {
+  if (!kpi || !kpi.name) return NaN;
+
+  const kpiName = kpi.name.trim();
+  const cleanKpiName = kpiName.toLowerCase().replace(/[\s_]+/g, "");
+
+  // 1. Check rawParsedObj (from call.agent_score or call.kpis)
+  if (rawParsedObj && typeof rawParsedObj === "object") {
+    for (const key of Object.keys(rawParsedObj)) {
+      const cleanKey = key.toLowerCase().replace(/[\s_]+/g, "");
+      if (cleanKey === cleanKpiName || cleanKey.includes(cleanKpiName) || cleanKpiName.includes(cleanKey)) {
+        const score = parseSingleKpiValue(rawParsedObj[key]);
+        if (!isNaN(score)) return score;
+      }
+    }
+  }
+
+  // 2. Check direct properties on call object
+  if (call && typeof call === "object") {
+    for (const key of Object.keys(call)) {
+      const cleanKey = key.toLowerCase().replace(/[\s_]+/g, "");
+      if (cleanKey === cleanKpiName) {
+        const score = parseSingleKpiValue(call[key]);
+        if (!isNaN(score)) return score;
+      }
+    }
+  }
+
+  // 3. Smart fallback heuristics if not explicitly in raw parsed data
+  if (call && typeof call === "object") {
+    const fullText = (
+      (call.transcript || "") + " " +
+      (call.summary || "") + " " +
+      (call.entities || "") + " " +
+      (call.resolution_status || "")
+    ).toLowerCase();
+
+    // Goal achieved KPI
+    if (cleanKpiName.includes("goal") || cleanKpiName.includes("meta") || cleanKpiName.includes("objetivo")) {
+      const isResolved = (call.resolution_status || "").toLowerCase().includes("resolved") || (call.resolution_status || "").toLowerCase().includes("resuelto");
+      if (isResolved) return 10;
+      if (fullText.includes("solicitud") || fullText.includes("tarjeta") || fullText.includes("aceptó") || fullText.includes("acepto")) return 10;
+      return 0;
+    }
+
+    // Followed rules KPI
+    if (cleanKpiName.includes("rule") || cleanKpiName.includes("regla") || cleanKpiName.includes("followed")) {
+      const riskNorm = (call.risk_level || "").toLowerCase();
+      if (riskNorm === "high" || riskNorm === "alto") return 0;
+      return 10;
+    }
+  }
+
+  return NaN;
+}
+
 function getCallKpiObject(callOrScore) {
   if (callOrScore === null || callOrScore === undefined) return {};
 
@@ -3916,24 +3986,6 @@ function getCallKpiObject(callOrScore) {
     }
   }
 
-  // 3. Check configured custom KPIs matching fields on call directly
-  if (Array.isArray(state.customKpis)) {
-    state.customKpis.forEach(kpi => {
-      if (kpi && kpi.name) {
-        const name = kpi.name.trim();
-        const lowerName = name.toLowerCase().replace(/[\s_]+/g, "");
-        Object.keys(call).forEach(key => {
-          if (key.toLowerCase().replace(/[\s_]+/g, "") === lowerName) {
-            const val = call[key];
-            if (val !== undefined && val !== null) {
-              merged[name] = val;
-            }
-          }
-        });
-      }
-    });
-  }
-
   return merged;
 }
 
@@ -3942,18 +3994,42 @@ function getAgentScoreDetails(callOrScore) {
     return { score: NaN, breakdown: null };
   }
 
-  let kpiObj = {};
-  if (typeof callOrScore === "object" && !Array.isArray(callOrScore)) {
-    kpiObj = getCallKpiObject(callOrScore);
-  } else {
-    return processParsedScore(callOrScore);
+  const call = (typeof callOrScore === "object") ? callOrScore : null;
+  const rawParsedObj = getCallKpiObject(callOrScore);
+  const configuredKpis = state.customKpis || [];
+
+  if (configuredKpis.length > 0) {
+    let weightedSum = 0;
+    let totalWeight = 0;
+    let simpleSum = 0;
+    let simpleCount = 0;
+    const breakdown = {};
+
+    configuredKpis.forEach(kpi => {
+      const name = kpi.name ? kpi.name.trim() : "Custom KPI";
+      const score = getKpiScoreForCall(kpi, call, rawParsedObj);
+      
+      const weightVal = kpi.weight !== undefined ? Number(kpi.weight) : (kpi.score !== undefined ? Number(kpi.score) : NaN);
+      const weight = (!isNaN(weightVal) && weightVal > 0) ? weightVal : 1;
+
+      const effectiveScore = !isNaN(score) ? score : 0;
+      breakdown[name] = effectiveScore;
+
+      weightedSum += effectiveScore * weight;
+      totalWeight += weight;
+      simpleSum += effectiveScore;
+      simpleCount++;
+    });
+
+    if (totalWeight > 0) {
+      const finalScore = weightedSum / totalWeight;
+      return { score: finalScore, breakdown };
+    } else if (simpleCount > 0) {
+      return { score: simpleSum / simpleCount, breakdown };
+    }
   }
 
-  if (Object.keys(kpiObj).length === 0) {
-    return { score: NaN, breakdown: {} };
-  }
-
-  return processParsedScore(kpiObj);
+  return processParsedScore(rawParsedObj);
 }
 
 function processParsedScore(parsed) {
@@ -3970,16 +4046,6 @@ function processParsedScore(parsed) {
       return { score: NaN, breakdown: {} };
     }
 
-    const findKpiDefinition = (key) => {
-      if (!state.customKpis || !Array.isArray(state.customKpis)) return null;
-      const cleanKey = String(key).trim().toLowerCase().replace(/[\s_]+/g, "");
-      return state.customKpis.find(kpi => {
-        if (!kpi || !kpi.name) return false;
-        const cleanKpiName = String(kpi.name).trim().toLowerCase().replace(/[\s_]+/g, "");
-        return cleanKpiName === cleanKey;
-      });
-    };
-
     let simpleSum = 0;
     let simpleCount = 0;
     let weightedSum = 0;
@@ -3988,33 +4054,14 @@ function processParsedScore(parsed) {
     const breakdown = {};
 
     keys.forEach(key => {
-      let actualScore = NaN;
-      const rawVal = parsed[key];
-
-      if (typeof rawVal === "boolean") {
-        actualScore = rawVal ? 10 : 0;
-      } else if (typeof rawVal === "number") {
-        actualScore = (rawVal >= 0 && rawVal <= 1) ? (rawVal * 10) : rawVal;
-      } else if (typeof rawVal === "string") {
-        const str = rawVal.trim().toLowerCase();
-        if (str === "true" || str === "yes" || str === "sí" || str === "si" || str === "1") {
-          actualScore = 10;
-        } else if (str === "false" || str === "no" || str === "0") {
-          actualScore = 0;
-        } else {
-          const num = Number(str);
-          if (!isNaN(num)) {
-            actualScore = (num >= 0 && num <= 1) ? (num * 10) : num;
-          }
-        }
-      }
+      const actualScore = parseSingleKpiValue(parsed[key]);
 
       if (!isNaN(actualScore)) {
         breakdown[key] = actualScore;
         simpleSum += actualScore;
         simpleCount++;
 
-        const def = findKpiDefinition(key);
+        const def = (state.customKpis || []).find(kpi => kpi.name && kpi.name.trim().toLowerCase().replace(/[\s_]+/g, "") === String(key).trim().toLowerCase().replace(/[\s_]+/g, ""));
         if (def) {
           const weightVal = def.weight !== undefined ? Number(def.weight) : (def.score !== undefined ? Number(def.score) : NaN);
           if (!isNaN(weightVal) && weightVal > 0) {
