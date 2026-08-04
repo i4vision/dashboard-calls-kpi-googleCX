@@ -882,18 +882,18 @@ async function archiveActiveImprovementsBeforeSync() {
           : 1;
         const nextPeriod = currentPeriod + 1;
 
-        let rawHistory = [];
-        if (row.raw_improvements) {
+        let history = [];
+        if (row.improvements_history) {
           try {
-            rawHistory = Array.isArray(row.raw_improvements) 
-              ? row.raw_improvements 
-              : (typeof row.raw_improvements === "object" ? Object.values(row.raw_improvements) : []);
+            history = Array.isArray(row.improvements_history) 
+              ? row.improvements_history 
+              : (typeof row.improvements_history === "object" ? Object.values(row.improvements_history) : []);
           } catch (e) {
-            rawHistory = [];
+            history = [];
           }
         }
         
-        rawHistory.push({
+        history.push({
           period_number: nextPeriod,
           date: new Date().toISOString(),
           improvements: activeImps
@@ -909,7 +909,7 @@ async function archiveActiveImprovementsBeforeSync() {
           body: JSON.stringify({
             ai_agent_improvements: [], // Clear active so n8n starts fresh
             period_number: nextPeriod,
-            raw_improvements: rawHistory
+            improvements_history: history
           })
         });
       }
@@ -3445,6 +3445,82 @@ function computeCanonicalAgents(calls) {
 
   // Save active resolved agents payload to global_settings table dynamically
   saveActiveAgentsToSupabase(activeAgentsPayload);
+
+  // Save all individual Gemini Agent Improvements from each call to raw_improvements column in database
+  saveRawImprovementsToDatabase(agentImprovements);
+}
+
+async function saveRawImprovementsToDatabase(agentImprovements) {
+  try {
+    const impResponse = await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?select=*`, {
+      method: "GET",
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+    if (!impResponse.ok) return;
+    const dbImps = await impResponse.json();
+
+    for (const agentId of Object.keys(agentImprovements)) {
+      const name = state.canonicalAgents[agentId];
+      if (!name) continue;
+
+      const impsList = agentImprovements[agentId] || [];
+
+      const dbRow = dbImps.find(row => row.agent_name === name);
+      if (dbRow) {
+        let existingRaw = [];
+        try {
+          existingRaw = Array.isArray(dbRow.raw_improvements)
+            ? dbRow.raw_improvements
+            : (typeof dbRow.raw_improvements === "string" ? JSON.parse(dbRow.raw_improvements) : []);
+        } catch (e) {
+          existingRaw = [];
+        }
+
+        const isDifferent = JSON.stringify(existingRaw) !== JSON.stringify(impsList);
+        if (isDifferent) {
+          await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?id=eq.${dbRow.id}`, {
+            method: "PATCH",
+            headers: {
+              "apikey": SUPABASE_ANON_KEY,
+              "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              raw_improvements: impsList
+            })
+          });
+          
+          if (state.agentImprovementsTable) {
+            const localRow = state.agentImprovementsTable.find(r => r.agent_name === name);
+            if (localRow) {
+              localRow.raw_improvements = impsList;
+            }
+          }
+        }
+      } else {
+        await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements`, {
+          method: "POST",
+          headers: {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            agent_name: name,
+            ai_agent_improvements: [],
+            period_number: 1,
+            raw_improvements: impsList,
+            improvements_history: []
+          })
+        });
+      }
+    }
+  } catch (err) {
+    console.warn("Failed to save raw_improvements to database:", err);
+  }
 }
 
 async function saveActiveAgentsToSupabase(agentsObj) {
