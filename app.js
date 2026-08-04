@@ -4487,7 +4487,7 @@ function renderCoachingSection() {
     // Calculate date range for selected version
     let dateRangeStr = "";
     const versionImps = selectedVersion.improvements;
-    const timestamps = [];
+    const audioTimestamps = [];
 
     const extractDatesFromImps = (imps) => {
       let rawString = "";
@@ -4512,7 +4512,7 @@ function renderCoachingSection() {
           const month = parseInt(m.substring(4, 6), 10) - 1;
           const d = parseInt(m.substring(6, 8), 10);
           const dt = new Date(Date.UTC(y, month, d));
-          if (!isNaN(dt.getTime())) timestamps.push(dt.getTime());
+          if (!isNaN(dt.getTime())) audioTimestamps.push(dt.getTime());
         });
       }
 
@@ -4523,18 +4523,13 @@ function renderCoachingSection() {
           const c = findCallByAudioName(f.trim());
           if (c && (c.create_time || c.created_at)) {
             const dt = new Date(c.create_time || c.created_at);
-            if (!isNaN(dt.getTime())) timestamps.push(dt.getTime());
+            if (!isNaN(dt.getTime())) audioTimestamps.push(dt.getTime());
           }
         });
       }
     };
 
     extractDatesFromImps(versionImps);
-
-    if (selectedVersion.date) {
-      const archiveDt = new Date(selectedVersion.date);
-      if (!isNaN(archiveDt.getTime())) timestamps.push(archiveDt.getTime());
-    }
 
     const formatDateShort = (d) => {
       const dt = new Date(d);
@@ -4544,28 +4539,19 @@ function renderCoachingSection() {
       return `${day}/${month}/${year}`;
     };
 
-    if (timestamps.length > 0) {
-      timestamps.sort((a, b) => a - b);
-      const minDate = formatDateShort(timestamps[0]);
-      const maxDate = formatDateShort(timestamps[timestamps.length - 1]);
+    if (audioTimestamps.length > 0) {
+      audioTimestamps.sort((a, b) => a - b);
+      const minDate = formatDateShort(audioTimestamps[0]);
+      const maxDate = formatDateShort(audioTimestamps[audioTimestamps.length - 1]);
       if (minDate === maxDate) {
         dateRangeStr = selectedVersion.isActive ? `${minDate} - ${lang === "es" ? "Presente" : "Present"}` : minDate;
       } else {
         dateRangeStr = `${minDate} - ${maxDate}`;
       }
-    } else {
-      const agentCalls = calls.filter(c => getAgentName(c) === agentName);
-      const callTimes = agentCalls.map(c => new Date(c.create_time || c.created_at).getTime()).filter(t => !isNaN(t));
-      if (callTimes.length > 0) {
-        callTimes.sort((a, b) => a - b);
-        const minDate = formatDateShort(callTimes[0]);
-        const maxDate = formatDateShort(callTimes[callTimes.length - 1]);
-        dateRangeStr = selectedVersion.isActive 
-          ? `${minDate} - ${lang === "es" ? "Presente" : "Present"}` 
-          : `${minDate} - ${maxDate}`;
-      } else if (selectedVersion.date) {
-        dateRangeStr = formatDateShort(selectedVersion.date);
-      }
+    } else if (selectedVersion.date) {
+      dateRangeStr = formatDateShort(selectedVersion.date);
+    } else if (selectedVersion.isActive) {
+      dateRangeStr = lang === "es" ? "Periodo Actual" : "Current Period";
     }
 
     // Navigation HTML
