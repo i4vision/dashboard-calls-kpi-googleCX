@@ -4484,6 +4484,90 @@ function renderCoachingSection() {
     let selectedVersion = versions.find(v => v.id === state.coachingSelectedVersions[agentName]) || versions[versions.length - 1];
     state.coachingSelectedVersions[agentName] = selectedVersion.id;
 
+    // Calculate date range for selected version
+    let dateRangeStr = "";
+    const versionImps = selectedVersion.improvements;
+    const timestamps = [];
+
+    const extractDatesFromImps = (imps) => {
+      let rawString = "";
+      if (typeof imps === "string") {
+        rawString = imps;
+      } else if (Array.isArray(imps)) {
+        imps.forEach(item => {
+          if (typeof item === "object" && item !== null) {
+            if (item.audio_file || item.audioFile) rawString += " " + (item.audio_file || item.audioFile);
+            if (item.text) rawString += " " + item.text;
+          } else {
+            rawString += " " + String(item);
+          }
+        });
+      }
+
+      // Match filenames like 20260706-080439_... or 20260706_...
+      const filenameDateMatches = rawString.match(/\b(20\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\b/g);
+      if (filenameDateMatches) {
+        filenameDateMatches.forEach(m => {
+          const y = parseInt(m.substring(0, 4), 10);
+          const month = parseInt(m.substring(4, 6), 10) - 1;
+          const d = parseInt(m.substring(6, 8), 10);
+          const dt = new Date(Date.UTC(y, month, d));
+          if (!isNaN(dt.getTime())) timestamps.push(dt.getTime());
+        });
+      }
+
+      // Match call object dates if audio filenames match calls
+      const audioMatches = rawString.match(/\b([\w\-]+\.(?:mp3|mpr|wav|m4a))\b/gi);
+      if (audioMatches) {
+        audioMatches.forEach(f => {
+          const c = findCallByAudioName(f.trim());
+          if (c && (c.create_time || c.created_at)) {
+            const dt = new Date(c.create_time || c.created_at);
+            if (!isNaN(dt.getTime())) timestamps.push(dt.getTime());
+          }
+        });
+      }
+    };
+
+    extractDatesFromImps(versionImps);
+
+    if (selectedVersion.date) {
+      const archiveDt = new Date(selectedVersion.date);
+      if (!isNaN(archiveDt.getTime())) timestamps.push(archiveDt.getTime());
+    }
+
+    const formatDateShort = (d) => {
+      const dt = new Date(d);
+      const day = String(dt.getDate()).padStart(2, '0');
+      const month = String(dt.getMonth() + 1).padStart(2, '0');
+      const year = dt.getFullYear();
+      return `${day}/${month}/${year}`;
+    };
+
+    if (timestamps.length > 0) {
+      timestamps.sort((a, b) => a - b);
+      const minDate = formatDateShort(timestamps[0]);
+      const maxDate = formatDateShort(timestamps[timestamps.length - 1]);
+      if (minDate === maxDate) {
+        dateRangeStr = selectedVersion.isActive ? `${minDate} - ${lang === "es" ? "Presente" : "Present"}` : minDate;
+      } else {
+        dateRangeStr = `${minDate} - ${maxDate}`;
+      }
+    } else {
+      const agentCalls = calls.filter(c => getAgentName(c) === agentName);
+      const callTimes = agentCalls.map(c => new Date(c.create_time || c.created_at).getTime()).filter(t => !isNaN(t));
+      if (callTimes.length > 0) {
+        callTimes.sort((a, b) => a - b);
+        const minDate = formatDateShort(callTimes[0]);
+        const maxDate = formatDateShort(callTimes[callTimes.length - 1]);
+        dateRangeStr = selectedVersion.isActive 
+          ? `${minDate} - ${lang === "es" ? "Presente" : "Present"}` 
+          : `${minDate} - ${maxDate}`;
+      } else if (selectedVersion.date) {
+        dateRangeStr = formatDateShort(selectedVersion.date);
+      }
+    }
+
     // Navigation HTML
     let navHtml = "";
     if (versions.length > 1) {
@@ -4492,13 +4576,16 @@ function renderCoachingSection() {
       const hasNext = currentIndex < versions.length - 1;
 
       navHtml = `
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); padding: 0.35rem 0.6rem; border-radius: var(--radius-sm);">
-          <span style="font-size: 0.72rem; font-weight: 700; color: ${selectedVersion.isActive ? 'var(--color-warning)' : 'var(--text-muted)'}; display: flex; align-items: center; gap: 0.35rem;">
-            <i class="fa-solid ${selectedVersion.isActive ? 'fa-graduation-cap' : 'fa-clock-rotate-left'}" style="font-size: 0.72rem;"></i>
-            ${selectedVersion.isActive 
-              ? (lang === 'es' ? `Periodo Actual (${selectedVersion.period})` : `Current Period (${selectedVersion.period})`)
-              : (lang === 'es' ? `Historial: Periodo ${selectedVersion.period}` : `History: Period ${selectedVersion.period}`)}
-          </span>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); padding: 0.4rem 0.6rem; border-radius: var(--radius-sm);">
+          <div style="display: flex; flex-direction: column; gap: 0.15rem;">
+            <span style="font-size: 0.72rem; font-weight: 700; color: ${selectedVersion.isActive ? 'var(--color-warning)' : 'var(--text-muted)'}; display: flex; align-items: center; gap: 0.35rem;">
+              <i class="fa-solid ${selectedVersion.isActive ? 'fa-graduation-cap' : 'fa-clock-rotate-left'}" style="font-size: 0.72rem;"></i>
+              ${selectedVersion.isActive 
+                ? (lang === 'es' ? `Periodo Actual (${selectedVersion.period})` : `Current Period (${selectedVersion.period})`)
+                : (lang === 'es' ? `Historial: Periodo ${selectedVersion.period}` : `History: Period ${selectedVersion.period}`)}
+            </span>
+            ${dateRangeStr ? `<span style="font-size: 0.65rem; color: var(--text-muted); font-weight: 500; padding-left: 1.05rem; display: flex; align-items: center; gap: 0.25rem;"><i class="fa-regular fa-calendar" style="font-size: 0.6rem;"></i> ${dateRangeStr}</span>` : ''}
+          </div>
           <div style="display: flex; gap: 0.4rem; align-items: center;">
             <button class="period-nav-btn" data-agent="${agentName}" data-dir="prev" ${hasPrev ? "" : "disabled"} style="background: ${hasPrev ? 'rgba(255,255,255,0.08)' : 'transparent'}; border: 1px solid ${hasPrev ? 'var(--border-color)' : 'rgba(255,255,255,0.05)'}; color: ${hasPrev ? 'var(--text-primary)' : 'var(--text-muted)'}; padding: 0.15rem 0.35rem; border-radius: 4px; cursor: ${hasPrev ? 'pointer' : 'not-allowed'}; font-size: 0.65rem; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center;" title="${lang === 'es' ? 'Periodo anterior' : 'Previous period'}">
               <i class="fa-solid fa-chevron-left"></i>
@@ -4511,11 +4598,14 @@ function renderCoachingSection() {
       `;
     } else {
       navHtml = `
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; background: rgba(255,255,255,0.02); border: 1px dashed var(--border-color); padding: 0.35rem 0.6rem; border-radius: var(--radius-sm);">
-          <span style="font-size: 0.72rem; font-weight: 700; color: var(--color-warning); display: flex; align-items: center; gap: 0.35rem;">
-            <i class="fa-solid fa-graduation-cap" style="font-size: 0.72rem;"></i>
-            ${lang === 'es' ? `Periodo Actual (${selectedVersion.period})` : `Current Period (${selectedVersion.period})`}
-          </span>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; background: rgba(255,255,255,0.02); border: 1px dashed var(--border-color); padding: 0.4rem 0.6rem; border-radius: var(--radius-sm);">
+          <div style="display: flex; flex-direction: column; gap: 0.15rem;">
+            <span style="font-size: 0.72rem; font-weight: 700; color: var(--color-warning); display: flex; align-items: center; gap: 0.35rem;">
+              <i class="fa-solid fa-graduation-cap" style="font-size: 0.72rem;"></i>
+              ${lang === 'es' ? `Periodo Actual (${selectedVersion.period})` : `Current Period (${selectedVersion.period})`}
+            </span>
+            ${dateRangeStr ? `<span style="font-size: 0.65rem; color: var(--text-muted); font-weight: 500; padding-left: 1.05rem; display: flex; align-items: center; gap: 0.25rem;"><i class="fa-regular fa-calendar" style="font-size: 0.6rem;"></i> ${dateRangeStr}</span>` : ''}
+          </div>
         </div>
       `;
     }
