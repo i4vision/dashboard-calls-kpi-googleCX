@@ -1228,6 +1228,34 @@ function enforceRBACPermissions() {
   document.querySelectorAll(".btn-mark-reviewed").forEach(btn => {
     btn.style.display = isManagerOrHigher ? "inline-flex" : "none";
   });
+
+  // 5. Recordings & Audio Access (Recordings button & audio playback are available for i4vision, admin, manager; BLOCKED for user role)
+  const btnOpenAudio = document.getElementById("btnOpenAudioSidebar");
+  if (btnOpenAudio) {
+    btnOpenAudio.style.display = isManagerOrHigher ? "inline-flex" : "none";
+  }
+
+  if (!isManagerOrHigher) {
+    const audioSidebar = document.getElementById("audioSidebar");
+    const audioBackdrop = document.getElementById("audioSidebarBackdrop");
+    if (audioSidebar && audioSidebar.classList.contains("active")) {
+      audioSidebar.classList.remove("active");
+      audioSidebar.setAttribute("aria-hidden", "true");
+    }
+    if (audioBackdrop && audioBackdrop.classList.contains("active")) {
+      audioBackdrop.classList.remove("active");
+      audioBackdrop.setAttribute("aria-hidden", "true");
+    }
+  }
+
+  const btnPlay = document.getElementById("btnDrawerPlayAudio");
+  const btnDownload = document.getElementById("btnDrawerDownloadAudio");
+  const scrubber = document.getElementById("drawerAudioScrubberContainer");
+  if (!isManagerOrHigher) {
+    if (btnPlay) btnPlay.style.display = "none";
+    if (btnDownload) btnDownload.style.display = "none";
+    if (scrubber) scrubber.style.display = "none";
+  }
 }
 
 function setupSettingsTabs() {
@@ -2822,8 +2850,10 @@ function openDrawer(call) {
   const durationTimeText = document.getElementById("drawerAudioDurationTime");
   const audioEl = document.getElementById("gcsAudioElement");
 
+  const isManagerOrHigher = (state.userRole === "admin" || state.userRole === "i4vision" || state.userRole === "manager");
+
   if (btnDrawerPlayAudio) {
-    if (call.audio_file_name) {
+    if (call.audio_file_name && isManagerOrHigher) {
       btnDrawerPlayAudio.style.display = "inline-flex";
       if (scrubberContainer) scrubberContainer.style.display = "flex";
 
