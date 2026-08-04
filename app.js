@@ -427,6 +427,9 @@ function updateUILanguage() {
   const btnOpenChat = document.getElementById("btnOpenChat");
   if (btnOpenChat) btnOpenChat.innerHTML = dict.btnOpenChat;
   
+  const labelFloatingAi = document.getElementById("labelFloatingAiText");
+  if (labelFloatingAi) labelFloatingAi.textContent = lang === "es" ? "Preguntar a IA" : "Ask AI";
+  
   const btnOpenSettings = document.getElementById("btnOpenSettings");
   if (btnOpenSettings) btnOpenSettings.setAttribute("title", dict.btnOpenSettingsTitle);
   
@@ -8178,9 +8181,14 @@ function setupChatDrawer() {
   const btnChatSend = document.getElementById("btnChatSend");
   const chatInput = document.getElementById("chatInput");
   
+  const btnFloatingChat = document.getElementById("btnFloatingChat");
+  if (btnFloatingChat) {
+    btnFloatingChat.addEventListener("click", toggleChatDrawer);
+  }
+
   // Drawer visibility
   if (btnOpenChat) {
-    btnOpenChat.addEventListener("click", openChatDrawer);
+    btnOpenChat.addEventListener("click", toggleChatDrawer);
   }
   if (chatDrawerClose) {
     chatDrawerClose.addEventListener("click", closeChatDrawer);
@@ -8427,16 +8435,27 @@ function setupChatDrawer() {
   }
 }
 
+function toggleChatDrawer() {
+  const chatDrawer = document.getElementById("chatDrawer");
+  if (chatDrawer && chatDrawer.classList.contains("active")) {
+    closeChatDrawer();
+  } else {
+    openChatDrawer();
+  }
+}
+
 function openChatDrawer() {
   const chatDrawer = document.getElementById("chatDrawer");
-  const chatSidebarBackdrop = document.getElementById("chatSidebarBackdrop");
+  const btnFloatingChat = document.getElementById("btnFloatingChat");
   const chatNoKeyWarning = document.getElementById("chatNoKeyWarning");
+  const chatInput = document.getElementById("chatInput");
   
-  if (chatDrawer && chatSidebarBackdrop) {
+  if (chatDrawer) {
     chatDrawer.classList.add("active");
     chatDrawer.setAttribute("aria-hidden", "false");
-    chatSidebarBackdrop.classList.add("active");
-    chatSidebarBackdrop.setAttribute("aria-hidden", "false");
+  }
+  if (btnFloatingChat) {
+    btnFloatingChat.classList.add("active");
   }
   
   const savedKey = localStorage.getItem("gcs_openai_api_key") || "";
@@ -8445,17 +8464,22 @@ function openChatDrawer() {
   } else if (chatNoKeyWarning) {
     chatNoKeyWarning.style.display = "none";
   }
+
+  if (chatInput) {
+    setTimeout(() => chatInput.focus(), 150);
+  }
 }
 
 function closeChatDrawer() {
   const chatDrawer = document.getElementById("chatDrawer");
-  const chatSidebarBackdrop = document.getElementById("chatSidebarBackdrop");
+  const btnFloatingChat = document.getElementById("btnFloatingChat");
   
-  if (chatDrawer && chatSidebarBackdrop) {
+  if (chatDrawer) {
     chatDrawer.classList.remove("active");
     chatDrawer.setAttribute("aria-hidden", "true");
-    chatSidebarBackdrop.classList.remove("active");
-    chatSidebarBackdrop.setAttribute("aria-hidden", "true");
+  }
+  if (btnFloatingChat) {
+    btnFloatingChat.classList.remove("active");
   }
 }
 
