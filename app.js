@@ -61,7 +61,7 @@ const TRANSLATIONS = {
     kpiAvgCostCall: '<i class="fa-solid fa-coins"></i> Avg cost/call',
     
     tabOverview: '<i class="fa-solid fa-chart-pie"></i> Overview Analytics',
-    tabTrends: '<i class="fa-solid fa-chart-line"></i> Temporal Trends',
+    tabTrends: '<i class="fa-solid fa-chart-line"></i> Trends',
     tabCoaching: '<i class="fa-solid fa-graduation-cap"></i> Recommendations',
     coachingTitle: "Agent Recommendations",
     coachingSubtitle: "Consolidated improvement areas extracted from call records under the Gemini_Agent_Improvements KPI.",
@@ -239,7 +239,7 @@ const TRANSLATIONS = {
     kpiAvgCostCall: '<i class="fa-solid fa-coins"></i> Costo prom./llamada',
     
     tabOverview: '<i class="fa-solid fa-chart-pie"></i> Análisis General',
-    tabTrends: '<i class="fa-solid fa-chart-line"></i> Tendencias Temporales',
+    tabTrends: '<i class="fa-solid fa-chart-line"></i> Tendencias',
     tabCoaching: '<i class="fa-solid fa-graduation-cap"></i> Recomendaciones',
     coachingTitle: "Recomendaciones por Agente",
     coachingSubtitle: "Áreas de mejora consolidadas extraídas de las evaluaciones de Gemini bajo el KPI Gemini_Agent_Improvements.",
