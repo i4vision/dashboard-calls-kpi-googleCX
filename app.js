@@ -2376,13 +2376,7 @@ function renderOverviewCharts() {
   const agentDataValues = sortedAgents.map(a => a.average);
   state.currentAgentLabels = agentLabels;
 
-  // Set the canvas height dynamically so each bar has ~28px.
-  // The wrapper div in index.html is a fixed-height scroll container.
-  const agentCanvas = document.getElementById("chartAgentScore");
-  if (agentCanvas) {
-    agentCanvas.style.height = Math.max(280, agentLabels.length * 28 + 20) + "px";
-    agentCanvas.style.width = "100%";
-  }
+
 
   // Build a color palette that cycles so every bar gets a color regardless of count
   const colorPalette = [
@@ -2413,8 +2407,7 @@ function renderOverviewCharts() {
         data: agentDataValues,
         backgroundColor: barColors,
         borderWidth: 1,
-        borderRadius: 6,
-        barThickness: 20
+        borderRadius: 4
       }]
     },
     options: {
