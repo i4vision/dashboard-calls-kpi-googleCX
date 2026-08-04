@@ -784,6 +784,18 @@ function updateUILanguage() {
     labelNewKpiWeight.textContent = lang === "es" ? "PESO KPI (0 o 1 a 10)" : "KPI WEIGHT (0 or 1 to 10)";
   }
 
+  // Translate Date Range filter elements
+  const optDateAll = document.getElementById("optDateAll");
+  if (optDateAll) optDateAll.textContent = lang === "es" ? "Todo el tiempo" : "All Time";
+  const optDateLastWeek = document.getElementById("optDateLastWeek");
+  if (optDateLastWeek) optDateLastWeek.textContent = lang === "es" ? "Última semana" : "Last Week";
+  const optDateLastMonth = document.getElementById("optDateLastMonth");
+  if (optDateLastMonth) optDateLastMonth.textContent = lang === "es" ? "Último mes" : "Last Month";
+  const optDateLastYear = document.getElementById("optDateLastYear");
+  if (optDateLastYear) optDateLastYear.textContent = lang === "es" ? "Último año" : "Last Year";
+  const optDateCustom = document.getElementById("optDateCustom");
+  if (optDateCustom) optDateCustom.textContent = lang === "es" ? "Rango personalizado..." : "Custom Range...";
+
   // Refresh Call Details Drawer if it's currently open
   if (state.activeCall) {
     openDrawer(state.activeCall);
@@ -1711,6 +1723,22 @@ function setupEventListeners() {
   document.getElementById("filterCategory").addEventListener("change", applyFilters);
   document.getElementById("filterDuration").addEventListener("change", applyFilters);
   
+  // Date range filters
+  const dateRangeFilter = document.getElementById("filterDateRange");
+  if (dateRangeFilter) {
+    dateRangeFilter.addEventListener("change", () => {
+      const customInputs = document.getElementById("customDateRangeInputs");
+      if (customInputs) {
+        customInputs.style.display = dateRangeFilter.value === "custom" ? "inline-flex" : "none";
+      }
+      applyFilters();
+    });
+  }
+  const startInput = document.getElementById("inputStartDate");
+  if (startInput) startInput.addEventListener("change", applyFilters);
+  const endInput = document.getElementById("inputEndDate");
+  if (endInput) endInput.addEventListener("change", applyFilters);
+
   // Reset filters
   document.getElementById("resetFilters").addEventListener("click", resetFilters);
 
@@ -1889,7 +1917,44 @@ function applyFilters() {
   const categoryFilter = document.getElementById("filterCategory").value;
   const durationFilter = document.getElementById("filterDuration").value;
 
+  const dateRange = document.getElementById("filterDateRange") ? document.getElementById("filterDateRange").value : "all";
+
   state.filteredCalls = state.allCalls.filter(call => {
+    // Date Range Filter
+    let dateMatch = true;
+    if (dateRange !== "all") {
+      const callDate = new Date(call.create_time || call.created_at);
+      if (isNaN(callDate.getTime())) {
+        dateMatch = false;
+      } else {
+        const now = new Date();
+        if (dateRange === "last-week") {
+          const sevenDaysAgo = new Date();
+          sevenDaysAgo.setDate(now.getDate() - 7);
+          dateMatch = callDate >= sevenDaysAgo && callDate <= now;
+        } else if (dateRange === "last-month") {
+          const thirtyDaysAgo = new Date();
+          thirtyDaysAgo.setDate(now.getDate() - 30);
+          dateMatch = callDate >= thirtyDaysAgo && callDate <= now;
+        } else if (dateRange === "last-year") {
+          const oneYearAgo = new Date();
+          oneYearAgo.setDate(now.getDate() - 365);
+          dateMatch = callDate >= oneYearAgo && callDate <= now;
+        } else if (dateRange === "custom") {
+          const startDateVal = document.getElementById("inputStartDate") ? document.getElementById("inputStartDate").value : "";
+          const endDateVal = document.getElementById("inputEndDate") ? document.getElementById("inputEndDate").value : "";
+          if (startDateVal) {
+            const start = new Date(startDateVal + "T00:00:00");
+            dateMatch = dateMatch && callDate >= start;
+          }
+          if (endDateVal) {
+            const end = new Date(endDateVal + "T23:59:59");
+            dateMatch = dateMatch && callDate <= end;
+          }
+        }
+      }
+    }
+
     // Search Filter (Generic query)
     const searchMatch = !searchQuery || 
       (call.conversation_name && call.conversation_name.toLowerCase().includes(searchQuery)) ||
@@ -1943,7 +2008,7 @@ function applyFilters() {
     // Clickable Agent filter
     const selectedAgentMatch = !state.selectedAgentFilter || getAgentName(call) === state.selectedAgentFilter;
 
-    return searchMatch && audioSearchMatch && sentimentMatch && riskMatch && resolutionMatch && categoryMatch && durationMatch && scoreMatch && selectedCategoryMatch && selectedAgentMatch;
+    return dateMatch && searchMatch && audioSearchMatch && sentimentMatch && riskMatch && resolutionMatch && categoryMatch && durationMatch && scoreMatch && selectedCategoryMatch && selectedAgentMatch;
   });
 
   // Toggle chart reset buttons based on active selections
@@ -2035,6 +2100,16 @@ function resetFilters() {
   document.getElementById("filterResolution").value = "all";
   document.getElementById("filterCategory").value = "all";
   document.getElementById("filterDuration").value = "all";
+  
+  const dateRangeFilter = document.getElementById("filterDateRange");
+  if (dateRangeFilter) dateRangeFilter.value = "all";
+  const customInputs = document.getElementById("customDateRangeInputs");
+  if (customInputs) customInputs.style.display = "none";
+  const startInput = document.getElementById("inputStartDate");
+  if (startInput) startInput.value = "";
+  const endInput = document.getElementById("inputEndDate");
+  if (endInput) endInput.value = "";
+
   state.scoreThresholdFilter = null;
   state.selectedCategoryFilter = null;
   state.selectedAgentFilter = null;

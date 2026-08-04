@@ -177,11 +177,35 @@
       </div>
     </section>
 
-    <!-- Tab Navigation for Charts -->
-    <nav class="tab-navigation" aria-label="Chart Section Navigation">
-      <button class="tab-btn active" data-target="overviewCharts"><i class="fa-solid fa-chart-pie"></i> Overview Analytics</button>
-      <button class="tab-btn" data-target="trendCharts"><i class="fa-solid fa-chart-line"></i> Temporal Trends</button>
-      <button class="tab-btn" data-target="coachingSection"><i class="fa-solid fa-graduation-cap"></i> Coaching & Training</button>
+    <!-- Tab Navigation for Charts & Date Filter -->
+    <nav class="tab-navigation" aria-label="Chart Section Navigation" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 1.5rem;">
+      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <button class="tab-btn active" data-target="overviewCharts"><i class="fa-solid fa-chart-pie"></i> Overview Analytics</button>
+        <button class="tab-btn" data-target="trendCharts"><i class="fa-solid fa-chart-line"></i> Temporal Trends</button>
+        <button class="tab-btn" data-target="coachingSection"><i class="fa-solid fa-graduation-cap"></i> Coaching & Training</button>
+      </div>
+      
+      <!-- Date Filter Dropdown and Custom Date inputs -->
+      <div id="dateFilterWrapper" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-right: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.35rem;">
+          <i class="fa-solid fa-calendar-days" style="color: var(--accent-secondary); font-size: 0.85rem;"></i>
+          <span style="font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Range:</span>
+        </div>
+        <select id="filterDateRange" class="filter-control" style="height: 30px; font-size: 0.75rem; font-weight: 600; padding: 0 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; outline: none; min-width: 120px;">
+          <option value="all" id="optDateAll">All Time</option>
+          <option value="last-week" id="optDateLastWeek">Last Week</option>
+          <option value="last-month" id="optDateLastMonth">Last Month</option>
+          <option value="last-year" id="optDateLastYear">Last Year</option>
+          <option value="custom" id="optDateCustom">Custom Range...</option>
+        </select>
+        
+        <!-- Custom Date Range inputs (hidden by default) -->
+        <div id="customDateRangeInputs" style="display: none; align-items: center; gap: 0.35rem;">
+          <input type="date" id="inputStartDate" class="filter-control" style="height: 30px; font-size: 0.75rem; padding: 0 0.4rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); outline: none;">
+          <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 500;">to</span>
+          <input type="date" id="inputEndDate" class="filter-control" style="height: 30px; font-size: 0.75rem; padding: 0 0.4rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); outline: none;">
+        </div>
+      </div>
     </nav>
 
     <!-- Overview Charts Container -->
