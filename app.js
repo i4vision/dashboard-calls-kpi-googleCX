@@ -217,7 +217,8 @@ const TRANSLATIONS = {
     settingsSavedStatus: '<i class="fa-solid fa-circle-check"></i> Agent mappings saved successfully!',
     settingsRefreshTitle: '<i class="fa-solid fa-arrows-rotate" style="color: var(--accent-secondary);"></i> Refresh Settings',
     settingsRefreshSub: "Define the automatic refresh period (in days) to consolidated recommendations.",
-    settingsRefreshLabel: "REFRESH INTERVAL (DAYS)"
+    settingsRefreshLabel: "REFRESH INTERVAL (DAYS)",
+    settingsTabPeriod: "Period"
   },
   es: {
     brandName: "Llamadas i4vision",
@@ -394,7 +395,8 @@ const TRANSLATIONS = {
     settingsSavedStatus: '<i class="fa-solid fa-circle-check"></i> ¡Mapeos de agentes guardados exitosamente!',
     settingsRefreshTitle: '<i class="fa-solid fa-arrows-rotate" style="color: var(--accent-secondary);"></i> Configuración de Actualización',
     settingsRefreshSub: "Define el período de actualización automática (en días) para consolidar recomendaciones.",
-    settingsRefreshLabel: "INTERVALO DE ACTUALIZACIÓN (DÍAS)"
+    settingsRefreshLabel: "INTERVALO DE ACTUALIZACIÓN (DÍAS)",
+    settingsTabPeriod: "Periodo"
   }
 };
 
@@ -769,6 +771,9 @@ function updateUILanguage() {
   
   const saveGeneralSettingsStatus = document.getElementById("generalSettingsSaveStatus");
   if (saveGeneralSettingsStatus) saveGeneralSettingsStatus.innerHTML = dict.settingsSavedStatus;
+
+  const labelTabPeriod = document.getElementById("labelTabPeriod");
+  if (labelTabPeriod) labelTabPeriod.textContent = dict.settingsTabPeriod;
 
   const settingsRefreshTitleEl = document.getElementById("settingsRefreshTitle");
   if (settingsRefreshTitleEl) settingsRefreshTitleEl.innerHTML = dict.settingsRefreshTitle;

@@ -829,6 +829,9 @@
         <button class="settings-tab-btn active" data-tab="tab-lang">
           <i class="fa-solid fa-language"></i> <span class="tab-label">Language</span>
         </button>
+        <button class="settings-tab-btn" data-tab="tab-period">
+          <i class="fa-solid fa-arrows-rotate"></i> <span class="tab-label" id="labelTabPeriod">Period</span>
+        </button>
         <button class="settings-tab-btn" data-tab="tab-rules">
           <i class="fa-solid fa-scroll"></i> <span class="tab-label">Guidelines</span>
         </button>
@@ -845,7 +848,7 @@
 
       <!-- Language Settings Card -->
       <div id="tab-lang" class="settings-tab-content active-content">
-        <div class="settings-card" style="padding: 1rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); width: 100%; margin-bottom: 1.25rem;">
+        <div class="settings-card" style="padding: 1rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); width: 100%;">
           <h3 id="settingsLangCardTitle" style="font-size: 0.9rem; font-weight: 600; margin: 0 0 0.5rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.35rem;">
             <i class="fa-solid fa-language" style="color: var(--accent-secondary);"></i> Language Settings
           </h3>
@@ -860,7 +863,10 @@
             </select>
           </div>
         </div>
+      </div>
 
+      <!-- Period Settings Card -->
+      <div id="tab-period" class="settings-tab-content">
         <div class="settings-card" style="padding: 1rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); width: 100%;">
           <h3 id="settingsRefreshTitle" style="font-size: 0.9rem; font-weight: 600; margin: 0 0 0.5rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.35rem;">
             <i class="fa-solid fa-arrows-rotate" style="color: var(--accent-secondary);"></i> Refresh Settings
