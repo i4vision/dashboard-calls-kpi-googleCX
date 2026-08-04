@@ -2407,6 +2407,7 @@ function renderOverviewCharts() {
           ticks: { color: mutedColor, font: { family: "Inter" } }
         },
         y: {
+          type: 'category',
           grid: { display: false },
           ticks: { color: textColor, font: { family: "Inter", weight: "500" } }
         }

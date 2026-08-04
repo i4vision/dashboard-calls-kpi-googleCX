@@ -431,9 +431,6 @@ h1, h2, h3, h4, h5, h6 {
   position: relative;
   width: 100%;
   min-height: 280px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 /* ==========================================================================
