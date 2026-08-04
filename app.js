@@ -3617,22 +3617,6 @@ async function saveRawImprovementsToDatabase(agentImprovements) {
             }
           }
         }
-      } else {
-        await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements`, {
-          method: "POST",
-          headers: {
-            "apikey": SUPABASE_ANON_KEY,
-            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            agent_name: name,
-            ai_agent_improvements: [],
-            period_number: 1,
-            raw_improvements: impsList,
-            improvements_history: []
-          })
-        });
       }
     }
   } catch (err) {
@@ -3644,21 +3628,7 @@ async function saveActiveAgentsToSupabase(agentsObj) {
   try {
     const agentsStr = JSON.stringify(agentsObj || {});
 
-    // If active resolved agents are empty, delete all rows from agent_improvements table in Supabase
-    if (Object.keys(agentsObj || {}).length === 0) {
-      try {
-        await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?agent_name=not.is.null`, {
-          method: "DELETE",
-          headers: {
-            "apikey": SUPABASE_ANON_KEY,
-            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
-          }
-        });
-        state.agentImprovementsTable = [];
-      } catch (err) {
-        console.warn("Failed to clear agent_improvements table on empty calls:", err);
-      }
-    }
+
 
     // First check if the row exists in global_settings
     const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=eq.active_agents`, {
