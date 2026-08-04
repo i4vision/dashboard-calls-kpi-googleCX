@@ -3910,9 +3910,26 @@ function getKpiScoreForCall(kpi, call, rawParsedObj) {
 
     // Goal achieved KPI
     if (cleanKpiName.includes("goal") || cleanKpiName.includes("meta") || cleanKpiName.includes("objetivo")) {
-      const isResolved = (call.resolution_status || "").toLowerCase().includes("resolved") || (call.resolution_status || "").toLowerCase().includes("resuelto");
-      if (isResolved) return 10;
-      if (fullText.includes("solicitud") || fullText.includes("tarjeta") || fullText.includes("aceptó") || fullText.includes("acepto")) return 10;
+      const res = (call.resolution_status || "").toLowerCase();
+      if (res.includes("resolve") || res.includes("resuelt") || res.includes("si") || res.includes("yes") || res.includes("exito") || res.includes("complet") || res.includes("cumpli")) {
+        return 10;
+      }
+      if (res.includes("unresolve") || res.includes("no_resuelt") || res.includes("cancel") || res.includes("fallid") || res.includes("failed")) {
+        return 0;
+      }
+      // Check overall call score if available
+      const rawScore = Number(call.agent_score);
+      if (!isNaN(rawScore) && rawScore >= 6.0) {
+        return 10;
+      }
+      // Check positive keywords in text
+      if (fullText.includes("solicitud") || fullText.includes("tarjeta") || fullText.includes("acept") || fullText.includes("éxito") || fullText.includes("exito") || fullText.includes("datos") || fullText.includes("correcto")) {
+        return 10;
+      }
+      // Default to 10 if call has normal/positive status
+      if (!res.includes("unresolve") && !res.includes("fail") && (!isNaN(rawScore) ? rawScore >= 5.0 : true)) {
+        return 10;
+      }
       return 0;
     }
 
@@ -4010,15 +4027,18 @@ function getAgentScoreDetails(callOrScore) {
       const score = getKpiScoreForCall(kpi, call, rawParsedObj);
       
       const weightVal = kpi.weight !== undefined ? Number(kpi.weight) : (kpi.score !== undefined ? Number(kpi.score) : NaN);
-      const weight = (!isNaN(weightVal) && weightVal > 0) ? weightVal : 1;
+      // Explicit 0 weight means the KPI is tracked for info but DOES NOT contribute weight to score
+      const weight = (!isNaN(weightVal) && weightVal >= 0) ? weightVal : 1;
 
       const effectiveScore = !isNaN(score) ? score : 0;
       breakdown[name] = effectiveScore;
 
-      weightedSum += effectiveScore * weight;
-      totalWeight += weight;
-      simpleSum += effectiveScore;
-      simpleCount++;
+      if (weight > 0) {
+        weightedSum += effectiveScore * weight;
+        totalWeight += weight;
+        simpleSum += effectiveScore;
+        simpleCount++;
+      }
     });
 
     if (totalWeight > 0) {
