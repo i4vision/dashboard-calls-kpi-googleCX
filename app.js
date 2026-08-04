@@ -4139,10 +4139,9 @@ function renderCoachingSection() {
       const matchingCall = findCallByAudioName(cleanName);
       if (matchingCall) {
         return `
-          <button class="audio-pill-link inline-audio-link" data-audio="${cleanName}" style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.35); color: var(--accent-primary); font-size: 0.72rem; padding: 0.05rem 0.25rem; border-radius: var(--radius-sm); cursor: pointer; display: inline-flex; align-items: center; gap: 0.15rem; transition: all 0.2s;" title="${lang === "es" ? "Ver detalles de la llamada" : "View call details"}">
-            <i class="fa-solid fa-file-audio" style="font-size: 0.65rem;"></i>
-            <span>${cleanName}</span>
-            <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 0.52rem; opacity: 0.8;"></i>
+          <button class="audio-pill-link inline-audio-link" data-audio="${cleanName}" style="background: rgba(139, 92, 246, 0.15); border: 1px solid rgba(139, 92, 246, 0.4); color: var(--accent-primary); font-size: 0.72rem; padding: 0.15rem 0.35rem; border-radius: var(--radius-sm); cursor: pointer; display: inline-flex; align-items: center; gap: 0.2rem; transition: all 0.2s; vertical-align: middle; margin: 0 0.15rem;" title="${cleanName} (${lang === "es" ? "Ver detalles de la llamada" : "View call details"})">
+            <i class="fa-solid fa-file-audio" style="font-size: 0.72rem;"></i>
+            <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 0.55rem; opacity: 0.85;"></i>
           </button>
         `;
       }
@@ -4579,14 +4578,13 @@ function renderCoachingSection() {
             const matchingCall = findCallByAudioName(audioFile);
             if (matchingCall) {
               audioPill = `
-                <button class="audio-pill-link" data-audio="${audioFile}" style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.35); color: var(--accent-primary); font-size: 0.65rem; padding: 0.15rem 0.4rem; border-radius: var(--radius-sm); cursor: pointer; display: inline-flex; align-items: center; gap: 0.25rem; transition: all 0.2s; margin-left: 0.35rem;" title="${lang === "es" ? "Ver detalles de la llamada" : "View call details"}">
-                  <i class="fa-solid fa-file-audio"></i>
-                  <span>${cleanName}</span>
-                  <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 0.55rem; opacity: 0.8;"></i>
+                <button class="audio-pill-link" data-audio="${audioFile}" style="background: rgba(139, 92, 246, 0.15); border: 1px solid rgba(139, 92, 246, 0.4); color: var(--accent-primary); font-size: 0.7rem; padding: 0.15rem 0.35rem; border-radius: var(--radius-sm); cursor: pointer; display: inline-flex; align-items: center; gap: 0.2rem; transition: all 0.2s; margin-left: 0.35rem;" title="${cleanName} (${lang === "es" ? "Ver detalles de la llamada" : "View call details"})">
+                  <i class="fa-solid fa-file-audio" style="font-size: 0.72rem;"></i>
+                  <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 0.55rem; opacity: 0.85;"></i>
                 </button>
               `;
             } else {
-              audioPill = `<span style="display: inline-block; font-size: 0.65rem; color: var(--text-muted); background: rgba(255,255,255,0.05); padding: 0.05rem 0.25rem; border-radius: 3px; margin-left: 0.35rem; border: 1px solid var(--border-color);" title="${cleanName}"><i class="fa-solid fa-file-audio" style="font-size: 0.6rem;"></i> ${cleanName}</span>`;
+              audioPill = `<span style="display: inline-flex; align-items: center; gap: 0.2rem; font-size: 0.7rem; color: var(--text-muted); background: rgba(255,255,255,0.05); padding: 0.15rem 0.35rem; border-radius: var(--radius-sm); margin-left: 0.35rem; border: 1px solid var(--border-color);" title="${cleanName}"><i class="fa-solid fa-file-audio" style="font-size: 0.7rem;"></i></span>`;
             }
           }
 
@@ -4647,14 +4645,13 @@ function renderCoachingSection() {
                 const matchingCall = findCallByAudioName(audioFile);
                 if (matchingCall) {
                   audioPill = `
-                    <button class="audio-pill-link" data-audio="${audioFile}" style="background: rgba(255, 255, 255, 0.05); border: 1px dashed rgba(255, 255, 255, 0.2); color: var(--text-muted); font-size: 0.62rem; padding: 0.1rem 0.3rem; border-radius: var(--radius-sm); cursor: pointer; display: inline-flex; align-items: center; gap: 0.2rem; transition: all 0.2s; margin-left: 0.35rem;" title="${lang === "es" ? "Ver detalles de la llamada" : "View call details"}">
-                      <i class="fa-solid fa-file-audio"></i>
-                      <span>${cleanName}</span>
+                    <button class="audio-pill-link" data-audio="${audioFile}" style="background: rgba(255, 255, 255, 0.05); border: 1px dashed rgba(255, 255, 255, 0.2); color: var(--text-muted); font-size: 0.65rem; padding: 0.1rem 0.3rem; border-radius: var(--radius-sm); cursor: pointer; display: inline-flex; align-items: center; gap: 0.2rem; transition: all 0.2s; margin-left: 0.35rem;" title="${cleanName} (${lang === "es" ? "Ver detalles de la llamada" : "View call details"})">
+                      <i class="fa-solid fa-file-audio" style="font-size: 0.68rem;"></i>
                       <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 0.5rem; opacity: 0.6;"></i>
                     </button>
                   `;
                 } else {
-                  audioPill = `<span style="display: inline-block; font-size: 0.62rem; color: var(--text-muted); background: rgba(255,255,255,0.03); padding: 0.02rem 0.2rem; border-radius: 3px; margin-left: 0.35rem; border: 1px dashed rgba(255,255,255,0.1);" title="${cleanName}"><i class="fa-solid fa-file-audio" style="font-size: 0.58rem; opacity: 0.6;"></i> ${cleanName}</span>`;
+                  audioPill = `<span style="display: inline-flex; align-items: center; gap: 0.2rem; font-size: 0.65rem; color: var(--text-muted); background: rgba(255,255,255,0.03); padding: 0.1rem 0.3rem; border-radius: var(--radius-sm); margin-left: 0.35rem; border: 1px dashed rgba(255,255,255,0.1);" title="${cleanName}"><i class="fa-solid fa-file-audio" style="font-size: 0.68rem; opacity: 0.6;"></i></span>`;
                 }
               }
               
