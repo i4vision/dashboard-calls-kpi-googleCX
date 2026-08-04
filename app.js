@@ -2376,6 +2376,33 @@ function renderOverviewCharts() {
   const agentDataValues = sortedAgents.map(a => a.average);
   state.currentAgentLabels = agentLabels;
 
+  // Dynamically size the chart container based on number of agents
+  // Each row needs ~36px of height. Minimum 280px.
+  const agentChartBody = document.getElementById("chartAgentScore")?.parentElement;
+  if (agentChartBody) {
+    const dynamicHeight = Math.max(280, agentLabels.length * 36 + 40);
+    agentChartBody.style.height = dynamicHeight + "px";
+  }
+
+  // Build a color palette that cycles so every bar gets a color regardless of count
+  const colorPalette = [
+    "rgba(139, 92, 246, 0.85)",  // Indigo
+    "rgba(59, 130, 246, 0.85)",   // Blue
+    "rgba(16, 185, 129, 0.85)",   // Green
+    "rgba(245, 158, 11, 0.85)",   // Amber
+    "rgba(244, 63, 94, 0.85)",    // Red
+    "rgba(14, 165, 233, 0.85)",   // Sky
+    "rgba(168, 85, 247, 0.85)",   // Purple
+    "rgba(20, 184, 166, 0.85)",   // Teal
+    "rgba(234, 88, 12, 0.85)",    // Orange
+    "rgba(100, 116, 139, 0.85)",  // Slate
+    "rgba(6, 182, 212, 0.85)",    // Cyan
+    "rgba(251, 191, 36, 0.85)",   // Yellow
+    "rgba(239, 68, 68, 0.85)",    // Rose
+    "rgba(34, 197, 94, 0.85)",    // Emerald
+  ];
+  const barColors = agentLabels.map((_, i) => colorPalette[i % colorPalette.length]);
+
   if (state.charts.agentScore) state.charts.agentScore.destroy();
   state.charts.agentScore = new Chart(document.getElementById("chartAgentScore").getContext("2d"), {
     type: "bar",
@@ -2384,21 +2411,16 @@ function renderOverviewCharts() {
       datasets: [{
         label: "Average Performance Score",
         data: agentDataValues,
-        backgroundColor: [
-          "rgba(139, 92, 246, 0.85)", // Indigo
-          "rgba(59, 130, 246, 0.85)",  // Blue
-          "rgba(16, 185, 129, 0.85)",  // Green
-          "rgba(245, 158, 11, 0.85)",  // Yellow
-          "rgba(244, 63, 94, 0.85)"    // Red
-        ],
+        backgroundColor: barColors,
         borderWidth: 1,
-        borderRadius: 6
+        borderRadius: 6,
+        barThickness: 20
       }]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      indexAxis: 'y', // Horizontal bars
+      indexAxis: 'y',
       scales: {
         x: {
           min: 0,
@@ -2407,7 +2429,6 @@ function renderOverviewCharts() {
           ticks: { color: mutedColor, font: { family: "Inter" } }
         },
         y: {
-          type: 'category',
           grid: { display: false },
           ticks: { color: textColor, font: { family: "Inter", weight: "500" } }
         }
