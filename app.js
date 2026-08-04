@@ -3563,6 +3563,60 @@ function computeCanonicalAgents(calls) {
   // Save active resolved agents payload to global_settings table dynamically
   saveActiveAgentsToSupabase(activeAgentsPayload);
 
+  // Automatically rename any existing database row with auto-generated placeholder names to their newly mapped canonical names
+  (async () => {
+    try {
+      const dbImps = state.agentImprovementsTable || [];
+      for (const agentId of Object.keys(state.canonicalAgents)) {
+        const canonicalName = state.canonicalAgents[agentId];
+        const autoGenNameEs = "Agente #" + agentId;
+        const autoGenNameEn = "Agent #" + agentId;
+        
+        if (canonicalName !== autoGenNameEs && canonicalName !== autoGenNameEn) {
+          const dbRowToRename = dbImps.find(row => 
+            row.agent_name === autoGenNameEs || row.agent_name === autoGenNameEn
+          );
+          
+          if (dbRowToRename) {
+            const targetRowExists = dbImps.some(row => 
+              row.agent_name === canonicalName && row.id !== dbRowToRename.id
+            );
+            
+            if (targetRowExists) {
+              await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?id=eq.${dbRowToRename.id}`, {
+                method: "DELETE",
+                headers: {
+                  "apikey": SUPABASE_ANON_KEY,
+                  "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+                }
+              });
+              if (state.agentImprovementsTable) {
+                state.agentImprovementsTable = state.agentImprovementsTable.filter(row => row.id !== dbRowToRename.id);
+              }
+              console.log(`Deleted duplicate placeholder row "${dbRowToRename.agent_name}"`);
+            } else {
+              await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?id=eq.${dbRowToRename.id}`, {
+                method: "PATCH",
+                headers: {
+                  "apikey": SUPABASE_ANON_KEY,
+                  "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+                  "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                  agent_name: canonicalName
+                })
+              });
+              dbRowToRename.agent_name = canonicalName;
+              console.log(`Automatically renamed database row from placeholder to "${canonicalName}"`);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to check or execute auto-rename of agent_improvements rows:", e);
+    }
+  })();
+
   // Save all individual Gemini Agent Improvements from each call to raw_improvements column in database
   saveRawImprovementsToDatabase(agentImprovements);
 }
