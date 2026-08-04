@@ -413,6 +413,8 @@ function updateUILanguage() {
   const elBrand = document.querySelector(".brand-name");
   if (elBrand) elBrand.textContent = dict.brandName;
   
+  const elSyncContainer = document.querySelector(".sync-status");
+  if (elSyncContainer) elSyncContainer.title = dict.liveConnected;
   const elSync = document.querySelector(".sync-status span");
   if (elSync) elSync.textContent = dict.liveConnected;
   
