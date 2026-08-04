@@ -3398,7 +3398,7 @@ function formatConvName(name) {
 function getAgentIdFromFilename(audioFileName) {
   if (!audioFileName) return null;
   // Strip off path and extension
-  const baseName = audioFileName.split("/").pop().replace(/\.mp3$/i, "").trim();
+  const baseName = audioFileName.split("/").pop().replace(/\.(mp3|mpr|m4a|wav)$/i, "").trim();
   const lastUnderscore = baseName.lastIndexOf("_");
   if (lastUnderscore === -1) return null;
   const agentId = baseName.substring(lastUnderscore + 1).trim();
@@ -3844,6 +3844,11 @@ function getAgentName(call) {
   const unknownLabel = lang === 'es' ? 'Agente Desconocido' : 'Unknown Agent';
   if (!call) return unknownLabel;
 
+  // 0. Use the new Supabase agent column if populated (Highest Priority)
+  if (call.agent && call.agent.trim()) {
+    return call.agent.trim();
+  }
+
   const parsedId = getAgentIdFromFilename(call.audio_file_name);
   
   // If we have an agent ID, check our canonical agents map first
@@ -3854,11 +3859,6 @@ function getAgentName(call) {
     if (state.canonicalAgents && state.canonicalAgents[parsedId]) {
       return state.canonicalAgents[parsedId];
     }
-  }
-
-  // 0. Use the new Supabase agent column if populated
-  if (call.agent && call.agent.trim()) {
-    return call.agent.trim();
   }
   
   // 1. First, check if we can parse the agent identifier from the MP3 filename
