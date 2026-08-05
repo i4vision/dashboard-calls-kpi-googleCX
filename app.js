@@ -4639,8 +4639,14 @@ function extractImprovementTextsFromStep(item) {
 
   if (typeof obj === "object" && obj !== null) {
     const results = [];
+    const res = (obj.resultado || obj.result || "").toLowerCase();
+
+    // 1. Skip no_aplicable steps
+    if (res === "no_aplicable" || res === "n/a" || res === "not_applicable") {
+      return [];
+    }
     
-    // 1. Recommendation
+    // 2. Extract explicit Recommendation
     if (typeof obj.recomendacion === "string" && obj.recomendacion.trim()) {
       results.push(obj.recomendacion.trim());
     }
@@ -4648,7 +4654,7 @@ function extractImprovementTextsFromStep(item) {
       results.push(obj.recommendation.trim());
     }
 
-    // 2. Opportunity for improvement
+    // 3. Extract explicit Opportunity for Improvement
     if (typeof obj.oportunidad_de_mejora === "string" && obj.oportunidad_de_mejora.trim()) {
       if (!results.includes(obj.oportunidad_de_mejora.trim())) {
         results.push(obj.oportunidad_de_mejora.trim());
@@ -4660,7 +4666,12 @@ function extractImprovementTextsFromStep(item) {
 
     if (results.length > 0) return results;
 
-    // 3. Direct text / description / gaps
+    // 4. If step was successful / bien_realizado with no explicit recommendation, SKIP IT! (Do not treat positive feedback as improvements)
+    if (res.includes("bien") || res.includes("cumplido") || res.includes("exito")) {
+      return [];
+    }
+
+    // 5. Direct text / description / gaps
     if (typeof obj.text === "string" && obj.text.trim() && obj.text.trim() !== "[object Object]") {
       results.push(obj.text.trim());
     }
@@ -4673,19 +4684,12 @@ function extractImprovementTextsFromStep(item) {
 
     if (results.length > 0) return results;
 
-    // 4. Step with result or aspects
+    // 6. Non-compliant step without recommendation text (parcialmente_cumplido, no_cumplido, etc.)
     const paso = typeof obj.paso === "string" ? obj.paso.trim() : (typeof obj.step === "string" ? obj.step.trim() : "");
-    const res = (obj.resultado || obj.result || "").toLowerCase();
-    const pos = typeof obj.aspectos_positivos === "string" ? obj.aspectos_positivos.trim() : "";
-
     if (paso) {
       if (res.includes("parcial")) return [`${paso} (Parcialmente cumplido)`];
       if (res.includes("no") || res.includes("fall")) return [`${paso} (No cumplido)`];
-      if (pos) return [`${paso}: ${pos}`];
-      return [paso];
     }
-
-    if (pos) return [pos];
   }
 
   const resStr = String(item).trim();
