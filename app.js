@@ -1126,10 +1126,43 @@ function initRoleSwitcher() {
     container.style.display = "inline-flex";
     select.value = state.userRole || "i4vision";
 
+    const userViewSelect = document.getElementById("simulatedUserViewSelect");
+    if (userViewSelect) {
+      const allCalls = state.allCalls || [];
+      const agentNames = [...new Set(allCalls.map(c => getAgentName(c)).filter(Boolean))].sort();
+
+      userViewSelect.innerHTML = agentNames.map(name => `<option value="${name}">${name}</option>`).join("");
+
+      const savedView = localStorage.getItem("dashboard_simulated_agent_view");
+      if (savedView && agentNames.includes(savedView)) {
+        state.simulatedAgentView = savedView;
+        userViewSelect.value = savedView;
+      } else if (agentNames.length > 0) {
+        state.simulatedAgentView = agentNames[0];
+        userViewSelect.value = agentNames[0];
+      }
+
+      userViewSelect.style.display = (state.userRole === "user") ? "inline-block" : "none";
+
+      userViewSelect.onchange = (e) => {
+        state.simulatedAgentView = e.target.value;
+        localStorage.setItem("dashboard_simulated_agent_view", e.target.value);
+        applyFilters();
+        enforceRBACPermissions();
+      };
+    }
+
     select.onchange = (e) => {
       const selectedRole = e.target.value;
       state.userRole = selectedRole;
       localStorage.setItem("dashboard_simulated_role", selectedRole);
+
+      if (userViewSelect) {
+        userViewSelect.style.display = (selectedRole === "user") ? "inline-block" : "none";
+        if (selectedRole === "user" && !state.simulatedAgentView && userViewSelect.options.length > 0) {
+          state.simulatedAgentView = userViewSelect.options[0].value;
+        }
+      }
 
       applyFilters();
       enforceRBACPermissions();
@@ -4360,6 +4393,10 @@ function getAgentScoreNumber(callOrScore) {
 
 // Extract Agent Name from Entities or Transcript (falling back to Hashed Deterministic Names if not found)
 function getCurrentUserAgentName() {
+  if (state.userRole === "user" && state.simulatedAgentView) {
+    return state.simulatedAgentView;
+  }
+
   const userEmail = (state.userEmail || localStorage.getItem("dashboard_user_email") || "").toLowerCase().trim();
   const userName = (localStorage.getItem("dashboard_user_name") || "").toLowerCase().trim();
   
