@@ -795,14 +795,23 @@ function updateUILanguage() {
   }
 
   // Translate Date Range filter elements
+  const optDateThisWeek = document.getElementById("optDateThisWeek");
+  if (optDateThisWeek) optDateThisWeek.textContent = lang === "es" ? "Esta semana" : "This Week";
   const optDateLastWeek = document.getElementById("optDateLastWeek");
-  if (optDateLastWeek) optDateLastWeek.textContent = lang === "es" ? "Última semana" : "Last Week";
+  if (optDateLastWeek) optDateLastWeek.textContent = lang === "es" ? "Semana pasada" : "Last Week";
+
+  const optDateThisMonth = document.getElementById("optDateThisMonth");
+  if (optDateThisMonth) optDateThisMonth.textContent = lang === "es" ? "Este mes" : "This Month";
   const optDateLastMonth = document.getElementById("optDateLastMonth");
   if (optDateLastMonth) optDateLastMonth.textContent = lang === "es" ? "Último mes" : "Last Month";
+
+  const optDateThisYear = document.getElementById("optDateThisYear");
+  if (optDateThisYear) optDateThisYear.textContent = lang === "es" ? "Este año" : "This Year";
   const optDateLastYear = document.getElementById("optDateLastYear");
-  if (optDateLastYear) optDateLastYear.textContent = lang === "es" ? "Último año" : "Last Year";
+  if (optDateLastYear) optDateLastYear.textContent = lang === "es" ? "Año pasado" : "Last Year";
+
   const optDateCustom = document.getElementById("optDateCustom");
-  if (optDateCustom) optDateCustom.textContent = lang === "es" ? "Rango personalizado..." : "Custom Range...";
+  if (optDateCustom) optDateCustom.textContent = lang === "es" ? "Personalizado" : "Custom";
 
   // Refresh Call Details Drawer if it's currently open
   if (state.activeCall) {
@@ -2276,16 +2285,28 @@ function applyFilters() {
         dateMatch = false;
       } else {
         const now = new Date();
-        if (dateRange === "last-week") {
-          const sevenDaysAgo = new Date();
+        if (dateRange === "this-week") {
+          const startOfWeek = new Date(now);
+          startOfWeek.setHours(0, 0, 0, 0);
+          const day = startOfWeek.getDay();
+          startOfWeek.setDate(startOfWeek.getDate() - day);
+          dateMatch = callDate >= startOfWeek && callDate <= now;
+        } else if (dateRange === "last-week") {
+          const sevenDaysAgo = new Date(now);
           sevenDaysAgo.setDate(now.getDate() - 7);
           dateMatch = callDate >= sevenDaysAgo && callDate <= now;
+        } else if (dateRange === "this-month") {
+          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+          dateMatch = callDate >= startOfMonth && callDate <= now;
         } else if (dateRange === "last-month") {
-          const thirtyDaysAgo = new Date();
+          const thirtyDaysAgo = new Date(now);
           thirtyDaysAgo.setDate(now.getDate() - 30);
           dateMatch = callDate >= thirtyDaysAgo && callDate <= now;
+        } else if (dateRange === "this-year") {
+          const startOfYear = new Date(now.getFullYear(), 0, 1);
+          dateMatch = callDate >= startOfYear && callDate <= now;
         } else if (dateRange === "last-year") {
-          const oneYearAgo = new Date();
+          const oneYearAgo = new Date(now);
           oneYearAgo.setDate(now.getDate() - 365);
           dateMatch = callDate >= oneYearAgo && callDate <= now;
         } else if (dateRange === "custom") {
