@@ -4449,6 +4449,16 @@ function setupTabNavigation() {
   });
 }
 
+function normalizeAgentName(name) {
+  if (!name) return "";
+  return String(name)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/^agent\s*#?|^agente\s*#?/, "agent#")
+    .replace(/[^a-z0-9]/g, "");
+}
+
 function extractStepItems(data) {
   const steps = [];
   if (!data) return steps;
@@ -5033,12 +5043,13 @@ function renderCoachingSection() {
     });
 
     const currentPeriod = row ? Number(row.period_number || 1) : 1;
-    const rawActiveImps = row ? (row.ai_agent_improvements || row.agent_improvements || []) : [];
+    const rawActiveImps = row ? (row.ai_agent_improvements || row.agent_improvements || row.raw_improvements || []) : [];
     let activePayload = parseImprovementList(rawActiveImps);
 
     // Fallback: If no recommendations found in agent_improvements table row, aggregate directly from active calls!
     if (activePayload.length === 0) {
-      const agentCalls = (calls || state.allCalls || []).filter(c => getAgentName(c) === agentName);
+      const normAgent = normalizeAgentName(agentName);
+      const agentCalls = (calls || state.allCalls || []).filter(c => normalizeAgentName(getAgentName(c)) === normAgent);
       const callImps = [];
 
       agentCalls.forEach(c => {
@@ -5052,40 +5063,16 @@ function renderCoachingSection() {
 
         sources.forEach(src => {
           if (!src) return;
-          let parsedSrc = src;
-          if (typeof src === "string") {
-            try {
-              parsedSrc = JSON.parse(src);
-            } catch (e) {
-              parsedSrc = src;
-            }
-          }
-
-          let items = [];
-          if (Array.isArray(parsedSrc)) {
-            items = parsedSrc;
-          } else if (parsedSrc && typeof parsedSrc === "object") {
-            if (Array.isArray(parsedSrc.gemini_agent_improvements)) {
-              items = parsedSrc.gemini_agent_improvements;
-            } else if (Array.isArray(parsedSrc.agent_improvements)) {
-              items = parsedSrc.agent_improvements;
-            } else if (Array.isArray(parsedSrc.kpis)) {
-              items = parsedSrc.kpis;
-            } else {
-              Object.values(parsedSrc).forEach(v => {
-                if (Array.isArray(v)) items.push(...v);
-                else if (typeof v === "object" && v !== null) items.push(v);
-              });
-            }
-          }
-
-          items.forEach(item => {
-            const text = extractImprovementOnlyText(item);
-            if (text && text.trim() && !text.includes("[object Object]")) {
-              if (!callImps.some(existing => existing.text === text.trim())) {
-                callImps.push({ text: text.trim(), audioFile });
+          const stepObjects = extractStepItems(src);
+          stepObjects.forEach(step => {
+            const texts = extractImprovementTextsFromStep(step);
+            texts.forEach(t => {
+              if (t && t.trim() && !t.includes("[object Object]")) {
+                if (!callImps.some(existing => existing.text === t.trim())) {
+                  callImps.push({ text: t.trim(), audioFile });
+                }
               }
-            }
+            });
           });
         });
       });
@@ -5398,7 +5385,8 @@ function renderCoachingSection() {
   }
 
   agentNamesList.sort().forEach(agentName => {
-    const dbRow = dbImprovements.find(row => row.agent_name === agentName);
+    const normName = normalizeAgentName(agentName);
+    const dbRow = dbImprovements.find(row => normalizeAgentName(row.agent_name) === normName);
     renderCard(agentName, dbRow || null);
   });
 
