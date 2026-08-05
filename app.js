@@ -1921,6 +1921,125 @@ function debounce(func, wait) {
   };
 }
 
+async function syncAgentImprovementsWithDatabase() {
+  try {
+    const calls = state.allCalls || [];
+    if (calls.length === 0) return;
+
+    const agentMap = {};
+    calls.forEach(c => {
+      const agent = getAgentName(c);
+      if (!agent) return;
+      if (!agentMap[agent]) {
+        agentMap[agent] = [];
+      }
+      agentMap[agent].push(c);
+    });
+
+    const dbRows = state.agentImprovementsTable || [];
+    const refreshDays = state.refreshDays || 7;
+
+    for (const agentName of Object.keys(agentMap)) {
+      const agentCalls = agentMap[agentName];
+      const normAgent = normalizeAgentName(agentName);
+      
+      const existingRow = dbRows.find(r => normalizeAgentName(r.agent_name) === normAgent);
+
+      const rawImpsList = [];
+      const activeImpsList = [];
+
+      agentCalls.forEach(c => {
+        const audioFile = c.audio_file_name || "";
+        const sources = [
+          c.gemini_agent_improvements,
+          c.agent_improvements,
+          c.kpis,
+          c.raw_improvements
+        ];
+
+        sources.forEach(src => {
+          if (!src) return;
+          const stepObjects = extractStepItems(src);
+          stepObjects.forEach(step => {
+            rawImpsList.push(step);
+
+            const texts = extractImprovementTextsFromStep(step);
+            texts.forEach(t => {
+              if (t && t.trim() && !t.includes("[object Object]")) {
+                if (!activeImpsList.some(item => item.text === t.trim())) {
+                  activeImpsList.push({
+                    text: t.trim(),
+                    audio_file: audioFile,
+                    audioFile: audioFile
+                  });
+                }
+              }
+            });
+          });
+        });
+      });
+
+      if (!existingRow) {
+        const newRowData = {
+          agent_name: agentName,
+          ai_agent_improvements: activeImpsList,
+          raw_improvements: rawImpsList,
+          period_days: refreshDays,
+          period_number: 1,
+          improvements_history: []
+        };
+
+        const postRes = await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements`, {
+          method: "POST",
+          headers: {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json",
+            "Prefer": "return=representation"
+          },
+          body: JSON.stringify(newRowData)
+        });
+
+        if (postRes.ok) {
+          const inserted = await postRes.json();
+          if (Array.isArray(inserted) && inserted.length > 0) {
+            state.agentImprovementsTable.push(inserted[0]);
+          }
+        }
+      } else {
+        const hasActiveInDb = (Array.isArray(existingRow.ai_agent_improvements) && existingRow.ai_agent_improvements.length > 0) || (typeof existingRow.ai_agent_improvements === "string" && existingRow.ai_agent_improvements.trim().length > 0);
+        const hasRawInDb = (Array.isArray(existingRow.raw_improvements) && existingRow.raw_improvements.length > 0);
+
+        if (!hasActiveInDb || !hasRawInDb) {
+          const updatePayload = {};
+          if (!hasActiveInDb && activeImpsList.length > 0) {
+            updatePayload.ai_agent_improvements = activeImpsList;
+            existingRow.ai_agent_improvements = activeImpsList;
+          }
+          if (!hasRawInDb && rawImpsList.length > 0) {
+            updatePayload.raw_improvements = rawImpsList;
+            existingRow.raw_improvements = rawImpsList;
+          }
+
+          if (Object.keys(updatePayload).length > 0) {
+            await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?id=eq.${existingRow.id}`, {
+              method: "PATCH",
+              headers: {
+                "apikey": SUPABASE_ANON_KEY,
+                "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify(updatePayload)
+            });
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Could not sync agent_improvements table with Supabase:", err);
+  }
+}
+
 async function cleanupOrphanAgentImprovements() {
   try {
     if (!state.agentImprovementsTable || !Array.isArray(state.agentImprovementsTable)) return;
@@ -2015,8 +2134,11 @@ async function fetchCallData() {
         state.agentImprovementsTable = await impResponse.json();
         // Clean up orphan rows if all calls were reset or agents no longer exist
         await cleanupOrphanAgentImprovements();
+        // Auto-populate agent_improvements table for all active agents
+        await syncAgentImprovementsWithDatabase();
       } else {
         state.agentImprovementsTable = [];
+        await syncAgentImprovementsWithDatabase();
       }
     } catch (e) {
       console.warn("Failed to fetch agent_improvements table:", e);
