@@ -4452,6 +4452,53 @@ function setupTabNavigation() {
   });
 }
 
+function extractTextFromImprovementItem(item) {
+  if (item === null || item === undefined) return "";
+
+  if (typeof item === "string") {
+    const str = item.trim();
+    if (str.startsWith("{") && str.endsWith("}")) {
+      try {
+        const parsed = JSON.parse(str);
+        return extractTextFromImprovementItem(parsed);
+      } catch (e) {}
+    }
+    return str;
+  }
+
+  if (typeof item === "object") {
+    if (typeof item.text === "string" && item.text.trim()) return item.text.trim();
+    if (typeof item.paso === "string" && item.paso.trim()) return item.paso.trim();
+    if (typeof item.improvement === "string" && item.improvement.trim()) return item.improvement.trim();
+    if (typeof item.gaps === "string" && item.gaps.trim()) return item.gaps.trim();
+    if (typeof item.value === "string" && item.value.trim()) return item.value.trim();
+    if (typeof item.description === "string" && item.description.trim()) return item.description.trim();
+    if (typeof item.recommendation === "string" && item.recommendation.trim()) return item.recommendation.trim();
+
+    const values = Object.values(item);
+    for (const val of values) {
+      if (typeof val === "string" && val.trim() && val.trim() !== "[object Object]") {
+        return val.trim();
+      }
+    }
+
+    for (const val of values) {
+      if (typeof val === "object" && val !== null) {
+        const nested = extractTextFromImprovementItem(val);
+        if (nested && nested !== "[object Object]") return nested;
+      }
+    }
+  }
+
+  const result = String(item).trim();
+  return result === "[object Object]" ? "" : result;
+}
+
+function extractAudioFileFromImprovementItem(item) {
+  if (!item || typeof item !== "object") return "";
+  return String(item.audioFile || item.audio_file || item.audio || item.file || "").trim();
+}
+
 // ==========================================================================
 // Coaching & Training Gaps Rendering
 // ==========================================================================
@@ -4799,14 +4846,8 @@ function renderCoachingSection() {
       activePayload = [];
       activeImps.forEach(item => {
         if (!item) return;
-        let text = "";
-        let audioFile = "";
-        if (typeof item === "object" && item !== null) {
-          text = (item.text || "").trim();
-          audioFile = (item.audio_file || "").trim();
-        } else {
-          text = String(item).trim();
-        }
+        const text = extractTextFromImprovementItem(item);
+        const audioFile = extractAudioFileFromImprovementItem(item);
         if (text) {
           activePayload.push({ text, audioFile });
         }
@@ -4970,14 +5011,9 @@ function renderCoachingSection() {
         gapsHtml = `<div style="font-size: 0.75rem; color: var(--text-muted); font-style: italic; margin-bottom: 0.5rem;">${lang === "es" ? "No se detectaron recomendaciones." : "No recommendations identified."}</div>`;
       } else {
         gapsHtml = displayImps.map(item => {
-          let text = "";
-          let audioFile = "";
-          if (typeof item === "object" && item !== null) {
-            text = item.text || "";
-            audioFile = item.audioFile || item.audio_file || "";
-          } else {
-            text = String(item);
-          }
+          const text = extractTextFromImprovementItem(item);
+          const audioFile = extractAudioFileFromImprovementItem(item);
+          if (!text) return "";
           
           let audioPill = "";
           if (audioFile) {
@@ -5037,14 +5073,9 @@ function renderCoachingSection() {
                 </div>
               </div>
             ` : (Array.isArray(oldGaps) ? oldGaps.map(item => {
-              let text = "";
-              let audioFile = "";
-              if (typeof item === "object" && item !== null) {
-                text = item.text || "";
-                audioFile = item.audio_file || item.audioFile || "";
-              } else {
-                text = String(item);
-              }
+              const text = extractTextFromImprovementItem(item);
+              const audioFile = extractAudioFileFromImprovementItem(item);
+              if (!text) return "";
               
               let audioPill = "";
               if (audioFile) {
