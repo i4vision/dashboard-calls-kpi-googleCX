@@ -2626,14 +2626,58 @@ function renderOverviewCharts() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      onClick: (event, activeElements) => {
+        const sentiments = ["positive", "neutral", "negative", "mixed"];
+        let targetSentiment = null;
+
+        if (activeElements && activeElements.length > 0) {
+          const clickedIndex = activeElements[0].index;
+          targetSentiment = sentiments[clickedIndex];
+        }
+
+        if (targetSentiment) {
+          const filterElem = document.getElementById("filterSentiment");
+          if (filterElem) {
+            if (filterElem.value === targetSentiment) {
+              filterElem.value = "all";
+            } else {
+              filterElem.value = targetSentiment;
+            }
+            applyFilters();
+          }
+        }
+      },
       plugins: {
         legend: {
           position: "bottom",
-          labels: { color: textColor, font: { family: "Inter", size: 11 } }
+          labels: { color: textColor, font: { family: "Inter", size: 11 } },
+          onClick: (e, legendItem, legend) => {
+            const sentiments = ["positive", "neutral", "negative", "mixed"];
+            const clickedIndex = legendItem.index;
+            const targetSentiment = sentiments[clickedIndex];
+
+            if (targetSentiment) {
+              const filterElem = document.getElementById("filterSentiment");
+              if (filterElem) {
+                if (filterElem.value === targetSentiment) {
+                  filterElem.value = "all";
+                } else {
+                  filterElem.value = targetSentiment;
+                }
+                applyFilters();
+              }
+            }
+          }
         }
       }
     }
   });
+
+  const sentimentCanvas = document.getElementById("chartSentiment");
+  if (sentimentCanvas && !sentimentCanvas.dataset.hoverBound) {
+    sentimentCanvas.dataset.hoverBound = "true";
+    sentimentCanvas.style.cursor = "pointer";
+  }
 
   // ---------------------------------------------------------
   // 2. Category & Risk Matrix (Stacked Bar)
