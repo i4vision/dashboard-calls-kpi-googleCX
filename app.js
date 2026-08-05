@@ -5621,21 +5621,61 @@ function renderCoachingSection() {
     container.appendChild(card);
   };
 
-  const activeAgentNames = new Set(calls.map(call => getAgentName(call)).filter(Boolean));
   const dbImprovements = state.agentImprovementsTable || [];
-  let agentNamesList = Array.from(activeAgentNames);
 
+  // Group active calls by canonical key (numeric Agent ID or normalized name)
+  const agentMap = {};
+  calls.forEach(c => {
+    const name = getAgentName(c);
+    if (!name) return;
+    const parsedId = getAgentIdFromFilename(c.audio_file_name);
+    const key = parsedId ? `id_${parsedId}` : `name_${normalizeAgentName(name)}`;
+
+    if (!agentMap[key]) {
+      agentMap[key] = {
+        agentId: parsedId ? Number(parsedId) : null,
+        displayName: name,
+        calls: []
+      };
+    }
+    agentMap[key].calls.push(c);
+  });
+
+  let canonicalAgents = Object.keys(agentMap).map(key => {
+    const info = agentMap[key];
+    const agentId = info.agentId;
+    const normName = normalizeAgentName(info.displayName);
+
+    const dbRow = dbImprovements.find(row => 
+      (agentId && Number(row.id) === agentId) || 
+      normalizeAgentName(row.agent_name) === normName
+    );
+
+    const displayName = dbRow ? dbRow.agent_name : info.displayName;
+
+    return {
+      agentName: displayName,
+      dbRow: dbRow || null
+    };
+  });
+
+  // Filter if simulated user role is active
   if (state.userRole === "user") {
     const userAgent = getCurrentUserAgentName();
     if (userAgent) {
-      agentNamesList = agentNamesList.filter(name => name.toLowerCase().trim() === userAgent.toLowerCase().trim());
+      const normUserAgent = normalizeAgentName(userAgent);
+      canonicalAgents = canonicalAgents.filter(item => normalizeAgentName(item.agentName) === normUserAgent);
     }
   }
 
-  agentNamesList.sort().forEach(agentName => {
-    const normName = normalizeAgentName(agentName);
-    const dbRow = dbImprovements.find(row => normalizeAgentName(row.agent_name) === normName);
-    renderCard(agentName, dbRow || null);
+  // Deduplicate and sort canonical agents
+  const renderedSet = new Set();
+  canonicalAgents.sort((a, b) => a.agentName.localeCompare(b.agentName)).forEach(item => {
+    const norm = normalizeAgentName(item.agentName);
+    if (!renderedSet.has(norm)) {
+      renderedSet.add(norm);
+      renderCard(item.agentName, item.dbRow);
+    }
   });
 
   // Bind click listener for revision buttons
