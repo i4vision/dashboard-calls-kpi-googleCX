@@ -5386,62 +5386,18 @@ function renderCoachingSection() {
     container.appendChild(card);
   };
 
-  const activeAgentNames = new Set(calls.map(call => getAgentName(call)).filter(Boolean));
-  const dbImprovements = state.agentImprovementsTable || [];
-  let filteredDbImps = dbImprovements.filter(row => activeAgentNames.has(row.agent_name));
-
+  let agentNamesList = Array.from(activeAgentNames);
   if (state.userRole === "user") {
     const userAgent = getCurrentUserAgentName();
     if (userAgent) {
-      filteredDbImps = filteredDbImps.filter(row => row.agent_name.toLowerCase().trim() === userAgent.toLowerCase().trim());
+      agentNamesList = agentNamesList.filter(name => name.toLowerCase().trim() === userAgent.toLowerCase().trim());
     }
   }
 
-  if (filteredDbImps.length > 0) {
-    filteredDbImps.sort((a, b) => a.agent_name.localeCompare(b.agent_name)).forEach(row => {
-      renderCard(row.agent_name, row);
-    });
-  } else {
-    // Fallback: Group call improvements by Agent Name (original logic)
-    const agentData = {};
-    calls.forEach(call => {
-      const agent = getAgentName(call);
-      if (!agentData[agent]) {
-        agentData[agent] = { callsCount: 0, trainingGaps: [], coachingPriorities: [] };
-      }
-      agentData[agent].callsCount++;
-      const impVal = getImprovementsVal(call);
-      if (impVal) {
-        const { trainingGaps, coachingPriorities } = parseImpList(impVal);
-        const combined = [...trainingGaps, ...coachingPriorities];
-        combined.forEach(item => {
-          if (item) {
-            const trimmed = String(item).trim();
-            if (trimmed) {
-              const exists = agentData[agent].trainingGaps.some(x => x.text.toLowerCase() === trimmed.toLowerCase());
-              if (!exists) {
-                agentData[agent].trainingGaps.push({
-                  text: trimmed,
-                  audioFile: call.audio_file_name || ""
-                });
-              }
-            }
-          }
-        });
-      }
-    });
-
-    Object.keys(agentData).sort().forEach(agentName => {
-      const info = agentData[agentName];
-      const mockRow = {
-        agent_name: agentName,
-        ai_agent_improvements: info.trainingGaps,
-        period_number: 1,
-        improvements_history: []
-      };
-      renderCard(agentName, mockRow);
-    });
-  }
+  agentNamesList.sort().forEach(agentName => {
+    const dbRow = dbImprovements.find(row => row.agent_name === agentName);
+    renderCard(agentName, dbRow || null);
+  });
 
   // Bind click listener for revision buttons
   const revisionButtons = container.querySelectorAll(".btn-revision");
