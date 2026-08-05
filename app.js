@@ -1921,6 +1921,64 @@ function debounce(func, wait) {
   };
 }
 
+async function cleanupOrphanAgentImprovements() {
+  try {
+    if (!state.agentImprovementsTable || !Array.isArray(state.agentImprovementsTable)) return;
+
+    const activeCalls = state.allCalls || [];
+    const activeAgentNames = new Set(activeCalls.map(c => getAgentName(c)).filter(Boolean));
+
+    // Identify rows in agent_improvements that belong to agents with 0 calls
+    const orphanRows = state.agentImprovementsTable.filter(row => {
+      if (!row) return false;
+      if (activeCalls.length === 0) return true; // WIPE ALL if no calls exist in dashboard
+      const rowName = (row.agent_name || "").trim();
+      if (!rowName) return true;
+      return !activeAgentNames.has(rowName);
+    });
+
+    if (orphanRows.length === 0) return;
+
+    console.log(`Cleaning ${orphanRows.length} orphan records from agent_improvements table...`);
+
+    if (activeCalls.length === 0) {
+      // Bulk wipe all rows from agent_improvements table
+      await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?id=gt.0`, {
+        method: "DELETE",
+        headers: {
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+        }
+      });
+      state.agentImprovementsTable = [];
+    } else {
+      // Delete specific orphan rows
+      for (const row of orphanRows) {
+        if (row.id) {
+          await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?id=eq.${row.id}`, {
+            method: "DELETE",
+            headers: {
+              "apikey": SUPABASE_ANON_KEY,
+              "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+            }
+          });
+        } else if (row.agent_name) {
+          await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?agent_name=eq.${encodeURIComponent(row.agent_name)}`, {
+            method: "DELETE",
+            headers: {
+              "apikey": SUPABASE_ANON_KEY,
+              "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+            }
+          });
+        }
+      }
+      state.agentImprovementsTable = state.agentImprovementsTable.filter(row => !orphanRows.includes(row));
+    }
+  } catch (err) {
+    console.warn("Error during cleanupOrphanAgentImprovements:", err);
+  }
+}
+
 // ==========================================================================
 // Data Fetching
 // ==========================================================================
@@ -1955,6 +2013,8 @@ async function fetchCallData() {
       });
       if (impResponse.ok) {
         state.agentImprovementsTable = await impResponse.json();
+        // Clean up orphan rows if all calls were reset or agents no longer exist
+        await cleanupOrphanAgentImprovements();
       } else {
         state.agentImprovementsTable = [];
       }
