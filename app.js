@@ -2449,10 +2449,22 @@ function applyFilters() {
 }
 
 function getAgentAverageScore(agentName) {
-  if (!state.allCalls) return 0;
-  const agentCalls = state.allCalls.filter(c => getAgentName(c) === agentName);
-  const scores = agentCalls.map(c => getAgentScoreNumber(c)).filter(s => !isNaN(s));
-  if (scores.length === 0) return 0;
+  const calls = state.allCalls || [];
+  if (calls.length === 0 || !agentName) return NaN;
+
+  const normTarget = normalizeAgentName(agentName);
+  const targetId = getNumericAgentId(agentName);
+
+  const agentCalls = calls.filter(c => {
+    const cName = normalizeAgentName(getAgentName(c));
+    if (cName === normTarget) return true;
+    const cId = getAgentIdFromFilename(c.audio_file_name);
+    if (targetId && cId && Number(cId) === targetId) return true;
+    return false;
+  });
+
+  const scores = agentCalls.map(c => getAgentScoreNumber(c)).filter(s => !isNaN(s) && s !== null);
+  if (scores.length === 0) return NaN;
   return scores.reduce((a, b) => a + b, 0) / scores.length;
 }
 
