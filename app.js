@@ -6570,30 +6570,66 @@ async function getGoogleAccessToken() {
     }
   }
   
-  // Clean up if expired, missing, or scope mismatched
+  // Clean up if expired or missing
   localStorage.removeItem("gcs_access_token");
   localStorage.removeItem("gcs_token_expiry");
   
-  // Check if we have a service account JSON stored
-  const saJsonStr = localStorage.getItem("gcs_service_account");
+  // Check if we have a service account JSON stored in localStorage, state, or Supabase
+  let saJsonStr = localStorage.getItem("gcs_service_account");
+  if (!saJsonStr && state.gcsServiceAccount) {
+    saJsonStr = (typeof state.gcsServiceAccount === "object") ? JSON.stringify(state.gcsServiceAccount) : state.gcsServiceAccount;
+  }
+
+  if (!saJsonStr) {
+    try {
+      const dbRes = await fetch(`${SUPABASE_URL}/rest/v1/dashboard_settings?id=eq.1&select=gcs_service_account,gcs_access_token,gcs_token_expiry`, {
+        headers: { "apikey": SUPABASE_ANON_KEY, "Authorization": `Bearer ${SUPABASE_ANON_KEY}` }
+      });
+      if (dbRes.ok) {
+        const rows = await dbRes.json();
+        if (Array.isArray(rows) && rows.length > 0) {
+          const row = rows[0];
+          if (row.gcs_service_account) {
+            saJsonStr = (typeof row.gcs_service_account === "object") ? JSON.stringify(row.gcs_service_account) : row.gcs_service_account;
+            localStorage.setItem("gcs_service_account", saJsonStr);
+            state.gcsServiceAccount = row.gcs_service_account;
+          }
+          if (row.gcs_access_token && row.gcs_token_expiry) {
+            const dbParts = String(row.gcs_token_expiry).split("_");
+            if (dbParts.length === 2 && dbParts[0] === "v3") {
+              const dbExpiry = Number(dbParts[1]);
+              if (Date.now() < dbExpiry - 30000) {
+                localStorage.setItem("gcs_access_token", row.gcs_access_token);
+                localStorage.setItem("gcs_token_expiry", row.gcs_token_expiry);
+                return row.gcs_access_token;
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Fetching GCS service account from Supabase failed:", e);
+    }
+  }
+
   if (saJsonStr) {
     try {
-      const saJson = JSON.parse(saJsonStr);
+      const saJson = (typeof saJsonStr === "object") ? saJsonStr : JSON.parse(saJsonStr);
       const data = await getAccessTokenFromServiceAccount(saJson);
       
       const newExpiry = Date.now() + (data.expires_in || 3600) * 1000;
+      const expiryStr = `v3_${newExpiry}`;
       localStorage.setItem("gcs_access_token", data.access_token);
-      localStorage.setItem("gcs_token_expiry", `v3_${newExpiry}`);
+      localStorage.setItem("gcs_token_expiry", expiryStr);
+      localStorage.setItem("gcs_service_account", (typeof saJsonStr === "string") ? saJsonStr : JSON.stringify(saJsonStr));
       
-      // Save refreshed credentials to database
-      await saveSettingToSupabase("gcs_access_token", data.access_token);
-      await saveSettingToSupabase("gcs_token_expiry", `v3_${newExpiry}`);
+      // Save refreshed credentials to database for all clients
+      saveSettingToSupabase("gcs_access_token", data.access_token);
+      saveSettingToSupabase("gcs_token_expiry", expiryStr);
       
       return data.access_token;
     } catch (err) {
       console.error("Auto-refreshing access token using Service Account failed:", err);
-      // Do NOT delete the credentials. Simply return null so the UI shows disconnected temporarily.
-      // This prevents temporary network issues or container restarts from wiping user credentials.
       return null;
     }
   }
@@ -6623,7 +6659,7 @@ async function getAccessTokenFromServiceAccount(saJson) {
   };
   
   const stringToSign = `${base64url(header)}.${base64url(payload)}`;
-  const privateKeyPem = saJson.private_key;
+  const privateKeyPem = (saJson.private_key || "").replace(/\\n/g, "\n");
   const pemHeader = "-----BEGIN PRIVATE KEY-----";
   const pemFooter = "-----END PRIVATE KEY-----";
   
@@ -6635,7 +6671,7 @@ async function getAccessTokenFromServiceAccount(saJson) {
   }
   
   const pemContents = privateKeyPem.substring(startIdx + pemHeader.length, endIdx);
-  const cleanPem = pemContents.replace(/\s+/g, "");
+  const cleanPem = pemContents.replace(/[\r\n\s\\]/g, "");
   
   const binaryDerString = atob(cleanPem);
   const binaryDer = new Uint8Array(binaryDerString.length);
