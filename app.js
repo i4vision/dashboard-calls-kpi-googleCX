@@ -1921,6 +1921,26 @@ function debounce(func, wait) {
   };
 }
 
+function getNumericAgentId(agentName, agentCalls) {
+  if (agentName) {
+    const match = agentName.match(/\d+/);
+    if (match && !isNaN(Number(match[0]))) {
+      return Number(match[0]);
+    }
+  }
+  if (Array.isArray(agentCalls)) {
+    for (const c of agentCalls) {
+      if (c && c.audio_file_name) {
+        const parsed = getAgentIdFromFilename(c.audio_file_name);
+        if (parsed && !isNaN(Number(parsed)) && Number(parsed) > 0) {
+          return Number(parsed);
+        }
+      }
+    }
+  }
+  return null;
+}
+
 async function syncAgentImprovementsWithDatabase() {
   try {
     const calls = state.allCalls || [];
@@ -1942,8 +1962,9 @@ async function syncAgentImprovementsWithDatabase() {
     for (const agentName of Object.keys(agentMap)) {
       const agentCalls = agentMap[agentName];
       const normAgent = normalizeAgentName(agentName);
+      const agentId = getNumericAgentId(agentName, agentCalls);
       
-      const existingRow = dbRows.find(r => normalizeAgentName(r.agent_name) === normAgent);
+      const existingRow = dbRows.find(r => normalizeAgentName(r.agent_name) === normAgent || (agentId && Number(r.id) === agentId));
 
       const rawImpsList = [];
       const activeImpsList = [];
@@ -2025,6 +2046,9 @@ async function syncAgentImprovementsWithDatabase() {
           period_number: 1,
           improvements_history: []
         };
+        if (agentId) {
+          newRowData.id = agentId;
+        }
 
         const postRes = await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements`, {
           method: "POST",
@@ -2045,6 +2069,7 @@ async function syncAgentImprovementsWithDatabase() {
         }
       } else {
         const updatePayload = {
+          agent_name: agentName,
           ai_agent_improvements: activeImpsList,
           raw_improvements: rawImpsList
         };
