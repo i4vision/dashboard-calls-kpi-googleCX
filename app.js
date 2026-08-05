@@ -5386,7 +5386,10 @@ function renderCoachingSection() {
     container.appendChild(card);
   };
 
+  const activeAgentNames = new Set(calls.map(call => getAgentName(call)).filter(Boolean));
+  const dbImprovements = state.agentImprovementsTable || [];
   let agentNamesList = Array.from(activeAgentNames);
+
   if (state.userRole === "user") {
     const userAgent = getCurrentUserAgentName();
     if (userAgent) {
