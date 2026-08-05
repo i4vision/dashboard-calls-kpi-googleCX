@@ -1858,6 +1858,14 @@ function setupEventListeners() {
 
   // Reset filters
   document.getElementById("resetFilters").addEventListener("click", resetFilters);
+  const btnResetSent = document.getElementById("btnResetSentimentFilter");
+  if (btnResetSent) {
+    btnResetSent.addEventListener("click", () => {
+      const elem = document.getElementById("filterSentiment");
+      if (elem) elem.value = "all";
+      applyFilters();
+    });
+  }
 
   // Reset clickable chart filters
   const resetCatFilterBtn = document.getElementById("btnResetCategoryFilter");
@@ -2390,6 +2398,10 @@ function applyFilters() {
   });
 
   // Toggle chart reset buttons based on active selections
+  const btnResetSent = document.getElementById("btnResetSentimentFilter");
+  if (btnResetSent) {
+    btnResetSent.style.display = (sentimentFilter && sentimentFilter !== "all") ? "inline-flex" : "none";
+  }
   const btnResetCat = document.getElementById("btnResetCategoryFilter");
   if (btnResetCat) {
     btnResetCat.style.display = state.selectedCategoryFilter ? "flex" : "none";
@@ -2417,6 +2429,34 @@ function renderActiveFilterBadges() {
   container.innerHTML = "";
 
   const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
+
+  const sentimentVal = document.getElementById("filterSentiment") ? document.getElementById("filterSentiment").value : "all";
+  if (sentimentVal && sentimentVal !== "all") {
+    const badge = document.createElement("span");
+    badge.className = "badge";
+    const colors = {
+      positive: { bg: "rgba(16, 185, 129, 0.15)", color: "#10b981", border: "rgba(16, 185, 129, 0.35)", es: "Positivo", en: "Positive" },
+      neutral: { bg: "rgba(107, 114, 128, 0.15)", color: "#9ca3af", border: "rgba(107, 114, 128, 0.35)", es: "Neutral", en: "Neutral" },
+      negative: { bg: "rgba(244, 63, 94, 0.15)", color: "#f43f5e", border: "rgba(244, 63, 94, 0.35)", es: "Negativo", en: "Negative" },
+      mixed: { bg: "rgba(245, 158, 11, 0.15)", color: "#f59e0b", border: "rgba(245, 158, 11, 0.35)", es: "Mixto", en: "Mixed" }
+    };
+    const conf = colors[sentimentVal] || { bg: "rgba(139, 92, 246, 0.15)", color: "#8b5cf6", border: "rgba(139, 92, 246, 0.35)", es: sentimentVal, en: sentimentVal };
+
+    badge.style.cssText = `background: ${conf.bg}; color: ${conf.color}; border-color: ${conf.border}; display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 600; font-size: 0.75rem; padding: 0.25rem 0.55rem; border-radius: var(--radius-sm); cursor: pointer; border: 1px solid; transition: all 0.2s;`;
+    
+    const label = lang === "es"
+      ? `Sentimiento: ${conf.es}`
+      : `Sentiment: ${conf.en}`;
+      
+    badge.innerHTML = `${label} <i class="fa-solid fa-xmark" style="font-size: 0.85rem; margin-left: 0.25rem;"></i>`;
+    badge.title = lang === "es" ? "Quitar filtro de sentimiento" : "Remove sentiment filter";
+    badge.addEventListener("click", () => {
+      const elem = document.getElementById("filterSentiment");
+      if (elem) elem.value = "all";
+      applyFilters();
+    });
+    container.appendChild(badge);
+  }
 
   if (state.scoreThresholdFilter !== null && state.scoreThresholdFilter !== undefined) {
     const badge = document.createElement("span");

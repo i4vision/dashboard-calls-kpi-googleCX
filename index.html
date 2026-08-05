@@ -221,8 +221,12 @@
     <section id="overviewCharts" class="charts-grid" aria-label="Overview Analytics">
       <!-- Chart 1: Sentiment Analysis -->
       <div class="chart-card">
-        <div class="chart-header">
+        <div class="chart-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
           <h2 class="chart-title"><i class="fa-solid fa-face-smile"></i> Sentiment Breakdown</h2>
+          <button id="btnResetSentimentFilter" class="btn-reset-filter" style="display: none; background: rgba(244, 63, 94, 0.12); color: #f43f5e; border: 1px solid rgba(244, 63, 94, 0.3); padding: 0.2rem 0.5rem; border-radius: var(--radius-sm); font-size: 0.72rem; font-weight: 600; cursor: pointer; align-items: center; gap: 0.35rem;" title="Quitar filtro de sentimiento">
+            <span id="txtResetSentiment">Quitar filtro</span>
+            <i class="fa-solid fa-xmark" style="font-size: 0.8rem;"></i>
+          </button>
         </div>
         <div class="chart-body">
           <canvas id="chartSentiment"></canvas>
