@@ -2068,35 +2068,23 @@ async function syncAgentImprovementsWithDatabase() {
           }
         }
       } else {
-        const existingActive = existingRow.ai_agent_improvements;
-        let activeIsEmpty = true;
-        if (Array.isArray(existingActive) && existingActive.length > 0) activeIsEmpty = false;
-        if (typeof existingActive === "string" && existingActive.trim().length > 0) activeIsEmpty = false;
+        // Row exists in Supabase. Populate raw_improvements ONLY if empty in DB.
+        // DO NOT overwrite ai_agent_improvements or period_number!
+        const existingRaw = existingRow.raw_improvements;
+        const rawIsEmpty = !Array.isArray(existingRaw) || existingRaw.length === 0;
 
-        const currentPeriod = Number(existingRow.period_number || 1);
-
-        const updatePayload = {
-          agent_name: agentName,
-          raw_improvements: rawImpsList
-        };
-
-        // Only populate ai_agent_improvements if it is empty AND period_number is 1
-        if (activeIsEmpty && currentPeriod === 1 && activeImpsList.length > 0) {
-          updatePayload.ai_agent_improvements = activeImpsList;
-          existingRow.ai_agent_improvements = activeImpsList;
+        if (rawIsEmpty && rawImpsList.length > 0) {
+          existingRow.raw_improvements = rawImpsList;
+          await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?id=eq.${existingRow.id}`, {
+            method: "PATCH",
+            headers: {
+              "apikey": SUPABASE_ANON_KEY,
+              "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ raw_improvements: rawImpsList })
+          });
         }
-
-        existingRow.raw_improvements = rawImpsList;
-
-        await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?id=eq.${existingRow.id}`, {
-          method: "PATCH",
-          headers: {
-            "apikey": SUPABASE_ANON_KEY,
-            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(updatePayload)
-        });
       }
     }
   } catch (err) {
@@ -3935,131 +3923,12 @@ function computeCanonicalAgents(calls) {
     state.canonicalAgents[agentId] = bestCandidate;
   });
 
-  // Build the dynamic payload storing agent id and name
   const activeAgentsPayload = {};
   Object.keys(state.canonicalAgents).forEach(agentId => {
     const name = state.canonicalAgents[agentId];
-    activeAgentsPayload[agentId] = {
-      name: name
-    };
+    activeAgentsPayload[agentId] = { name };
   });
-
-  // Save active resolved agents payload to global_settings table dynamically
   saveActiveAgentsToSupabase(activeAgentsPayload);
-
-  // Automatically rename any existing database row with auto-generated placeholder names to their newly mapped canonical names
-  (async () => {
-    try {
-      const dbImps = state.agentImprovementsTable || [];
-      for (const agentId of Object.keys(state.canonicalAgents)) {
-        const canonicalName = state.canonicalAgents[agentId];
-        const autoGenNameEs = "Agente #" + agentId;
-        const autoGenNameEn = "Agent #" + agentId;
-        
-        if (canonicalName !== autoGenNameEs && canonicalName !== autoGenNameEn) {
-          const dbRowToRename = dbImps.find(row => 
-            row.agent_name === autoGenNameEs || row.agent_name === autoGenNameEn
-          );
-          
-          if (dbRowToRename) {
-            const targetRowExists = dbImps.some(row => 
-              row.agent_name === canonicalName && row.id !== dbRowToRename.id
-            );
-            
-            if (targetRowExists) {
-              await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?id=eq.${dbRowToRename.id}`, {
-                method: "DELETE",
-                headers: {
-                  "apikey": SUPABASE_ANON_KEY,
-                  "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
-                }
-              });
-              if (state.agentImprovementsTable) {
-                state.agentImprovementsTable = state.agentImprovementsTable.filter(row => row.id !== dbRowToRename.id);
-              }
-              console.log(`Deleted duplicate placeholder row "${dbRowToRename.agent_name}"`);
-            } else {
-              await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?id=eq.${dbRowToRename.id}`, {
-                method: "PATCH",
-                headers: {
-                  "apikey": SUPABASE_ANON_KEY,
-                  "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-                  "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                  agent_name: canonicalName
-                })
-              });
-              dbRowToRename.agent_name = canonicalName;
-              console.log(`Automatically renamed database row from placeholder to "${canonicalName}"`);
-            }
-          }
-        }
-      }
-    } catch (e) {
-      console.warn("Failed to check or execute auto-rename of agent_improvements rows:", e);
-    }
-  })();
-
-  // Save all individual Gemini Agent Improvements from each call to raw_improvements column in database
-  saveRawImprovementsToDatabase(agentImprovements);
-}
-
-async function saveRawImprovementsToDatabase(agentImprovements) {
-  try {
-    const impResponse = await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?select=*`, {
-      method: "GET",
-      headers: {
-        "apikey": SUPABASE_ANON_KEY,
-        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
-      }
-    });
-    if (!impResponse.ok) return;
-    const dbImps = await impResponse.json();
-
-    for (const agentId of Object.keys(agentImprovements)) {
-      const name = state.canonicalAgents[agentId];
-      if (!name) continue;
-
-      const impsList = agentImprovements[agentId] || [];
-
-      const dbRow = dbImps.find(row => row.agent_name === name);
-      if (dbRow) {
-        let existingRaw = [];
-        try {
-          existingRaw = Array.isArray(dbRow.raw_improvements)
-            ? dbRow.raw_improvements
-            : (typeof dbRow.raw_improvements === "string" ? JSON.parse(dbRow.raw_improvements) : []);
-        } catch (e) {
-          existingRaw = [];
-        }
-
-        const isDifferent = JSON.stringify(existingRaw) !== JSON.stringify(impsList);
-        if (isDifferent) {
-          await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?id=eq.${dbRow.id}`, {
-            method: "PATCH",
-            headers: {
-              "apikey": SUPABASE_ANON_KEY,
-              "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-              raw_improvements: impsList
-            })
-          });
-          
-          if (state.agentImprovementsTable) {
-            const localRow = state.agentImprovementsTable.find(r => r.agent_name === name);
-            if (localRow) {
-              localRow.raw_improvements = impsList;
-            }
-          }
-        }
-      }
-    }
-  } catch (err) {
-    console.warn("Failed to save raw_improvements to database:", err);
-  }
 }
 
 async function saveActiveAgentsToSupabase(agentsObj) {
