@@ -1984,7 +1984,6 @@ async function syncAgentImprovementsWithDatabase() {
           agent_name: agentName,
           ai_agent_improvements: activeImpsList,
           raw_improvements: rawImpsList,
-          period_days: refreshDays,
           period_number: 1,
           improvements_history: []
         };
