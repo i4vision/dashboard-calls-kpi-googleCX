@@ -4449,104 +4449,137 @@ function setupTabNavigation() {
   });
 }
 
-function extractImprovementOnlyText(item) {
-  if (item === null || item === undefined) return "";
+function extractStepItems(data) {
+  const steps = [];
+  if (!data) return steps;
+
+  let parsed = data;
+  if (typeof data === "string") {
+    const trimmed = data.trim();
+    if ((trimmed.startsWith("[") && trimmed.endsWith("]")) || (trimmed.startsWith("{") && trimmed.endsWith("}"))) {
+      try {
+        parsed = JSON.parse(trimmed);
+      } catch (e) {
+        return steps;
+      }
+    } else {
+      return steps;
+    }
+  }
+
+  if (Array.isArray(parsed)) {
+    parsed.forEach(item => {
+      steps.push(...extractStepItems(item));
+    });
+  } else if (typeof parsed === "object" && parsed !== null) {
+    if (parsed.paso || parsed.resultado || parsed.recomendacion || parsed.oportunidad_de_mejora || parsed.aspectos_positivos || parsed.text || parsed.description) {
+      steps.push(parsed);
+    } else {
+      Object.keys(parsed).forEach(key => {
+        const val = parsed[key];
+        if (val && (typeof val === "object" || typeof val === "string")) {
+          steps.push(...extractStepItems(val));
+        }
+      });
+    }
+  }
+
+  return steps;
+}
+
+function extractImprovementTextsFromStep(item) {
+  if (item === null || item === undefined) return [];
 
   let obj = item;
   if (typeof item === "string") {
     const str = item.trim();
-    if (str === "[object Object]") return "";
+    if (str === "[object Object]") return [];
     if ((str.startsWith("{") && str.endsWith("}")) || (str.startsWith("[") && str.endsWith("]"))) {
       try {
         obj = JSON.parse(str);
       } catch (e) {
-        return str;
+        return [str];
       }
     } else {
-      return str;
+      return [str];
     }
   }
 
   if (typeof obj === "object" && obj !== null) {
-    // 1. Recommendation or Opportunity for Improvement
+    const results = [];
+    
+    // 1. Recommendation
     if (typeof obj.recomendacion === "string" && obj.recomendacion.trim()) {
-      return obj.recomendacion.trim();
+      results.push(obj.recomendacion.trim());
     }
-    if (typeof obj.recommendation === "string" && obj.recommendation.trim()) {
-      return obj.recommendation.trim();
+    if (typeof obj.recommendation === "string" && obj.recommendation.trim() && !results.includes(obj.recommendation.trim())) {
+      results.push(obj.recommendation.trim());
     }
+
+    // 2. Opportunity for improvement
     if (typeof obj.oportunidad_de_mejora === "string" && obj.oportunidad_de_mejora.trim()) {
-      return obj.oportunidad_de_mejora.trim();
+      if (!results.includes(obj.oportunidad_de_mejora.trim())) {
+        results.push(obj.oportunidad_de_mejora.trim());
+      }
     }
-    if (typeof obj.improvement === "string" && obj.improvement.trim()) {
-      return obj.improvement.trim();
+    if (typeof obj.improvement === "string" && obj.improvement.trim() && !results.includes(obj.improvement.trim())) {
+      results.push(obj.improvement.trim());
     }
 
-    // 2. Direct text / description / gaps / value fields
+    if (results.length > 0) return results;
+
+    // 3. Direct text / description / gaps
     if (typeof obj.text === "string" && obj.text.trim() && obj.text.trim() !== "[object Object]") {
-      return obj.text.trim();
+      results.push(obj.text.trim());
     }
-    if (typeof obj.description === "string" && obj.description.trim() && obj.description.trim() !== "[object Object]") {
-      return obj.description.trim();
+    if (typeof obj.description === "string" && obj.description.trim() && obj.description.trim() !== "[object Object]" && !results.includes(obj.description.trim())) {
+      results.push(obj.description.trim());
     }
-    if (typeof obj.gaps === "string" && obj.gaps.trim() && obj.gaps.trim() !== "[object Object]") {
-      return obj.gaps.trim();
+    if (typeof obj.gaps === "string" && obj.gaps.trim() && obj.gaps.trim() !== "[object Object]" && !results.includes(obj.gaps.trim())) {
+      results.push(obj.gaps.trim());
     }
 
-    // 3. Step with result or aspects
+    if (results.length > 0) return results;
+
+    // 4. Step with result or aspects
     const paso = typeof obj.paso === "string" ? obj.paso.trim() : (typeof obj.step === "string" ? obj.step.trim() : "");
     const res = (obj.resultado || obj.result || "").toLowerCase();
     const pos = typeof obj.aspectos_positivos === "string" ? obj.aspectos_positivos.trim() : "";
 
     if (paso) {
-      if (res.includes("parcial")) return `${paso} (Parcialmente cumplido)`;
-      if (res.includes("no") || res.includes("fall")) return `${paso} (No cumplido)`;
-      if (pos) return `${paso}: ${pos}`;
-      return paso;
+      if (res.includes("parcial")) return [`${paso} (Parcialmente cumplido)`];
+      if (res.includes("no") || res.includes("fall")) return [`${paso} (No cumplido)`];
+      if (pos) return [`${paso}: ${pos}`];
+      return [paso];
     }
 
-    if (pos) return pos;
+    if (pos) return [pos];
   }
 
-  const result = String(item).trim();
-  return (result === "[object Object]" || result.includes("[object Object]")) ? "" : result;
+  const resStr = String(item).trim();
+  return (resStr === "[object Object]" || resStr.includes("[object Object]")) ? [] : [resStr];
+}
+
+function extractImprovementOnlyText(item) {
+  const texts = extractImprovementTextsFromStep(item);
+  return texts.length > 0 ? texts[0] : "";
 }
 
 function parseImprovementList(raw) {
   if (!raw) return [];
-
-  let list = raw;
-  if (typeof raw === "string") {
-    const trimmed = raw.trim();
-    if (trimmed === "[object Object]") return [];
-    if ((trimmed.startsWith("[") && trimmed.endsWith("]")) || (trimmed.startsWith("{") && trimmed.endsWith("}"))) {
-      try {
-        const parsed = JSON.parse(trimmed);
-        list = Array.isArray(parsed) ? parsed : [parsed];
-      } catch (e) {
-        list = trimmed.split(/\n+/).map(s => s.trim()).filter(Boolean);
-      }
-    } else {
-      list = trimmed.split(/\n+/).map(s => s.trim()).filter(Boolean);
-    }
-  }
-
-  if (!Array.isArray(list)) {
-    list = [list];
-  }
-
+  const steps = extractStepItems(raw);
   const result = [];
-  list.forEach(item => {
-    if (!item) return;
-
-    const text = extractImprovementOnlyText(item);
-    const audioFile = extractAudioFileFromImprovementItem(item);
-
-    if (text && text.trim() && !text.includes("[object Object]")) {
-      result.push({ text: text.trim(), audioFile });
-    }
+  steps.forEach(step => {
+    const texts = extractImprovementTextsFromStep(step);
+    const audioFile = extractAudioFileFromImprovementItem(step);
+    texts.forEach(t => {
+      if (t && t.trim() && !t.includes("[object Object]")) {
+        if (!result.some(r => r.text === t.trim())) {
+          result.push({ text: t.trim(), audioFile });
+        }
+      }
+    });
   });
-
   return result;
 }
 
