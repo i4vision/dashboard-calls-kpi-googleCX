@@ -1962,14 +1962,44 @@ async function syncAgentImprovementsWithDatabase() {
           const stepObjects = extractStepItems(src);
           stepObjects.forEach(step => {
             const res = (step.resultado || step.result || "").toLowerCase();
-            const hasRec = typeof step.recomendacion === "string" && step.recomendacion.trim().length > 0;
-            const hasOport = typeof step.oportunidad_de_mejora === "string" && step.oportunidad_de_mejora.trim().length > 0;
+            const rec = typeof step.recomendacion === "string" ? step.recomendacion.trim() : "";
+            const oport = typeof step.oportunidad_de_mejora === "string" ? step.oportunidad_de_mejora.trim() : "";
+            const paso = typeof step.paso === "string" ? step.paso.trim() : "";
+            const evid = typeof step.evidencia === "string" ? step.evidencia.trim() : "";
 
             // Skip no_aplicable steps and successful/bien_realizado steps without recommendations
             if (res === "no_aplicable" || res === "n/a" || res === "not_applicable") return;
-            if ((res.includes("bien") || res.includes("cumplido") || res.includes("exito")) && !hasRec && !hasOport) return;
+            if ((res.includes("bien") || res.includes("cumplido") || res.includes("exito")) && !rec && !oport) return;
 
-            rawImpsList.push(step);
+            // Split into individual raw improvement objects so raw_improvements count equals total improvements
+            if (rec) {
+              rawImpsList.push({
+                paso: paso,
+                recomendacion: rec,
+                evidencia: evid,
+                resultado: res,
+                audio_file: audioFile
+              });
+            }
+            if (oport && oport !== rec) {
+              rawImpsList.push({
+                paso: paso,
+                oportunidad_de_mejora: oport,
+                evidencia: evid,
+                resultado: res,
+                audio_file: audioFile
+              });
+            }
+            if (!rec && !oport && paso) {
+              if (res.includes("parcial") || res.includes("no") || res.includes("fall")) {
+                rawImpsList.push({
+                  paso: paso,
+                  resultado: res,
+                  evidencia: evid,
+                  audio_file: audioFile
+                });
+              }
+            }
 
             const texts = extractImprovementTextsFromStep(step);
             texts.forEach(t => {
