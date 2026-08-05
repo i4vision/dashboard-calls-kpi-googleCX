@@ -8075,23 +8075,53 @@ function setupSettingsDrawer() {
     kpis.forEach((kpi, index) => {
       const item = document.createElement("div");
       item.className = "agent-mapping-item";
-      item.style.cssText = "display: flex; justify-content: space-between; align-items: center; background: rgba(255, 255, 255, 0.02); padding: 0.4rem 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);";
+      item.style.cssText = "display: flex; flex-direction: column; gap: 0.4rem; background: rgba(255, 255, 255, 0.02); padding: 0.6rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); width: 100%; margin-bottom: 0.45rem;";
+      
       const weightVal = kpi.weight !== undefined ? kpi.weight : (kpi.score !== undefined ? kpi.score : (kpi.order !== undefined ? kpi.order : 0));
       const isEs = state.lang === "es" || localStorage.getItem("gcs_lang") === "es";
+      const escDesc = (kpi.description || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
       item.innerHTML = `
-        <div style="display: flex; flex-direction: column; gap: 0.15rem;">
-          <div style="display: flex; align-items: center; gap: 0.35rem;">
-            <span style="font-weight: 600; font-size: 0.78rem; color: var(--text-primary); font-family: var(--font-mono);">${kpi.name}</span>
-            <span class="badge" style="font-size: 0.65rem; padding: 0.05rem 0.25rem; text-transform: uppercase; background: rgba(139, 92, 246, 0.1); color: var(--accent-primary); border-color: rgba(139, 92, 246, 0.2);">${kpi.type}</span>
-            <span class="badge" style="font-size: 0.65rem; padding: 0.05rem 0.25rem; background: rgba(255, 255, 255, 0.05); color: var(--text-secondary); border-color: rgba(255, 255, 255, 0.1);">${isEs ? "Peso" : "Weight"}: ${weightVal}</span>
+        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+          <div style="display: flex; align-items: center; gap: 0.4rem;">
+            <span style="font-weight: 700; font-size: 0.8rem; color: var(--text-primary); font-family: var(--font-mono);">${kpi.name}</span>
+            <span class="badge" style="font-size: 0.65rem; padding: 0.05rem 0.3rem; text-transform: uppercase; background: rgba(139, 92, 246, 0.12); color: var(--accent-primary); border-color: rgba(139, 92, 246, 0.25); font-weight: 600;">${kpi.type}</span>
           </div>
-          <div style="font-size: 0.65rem; color: var(--text-secondary); line-height: 1.2;">${kpi.description || "No description"}</div>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.25rem; background: rgba(255, 255, 255, 0.04); padding: 0.15rem 0.4rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+              <label style="font-size: 0.65rem; color: var(--text-secondary); font-weight: 500;">${isEs ? "PESO:" : "WEIGHT:"}</label>
+              <input type="number" class="edit-kpi-weight" data-index="${index}" value="${weightVal}" min="0" max="10" style="width: 44px; height: 22px; font-size: 0.7rem; font-weight: 600; text-align: center; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); outline: none;">
+            </div>
+            <button class="btn-delete-kpi" data-index="${index}" title="${isEs ? "Eliminar parámetro de KPI" : "Delete KPI parameter"}" style="background: none; border: none; color: var(--color-negative); cursor: pointer; padding: 0.25rem; transition: color 0.15s ease;">
+              <i class="fa-solid fa-trash-can" style="font-size: 0.85rem;"></i>
+            </button>
+          </div>
         </div>
-        <button class="btn-delete-kpi" data-index="${index}" title="Delete KPI parameter" style="background: none; border: none; color: var(--color-negative); cursor: pointer; padding: 0.25rem; transition: color 0.15s ease;">
-          <i class="fa-solid fa-trash-can" style="font-size: 0.8rem;"></i>
-        </button>
+        <div style="width: 100%;">
+          <input type="text" class="edit-kpi-desc" data-index="${index}" value="${escDesc}" placeholder="${isEs ? "Descripción del KPI..." : "KPI description..."}" style="width: 100%; font-size: 0.72rem; padding: 0.35rem 0.5rem; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); outline: none; transition: border-color 0.2s;" />
+        </div>
       `;
 
+      // Live sync description input
+      item.querySelector(".edit-kpi-desc").addEventListener("input", (e) => {
+        const idx = parseInt(e.target.getAttribute("data-index"), 10);
+        if (state.customKpis && state.customKpis[idx]) {
+          state.customKpis[idx].description = e.target.value;
+        }
+      });
+
+      // Live sync weight input
+      item.querySelector(".edit-kpi-weight").addEventListener("input", (e) => {
+        const idx = parseInt(e.target.getAttribute("data-index"), 10);
+        let num = parseInt(e.target.value, 10);
+        if (isNaN(num)) num = 0;
+        if (state.customKpis && state.customKpis[idx]) {
+          state.customKpis[idx].weight = num;
+          state.customKpis[idx].score = num;
+        }
+      });
+
+      // Delete listener
       item.querySelector(".btn-delete-kpi").addEventListener("click", (e) => {
         const idx = parseInt(e.currentTarget.getAttribute("data-index"), 10);
         state.customKpis.splice(idx, 1);
@@ -8185,6 +8215,28 @@ function setupSettingsDrawer() {
   // Bind Save KPI Settings button
   if (saveKpiBtn) {
     saveKpiBtn.addEventListener("click", async () => {
+      // Direct DOM sync before saving
+      if (listKpiContainer) {
+        const descInputs = listKpiContainer.querySelectorAll(".edit-kpi-desc");
+        descInputs.forEach(input => {
+          const idx = parseInt(input.getAttribute("data-index"), 10);
+          if (state.customKpis && state.customKpis[idx]) {
+            state.customKpis[idx].description = input.value.trim();
+          }
+        });
+
+        const weightInputs = listKpiContainer.querySelectorAll(".edit-kpi-weight");
+        weightInputs.forEach(input => {
+          const idx = parseInt(input.getAttribute("data-index"), 10);
+          let num = parseInt(input.value, 10);
+          if (isNaN(num)) num = 0;
+          if (state.customKpis && state.customKpis[idx]) {
+            state.customKpis[idx].weight = num;
+            state.customKpis[idx].score = num;
+          }
+        });
+      }
+
       const kpis = state.customKpis || [];
       const kpisStr = JSON.stringify(kpis);
       localStorage.setItem("gcs_custom_kpis", kpisStr);
@@ -8228,6 +8280,9 @@ function setupSettingsDrawer() {
       } catch (err) {
         console.warn("Could not save custom KPIs to global_settings table:", err);
       }
+
+      if (typeof renderCharts === "function") renderCharts();
+      if (typeof renderCoachingSection === "function") renderCoachingSection();
 
       if (saveKpiStatusLabel) {
         saveKpiStatusLabel.style.display = "block";
