@@ -2068,12 +2068,24 @@ async function syncAgentImprovementsWithDatabase() {
           }
         }
       } else {
+        const existingActive = existingRow.ai_agent_improvements;
+        let activeIsEmpty = true;
+        if (Array.isArray(existingActive) && existingActive.length > 0) activeIsEmpty = false;
+        if (typeof existingActive === "string" && existingActive.trim().length > 0) activeIsEmpty = false;
+
+        const currentPeriod = Number(existingRow.period_number || 1);
+
         const updatePayload = {
           agent_name: agentName,
-          ai_agent_improvements: activeImpsList,
           raw_improvements: rawImpsList
         };
-        existingRow.ai_agent_improvements = activeImpsList;
+
+        // Only populate ai_agent_improvements if it is empty AND period_number is 1
+        if (activeIsEmpty && currentPeriod === 1 && activeImpsList.length > 0) {
+          updatePayload.ai_agent_improvements = activeImpsList;
+          existingRow.ai_agent_improvements = activeImpsList;
+        }
+
         existingRow.raw_improvements = rawImpsList;
 
         await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?id=eq.${existingRow.id}`, {
