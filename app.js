@@ -4468,7 +4468,7 @@ function extractImprovementOnlyText(item) {
   }
 
   if (typeof obj === "object" && obj !== null) {
-    // 1. Direct recommendation or opportunity for improvement
+    // 1. Recommendation or Opportunity for Improvement
     if (typeof obj.recomendacion === "string" && obj.recomendacion.trim()) {
       return obj.recomendacion.trim();
     }
@@ -4482,26 +4482,30 @@ function extractImprovementOnlyText(item) {
       return obj.improvement.trim();
     }
 
-    // 2. Step with non-perfect result (parcialmente_cumplido, no_cumplido, etc.)
-    const res = (obj.resultado || obj.result || "").toLowerCase();
-    const paso = typeof obj.paso === "string" ? obj.paso.trim() : (typeof obj.step === "string" ? obj.step.trim() : "");
-    if (paso && (res.includes("parcial") || res.includes("no") || res.includes("fall"))) {
-      const stateLabel = res.includes("parcial") ? "(Parcialmente cumplido)" : "(No cumplido)";
-      return `${paso} ${stateLabel}`;
-    }
-
-    // 3. If result is bien_realizado or cumplido with no recommendation, skip (nothing to improve!)
-    if (res.includes("bien") || res === "cumplido" || res === "paso" || res === "exitoso") {
-      return "";
-    }
-
-    // 4. Fallback to text or description
+    // 2. Direct text / description / gaps / value fields
     if (typeof obj.text === "string" && obj.text.trim() && obj.text.trim() !== "[object Object]") {
       return obj.text.trim();
     }
     if (typeof obj.description === "string" && obj.description.trim() && obj.description.trim() !== "[object Object]") {
       return obj.description.trim();
     }
+    if (typeof obj.gaps === "string" && obj.gaps.trim() && obj.gaps.trim() !== "[object Object]") {
+      return obj.gaps.trim();
+    }
+
+    // 3. Step with result or aspects
+    const paso = typeof obj.paso === "string" ? obj.paso.trim() : (typeof obj.step === "string" ? obj.step.trim() : "");
+    const res = (obj.resultado || obj.result || "").toLowerCase();
+    const pos = typeof obj.aspectos_positivos === "string" ? obj.aspectos_positivos.trim() : "";
+
+    if (paso) {
+      if (res.includes("parcial")) return `${paso} (Parcialmente cumplido)`;
+      if (res.includes("no") || res.includes("fall")) return `${paso} (No cumplido)`;
+      if (pos) return `${paso}: ${pos}`;
+      return paso;
+    }
+
+    if (pos) return pos;
   }
 
   const result = String(item).trim();
