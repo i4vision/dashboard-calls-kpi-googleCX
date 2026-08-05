@@ -4449,55 +4449,105 @@ function setupTabNavigation() {
   });
 }
 
-function extractTextFromImprovementItem(item) {
+function extractImprovementOnlyText(item) {
   if (item === null || item === undefined) return "";
 
+  let obj = item;
   if (typeof item === "string") {
     const str = item.trim();
-    if (str.startsWith("{") && str.endsWith("}")) {
+    if (str === "[object Object]") return "";
+    if ((str.startsWith("{") && str.endsWith("}")) || (str.startsWith("[") && str.endsWith("]"))) {
       try {
-        const parsed = JSON.parse(str);
-        return extractTextFromImprovementItem(parsed);
-      } catch (e) {}
+        obj = JSON.parse(str);
+      } catch (e) {
+        return str;
+      }
+    } else {
+      return str;
     }
-    return str;
   }
 
-  if (typeof item === "object") {
-    // 1. Prefer recommendation or opportunity for improvement
-    if (typeof item.recomendacion === "string" && item.recomendacion.trim()) return item.recomendacion.trim();
-    if (typeof item.recommendation === "string" && item.recommendation.trim()) return item.recommendation.trim();
-    if (typeof item.oportunidad_de_mejora === "string" && item.oportunidad_de_mejora.trim()) return item.oportunidad_de_mejora.trim();
-    if (typeof item.improvement === "string" && item.improvement.trim()) return item.improvement.trim();
-
-    // 2. Step + Positives or Text
-    if (typeof item.paso === "string" && item.paso.trim()) {
-      const paso = item.paso.trim();
-      const pos = typeof item.aspectos_positivos === "string" ? item.aspectos_positivos.trim() : "";
-      return pos ? `${paso}: ${pos}` : paso;
+  if (typeof obj === "object" && obj !== null) {
+    // 1. Direct recommendation or opportunity for improvement
+    if (typeof obj.recomendacion === "string" && obj.recomendacion.trim()) {
+      return obj.recomendacion.trim();
     }
-    if (typeof item.text === "string" && item.text.trim()) return item.text.trim();
-    if (typeof item.gaps === "string" && item.gaps.trim()) return item.gaps.trim();
-    if (typeof item.value === "string" && item.value.trim()) return item.value.trim();
-    if (typeof item.description === "string" && item.description.trim()) return item.description.trim();
-
-    const values = Object.values(item);
-    for (const val of values) {
-      if (typeof val === "string" && val.trim() && val.trim() !== "[object Object]") {
-        return val.trim();
-      }
+    if (typeof obj.recommendation === "string" && obj.recommendation.trim()) {
+      return obj.recommendation.trim();
+    }
+    if (typeof obj.oportunidad_de_mejora === "string" && obj.oportunidad_de_mejora.trim()) {
+      return obj.oportunidad_de_mejora.trim();
+    }
+    if (typeof obj.improvement === "string" && obj.improvement.trim()) {
+      return obj.improvement.trim();
     }
 
-    for (const val of values) {
-      if (typeof val === "object" && val !== null) {
-        const nested = extractTextFromImprovementItem(val);
-        if (nested && nested !== "[object Object]") return nested;
-      }
+    // 2. Step with non-perfect result (parcialmente_cumplido, no_cumplido, etc.)
+    const res = (obj.resultado || obj.result || "").toLowerCase();
+    const paso = typeof obj.paso === "string" ? obj.paso.trim() : (typeof obj.step === "string" ? obj.step.trim() : "");
+    if (paso && (res.includes("parcial") || res.includes("no") || res.includes("fall"))) {
+      const stateLabel = res.includes("parcial") ? "(Parcialmente cumplido)" : "(No cumplido)";
+      return `${paso} ${stateLabel}`;
+    }
+
+    // 3. If result is bien_realizado or cumplido with no recommendation, skip (nothing to improve!)
+    if (res.includes("bien") || res === "cumplido" || res === "paso" || res === "exitoso") {
+      return "";
+    }
+
+    // 4. Fallback to text or description
+    if (typeof obj.text === "string" && obj.text.trim() && obj.text.trim() !== "[object Object]") {
+      return obj.text.trim();
+    }
+    if (typeof obj.description === "string" && obj.description.trim() && obj.description.trim() !== "[object Object]") {
+      return obj.description.trim();
     }
   }
 
   const result = String(item).trim();
-  return result === "[object Object]" ? "" : result;
+  return (result === "[object Object]" || result.includes("[object Object]")) ? "" : result;
+}
+
+function parseImprovementList(raw) {
+  if (!raw) return [];
+
+  let list = raw;
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (trimmed === "[object Object]") return [];
+    if ((trimmed.startsWith("[") && trimmed.endsWith("]")) || (trimmed.startsWith("{") && trimmed.endsWith("}"))) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        list = Array.isArray(parsed) ? parsed : [parsed];
+      } catch (e) {
+        list = trimmed.split(/\n+/).map(s => s.trim()).filter(Boolean);
+      }
+    } else {
+      list = trimmed.split(/\n+/).map(s => s.trim()).filter(Boolean);
+    }
+  }
+
+  if (!Array.isArray(list)) {
+    list = [list];
+  }
+
+  const result = [];
+  list.forEach(item => {
+    if (!item) return;
+
+    const text = extractImprovementOnlyText(item);
+    const audioFile = extractAudioFileFromImprovementItem(item);
+
+    if (text && text.trim() && !text.includes("[object Object]")) {
+      result.push({ text: text.trim(), audioFile });
+    }
+  });
+
+  return result;
+}
+
+function extractTextFromImprovementItem(item) {
+  return extractImprovementOnlyText(item);
 }
 
 function formatKpiArrayItem(item) {
@@ -4940,26 +4990,14 @@ function renderCoachingSection() {
         id: `history_${idx}`,
         period: periodNum,
         date: entry.date,
-        improvements: entry.improvements,
+        improvements: parseImprovementList(entry.improvements),
         isActive: false
       });
     });
 
     const currentPeriod = row ? Number(row.period_number || 1) : 1;
-    const activeImps = row ? (row.ai_agent_improvements || row.agent_improvements || []) : [];
-    let activePayload = activeImps;
-
-    if (Array.isArray(activeImps)) {
-      activePayload = [];
-      activeImps.forEach(item => {
-        if (!item) return;
-        const text = extractTextFromImprovementItem(item);
-        const audioFile = extractAudioFileFromImprovementItem(item);
-        if (text) {
-          activePayload.push({ text, audioFile });
-        }
-      });
-    }
+    const rawActiveImps = row ? (row.ai_agent_improvements || row.agent_improvements || []) : [];
+    const activePayload = parseImprovementList(rawActiveImps);
 
     let hasActive = false;
     if (typeof activePayload === "string" && activePayload.trim().length > 0) hasActive = true;
