@@ -1961,6 +1961,14 @@ async function syncAgentImprovementsWithDatabase() {
           if (!src) return;
           const stepObjects = extractStepItems(src);
           stepObjects.forEach(step => {
+            const res = (step.resultado || step.result || "").toLowerCase();
+            const hasRec = typeof step.recomendacion === "string" && step.recomendacion.trim().length > 0;
+            const hasOport = typeof step.oportunidad_de_mejora === "string" && step.oportunidad_de_mejora.trim().length > 0;
+
+            // Skip no_aplicable steps and successful/bien_realizado steps without recommendations
+            if (res === "no_aplicable" || res === "n/a" || res === "not_applicable") return;
+            if ((res.includes("bien") || res.includes("cumplido") || res.includes("exito")) && !hasRec && !hasOport) return;
+
             rawImpsList.push(step);
 
             const texts = extractImprovementTextsFromStep(step);
@@ -2006,32 +2014,22 @@ async function syncAgentImprovementsWithDatabase() {
           }
         }
       } else {
-        const hasActiveInDb = (Array.isArray(existingRow.ai_agent_improvements) && existingRow.ai_agent_improvements.length > 0) || (typeof existingRow.ai_agent_improvements === "string" && existingRow.ai_agent_improvements.trim().length > 0);
-        const hasRawInDb = (Array.isArray(existingRow.raw_improvements) && existingRow.raw_improvements.length > 0);
+        const updatePayload = {
+          ai_agent_improvements: activeImpsList,
+          raw_improvements: rawImpsList
+        };
+        existingRow.ai_agent_improvements = activeImpsList;
+        existingRow.raw_improvements = rawImpsList;
 
-        if (!hasActiveInDb || !hasRawInDb) {
-          const updatePayload = {};
-          if (!hasActiveInDb && activeImpsList.length > 0) {
-            updatePayload.ai_agent_improvements = activeImpsList;
-            existingRow.ai_agent_improvements = activeImpsList;
-          }
-          if (!hasRawInDb && rawImpsList.length > 0) {
-            updatePayload.raw_improvements = rawImpsList;
-            existingRow.raw_improvements = rawImpsList;
-          }
-
-          if (Object.keys(updatePayload).length > 0) {
-            await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?id=eq.${existingRow.id}`, {
-              method: "PATCH",
-              headers: {
-                "apikey": SUPABASE_ANON_KEY,
-                "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-                "Content-Type": "application/json"
-              },
-              body: JSON.stringify(updatePayload)
-            });
-          }
-        }
+        await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?id=eq.${existingRow.id}`, {
+          method: "PATCH",
+          headers: {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(updatePayload)
+        });
       }
     }
   } catch (err) {
