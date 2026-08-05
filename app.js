@@ -4755,20 +4755,67 @@ function extractImprovementOnlyText(item) {
 
 function parseImprovementList(raw) {
   if (!raw) return [];
-  const steps = extractStepItems(raw);
-  const result = [];
-  steps.forEach(step => {
-    const texts = extractImprovementTextsFromStep(step);
-    const audioFile = extractAudioFileFromImprovementItem(step);
-    texts.forEach(t => {
-      if (t && t.trim() && !t.includes("[object Object]")) {
-        if (!result.some(r => r.text === t.trim())) {
-          result.push({ text: t.trim(), audioFile });
+
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed || trimmed === "[object Object]") return [];
+
+    // 1. Check if stringified JSON array or object
+    if ((trimmed.startsWith("[") && trimmed.endsWith("]")) || (trimmed.startsWith("{") && trimmed.endsWith("}"))) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        return parseImprovementList(parsed);
+      } catch (e) {
+        // Fallthrough
+      }
+    }
+
+    // 2. Return raw HTML or plain text string directly for rendered card display
+    return trimmed;
+  }
+
+  if (Array.isArray(raw)) {
+    if (raw.length === 0) return [];
+    
+    // Array of step objects
+    const steps = extractStepItems(raw);
+    const result = [];
+    steps.forEach(step => {
+      const texts = extractImprovementTextsFromStep(step);
+      const audioFile = extractAudioFileFromImprovementItem(step);
+      texts.forEach(t => {
+        if (t && t.trim() && !t.includes("[object Object]")) {
+          if (!result.some(r => r.text === t.trim())) {
+            result.push({ text: t.trim(), audioFile });
+          }
+        }
+      });
+    });
+
+    if (result.length > 0) return result;
+
+    // Array of simple string items or { text: "..." } objects
+    const simpleList = [];
+    raw.forEach(item => {
+      if (!item) return;
+      if (typeof item === "string" && item.trim()) {
+        simpleList.push({ text: item.trim() });
+      } else if (typeof item === "object") {
+        const txt = item.text || item.recomendacion || item.oportunidad_de_mejora || item.description || "";
+        const audio = item.audio_file || item.audioFile || "";
+        if (txt && txt.trim() && txt.trim() !== "[object Object]") {
+          simpleList.push({ text: txt.trim(), audioFile: audio });
         }
       }
     });
-  });
-  return result;
+    return simpleList;
+  }
+
+  if (typeof raw === "object" && raw !== null) {
+    return parseImprovementList([raw]);
+  }
+
+  return [];
 }
 
 function extractTextFromImprovementItem(item) {
@@ -5410,8 +5457,8 @@ function renderCoachingSection() {
 
     const displayImps = selectedVersion.improvements;
     let gapsHtml = "";
-    if (typeof displayImps === "string") {
-      gapsHtml = `<div style="font-size: 0.78rem; line-height: 1.4; color: var(--text-secondary); margin-bottom: 0.45rem;">${linkifyAudioFilenames(displayImps, lang)}</div>`;
+    if (typeof displayImps === "string" && displayImps.trim().length > 0) {
+      gapsHtml = `<div class="synced-ai-recommendations" style="font-size: 0.8rem; line-height: 1.5; color: var(--text-secondary); margin-bottom: 0.45rem; text-align: left;">${linkifyAudioFilenames(displayImps, lang)}</div>`;
     } else if (Array.isArray(displayImps)) {
       if (displayImps.length === 0) {
         gapsHtml = `<div style="font-size: 0.75rem; color: var(--text-muted); font-style: italic; margin-bottom: 0.5rem;">${lang === "es" ? "No se detectaron recomendaciones." : "No recommendations identified."}</div>`;
