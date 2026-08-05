@@ -2714,7 +2714,7 @@ function renderOverviewCharts() {
     const avg = item.count > 0 ? (item.total / item.count) : 0;
     return { name: agent, average: avg, count: item.count };
   }).filter(a => a.count > 0 && a.name && a.name !== "Unknown Agent" && a.name !== "Agente Desconocido")
-    .sort((a, b) => b.average - a.average);
+    .sort((a, b) => a.average - b.average);
 
   // Limit to Top 15 Agents for 1-to-1 crisp label alignment
   const displayAgents = sortedAgents.slice(0, 15);
