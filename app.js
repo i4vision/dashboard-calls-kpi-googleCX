@@ -3286,11 +3286,8 @@ function openDrawer(call) {
           valueHtml = `<span class="badge ${badgeClass}" style="width: fit-content; font-size: 0.68rem; padding: 0.1rem 0.45rem;">${badgeText}</span>`;
         } else if (Array.isArray(val)) {
           if (val.length > 0) {
-            const tags = val.map(item => {
-              const str = typeof item === "object" ? JSON.stringify(item) : String(item);
-              return `<span class="tag tag-other" style="font-size: 0.68rem; margin: 0.1rem; padding: 0.15rem 0.35rem; display: inline-flex; align-items: center; gap: 0.25rem; background: rgba(255, 255, 255, 0.04); border-color: rgba(255,255,255,0.1);"><i class="fa-solid fa-circle-dot" style="font-size: 0.5rem; opacity: 0.5;"></i> ${str}</span>`;
-            }).join("");
-            valueHtml = `<div style="display: flex; flex-wrap: wrap; gap: 0.2rem; margin-top: 0.2rem;">${tags}</div>`;
+            const cards = val.map(item => formatKpiArrayItem(item)).join("");
+            valueHtml = `<div style="display: flex; flex-direction: column; width: 100%;">${cards}</div>`;
           } else {
             valueHtml = `<span style="color: var(--text-muted); font-size: 0.8rem;">[] (Empty Array)</span>`;
           }
@@ -4467,13 +4464,22 @@ function extractTextFromImprovementItem(item) {
   }
 
   if (typeof item === "object") {
-    if (typeof item.text === "string" && item.text.trim()) return item.text.trim();
-    if (typeof item.paso === "string" && item.paso.trim()) return item.paso.trim();
+    // 1. Prefer recommendation or opportunity for improvement
+    if (typeof item.recomendacion === "string" && item.recomendacion.trim()) return item.recomendacion.trim();
+    if (typeof item.recommendation === "string" && item.recommendation.trim()) return item.recommendation.trim();
+    if (typeof item.oportunidad_de_mejora === "string" && item.oportunidad_de_mejora.trim()) return item.oportunidad_de_mejora.trim();
     if (typeof item.improvement === "string" && item.improvement.trim()) return item.improvement.trim();
+
+    // 2. Step + Positives or Text
+    if (typeof item.paso === "string" && item.paso.trim()) {
+      const paso = item.paso.trim();
+      const pos = typeof item.aspectos_positivos === "string" ? item.aspectos_positivos.trim() : "";
+      return pos ? `${paso}: ${pos}` : paso;
+    }
+    if (typeof item.text === "string" && item.text.trim()) return item.text.trim();
     if (typeof item.gaps === "string" && item.gaps.trim()) return item.gaps.trim();
     if (typeof item.value === "string" && item.value.trim()) return item.value.trim();
     if (typeof item.description === "string" && item.description.trim()) return item.description.trim();
-    if (typeof item.recommendation === "string" && item.recommendation.trim()) return item.recommendation.trim();
 
     const values = Object.values(item);
     for (const val of values) {
@@ -4492,6 +4498,107 @@ function extractTextFromImprovementItem(item) {
 
   const result = String(item).trim();
   return result === "[object Object]" ? "" : result;
+}
+
+function formatKpiArrayItem(item) {
+  if (item === null || item === undefined) return "";
+
+  let obj = item;
+  if (typeof item === "string") {
+    const trimmed = item.trim();
+    if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+      try {
+        obj = JSON.parse(trimmed);
+      } catch (e) {
+        obj = item;
+      }
+    }
+  }
+
+  // Step Evaluation Object schema (has paso, resultado, recomendacion, etc.)
+  if (typeof obj === "object" && obj !== null && (obj.paso || obj.resultado || obj.recomendacion || obj.oportunidad_de_mejora || obj.aspectos_positivos)) {
+    const paso = obj.paso || obj.step || obj.title || "Paso";
+    const res = (obj.resultado || obj.result || "").toLowerCase();
+    const rec = obj.recomendacion || obj.recommendation || "";
+    const opp = obj.oportunidad_de_mejora || obj.improvement || "";
+    const pos = obj.aspectos_positivos || obj.positives || "";
+    const evi = obj.evidencia || obj.evidence || "";
+
+    let badgeBg = "rgba(100, 116, 139, 0.15)";
+    let badgeColor = "var(--text-secondary)";
+    let badgeText = res || "Evaluado";
+
+    if (res.includes("bien") || res === "cumplido" || res === "paso" || res === "exitoso") {
+      badgeBg = "rgba(16, 185, 129, 0.15)";
+      badgeColor = "#10b981";
+      badgeText = res === "bien_realizado" ? "Bien realizado" : (res === "cumplido" ? "Cumplido" : res);
+    } else if (res.includes("parcial")) {
+      badgeBg = "rgba(245, 158, 11, 0.15)";
+      badgeColor = "#f59e0b";
+      badgeText = "Parcialmente cumplido";
+    } else if (res.includes("no") || res.includes("fall")) {
+      badgeBg = "rgba(244, 63, 94, 0.15)";
+      badgeColor = "#f43f5e";
+      badgeText = "No cumplido";
+    }
+
+    return `
+      <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.5rem 0.65rem; margin-top: 0.35rem; display: flex; flex-direction: column; gap: 0.35rem; width: 100%;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
+          <span style="font-weight: 700; font-size: 0.78rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.35rem;">
+            <i class="fa-solid fa-list-check" style="font-size: 0.7rem; color: var(--accent-primary);"></i>
+            ${paso}
+          </span>
+          <span class="badge" style="font-size: 0.65rem; padding: 0.1rem 0.4rem; background: ${badgeBg}; color: ${badgeColor}; border: 1px solid ${badgeColor}40; font-weight: 600; text-transform: capitalize;">
+            ${badgeText}
+          </span>
+        </div>
+        ${rec ? `
+          <div style="font-size: 0.72rem; color: var(--text-secondary); background: rgba(245, 158, 11, 0.06); border-left: 3px solid #f59e0b; padding: 0.25rem 0.45rem; border-radius: 0 4px 4px 0;">
+            <strong style="color: #f59e0b;">Recomendación:</strong> ${rec}
+          </div>
+        ` : ""}
+        ${opp ? `
+          <div style="font-size: 0.72rem; color: var(--text-secondary); background: rgba(244, 63, 94, 0.06); border-left: 3px solid #f43f5e; padding: 0.25rem 0.45rem; border-radius: 0 4px 4px 0;">
+            <strong style="color: #f43f5e;">Oportunidad de Mejora:</strong> ${opp}
+          </div>
+        ` : ""}
+        ${pos ? `
+          <div style="font-size: 0.72rem; color: var(--text-secondary); background: rgba(16, 185, 129, 0.06); border-left: 3px solid #10b981; padding: 0.25rem 0.45rem; border-radius: 0 4px 4px 0;">
+            <strong style="color: #10b981;">Aspectos Positivos:</strong> ${pos}
+          </div>
+        ` : ""}
+        ${evi ? `
+          <div style="font-size: 0.7rem; color: var(--text-muted); font-style: italic; background: rgba(0,0,0,0.15); padding: 0.25rem 0.45rem; border-radius: 4px; display: flex; gap: 0.3rem; align-items: flex-start; margin-top: 0.1rem;">
+            <i class="fa-solid fa-quote-left" style="font-size: 0.6rem; margin-top: 0.15rem; opacity: 0.6;"></i>
+            <span>${evi}</span>
+          </div>
+        ` : ""}
+      </div>
+    `;
+  }
+
+  // Other Object schema
+  if (typeof obj === "object" && obj !== null) {
+    const entries = Object.entries(obj).map(([k, v]) => {
+      const formattedKey = k.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      const valStr = typeof v === "object" ? JSON.stringify(v) : String(v);
+      return `<strong>${formattedKey}:</strong> ${valStr}`;
+    }).join(" | ");
+
+    return `
+      <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.35rem 0.5rem; font-size: 0.72rem; color: var(--text-secondary); margin-top: 0.25rem;">
+        ${entries}
+      </div>
+    `;
+  }
+
+  // String item
+  return `
+    <span class="tag tag-other" style="font-size: 0.7rem; margin: 0.1rem; padding: 0.2rem 0.45rem; display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(255, 255, 255, 0.04); border-color: rgba(255,255,255,0.1); color: var(--text-primary);">
+      <i class="fa-solid fa-circle-dot" style="font-size: 0.5rem; opacity: 0.5;"></i> ${String(item)}
+    </span>
+  `;
 }
 
 function extractAudioFileFromImprovementItem(item) {
