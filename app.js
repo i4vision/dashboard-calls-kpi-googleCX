@@ -922,48 +922,42 @@ async function archiveActiveImprovementsBeforeSync() {
         ? row.ai_agent_improvements 
         : ((Array.isArray(row.agent_improvements) || typeof row.agent_improvements === "string") ? row.agent_improvements : []);
 
-      let hasActive = false;
-      if (Array.isArray(activeImps) && activeImps.length > 0) hasActive = true;
-      if (typeof activeImps === "string" && activeImps.trim().length > 0) hasActive = true;
-
       let currentPeriod = (row.period_number !== null && row.period_number !== undefined) 
         ? Number(row.period_number) 
         : 1;
 
-      if (hasActive) {
-        const nextPeriod = currentPeriod + 1;
+      const nextPeriod = currentPeriod + 1;
 
-        let history = [];
-        if (row.improvements_history) {
-          try {
-            history = Array.isArray(row.improvements_history) 
-              ? row.improvements_history 
-              : (typeof row.improvements_history === "object" ? Object.values(row.improvements_history) : []);
-          } catch (e) {
-            history = [];
-          }
+      let history = [];
+      if (row.improvements_history) {
+        try {
+          history = Array.isArray(row.improvements_history) 
+            ? row.improvements_history 
+            : (typeof row.improvements_history === "object" ? Object.values(row.improvements_history) : []);
+        } catch (e) {
+          history = [];
         }
-        
-        history.push({
-          period_number: nextPeriod,
-          date: new Date().toISOString(),
-          improvements: activeImps
-        });
-
-        await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?id=eq.${row.id}`, {
-          method: "PATCH",
-          headers: {
-            "apikey": SUPABASE_ANON_KEY,
-            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            ai_agent_improvements: typeof activeImps === "string" ? "" : [], // Clear active so n8n starts fresh
-            period_number: nextPeriod,
-            improvements_history: history
-          })
-        });
       }
+      
+      history.push({
+        period_number: nextPeriod,
+        date: new Date().toISOString(),
+        improvements: activeImps
+      });
+
+      await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?id=eq.${row.id}`, {
+        method: "PATCH",
+        headers: {
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          ai_agent_improvements: typeof activeImps === "string" ? "" : [], // Clear active so n8n starts fresh for nextPeriod
+          period_number: nextPeriod,
+          improvements_history: history
+        })
+      });
     }
   } catch (err) {
     console.warn("Failed to archive active improvements before sync:", err);
