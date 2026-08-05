@@ -2091,15 +2091,21 @@ async function cleanupOrphanAgentImprovements() {
     if (!state.agentImprovementsTable || !Array.isArray(state.agentImprovementsTable)) return;
 
     const activeCalls = state.allCalls || [];
-    const activeAgentNames = new Set(activeCalls.map(c => getAgentName(c)).filter(Boolean));
+    if (activeCalls.length === 0) return; // Do not delete rows if calls view is empty or filtered
+
+    const activeAgentNames = new Set(activeCalls.map(c => normalizeAgentName(getAgentName(c))).filter(Boolean));
+    const activeAgentIds = new Set(activeCalls.map(c => getAgentIdFromFilename(c.audio_file_name)).filter(Boolean).map(id => Number(id)));
 
     // Identify rows in agent_improvements that belong to agents with 0 calls
     const orphanRows = state.agentImprovementsTable.filter(row => {
       if (!row) return false;
-      if (activeCalls.length === 0) return true; // WIPE ALL if no calls exist in dashboard
-      const rowName = (row.agent_name || "").trim();
-      if (!rowName) return true;
-      return !activeAgentNames.has(rowName);
+      const rowName = normalizeAgentName(row.agent_name || "");
+      const rowId = Number(row.id);
+
+      if (rowId && activeAgentIds.has(rowId)) return false; // Match by Agent ID
+      if (rowName && activeAgentNames.has(rowName)) return false; // Match by Normalized Name
+
+      return true;
     });
 
     if (orphanRows.length === 0) return;
