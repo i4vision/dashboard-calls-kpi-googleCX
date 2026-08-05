@@ -2484,31 +2484,32 @@ function renderOverviewCharts() {
   const sortedAgents = Object.keys(agentScores).map(agent => {
     const item = agentScores[agent];
     const avg = item.count > 0 ? (item.total / item.count) : 0;
-    return { name: agent, average: avg };
-  }).sort((a, b) => b.average - a.average);
+    return { name: agent, average: avg, count: item.count };
+  }).filter(a => a.count > 0 && a.name && a.name !== "Unknown Agent" && a.name !== "Agente Desconocido")
+    .sort((a, b) => b.average - a.average);
 
-  const agentLabels = sortedAgents.map(a => a.name);
-  const agentDataValues = sortedAgents.map(a => a.average);
+  // Limit to Top 15 Agents for 1-to-1 crisp label alignment
+  const displayAgents = sortedAgents.slice(0, 15);
+  const agentLabels = displayAgents.map(a => a.name);
+  const agentDataValues = displayAgents.map(a => a.average);
   state.currentAgentLabels = agentLabels;
-
-
 
   // Build a color palette that cycles so every bar gets a color regardless of count
   const colorPalette = [
-    "rgba(139, 92, 246, 0.85)",  // Indigo
-    "rgba(59, 130, 246, 0.85)",   // Blue
-    "rgba(16, 185, 129, 0.85)",   // Green
-    "rgba(245, 158, 11, 0.85)",   // Amber
-    "rgba(244, 63, 94, 0.85)",    // Red
-    "rgba(14, 165, 233, 0.85)",   // Sky
-    "rgba(168, 85, 247, 0.85)",   // Purple
-    "rgba(20, 184, 166, 0.85)",   // Teal
-    "rgba(234, 88, 12, 0.85)",    // Orange
-    "rgba(100, 116, 139, 0.85)",  // Slate
-    "rgba(6, 182, 212, 0.85)",    // Cyan
-    "rgba(251, 191, 36, 0.85)",   // Yellow
-    "rgba(239, 68, 68, 0.85)",    // Rose
-    "rgba(34, 197, 94, 0.85)",    // Emerald
+    "rgba(139, 92, 246, 0.9)",  // Indigo
+    "rgba(59, 130, 246, 0.9)",   // Blue
+    "rgba(16, 185, 129, 0.9)",   // Green
+    "rgba(245, 158, 11, 0.9)",   // Amber
+    "rgba(244, 63, 94, 0.9)",    // Red
+    "rgba(14, 165, 233, 0.9)",   // Sky
+    "rgba(168, 85, 247, 0.9)",   // Purple
+    "rgba(20, 184, 166, 0.9)",   // Teal
+    "rgba(234, 88, 12, 0.9)",    // Orange
+    "rgba(100, 116, 139, 0.9)",  // Slate
+    "rgba(6, 182, 212, 0.9)",    // Cyan
+    "rgba(251, 191, 36, 0.9)",   // Yellow
+    "rgba(239, 68, 68, 0.9)",    // Rose
+    "rgba(34, 197, 94, 0.9)",    // Emerald
   ];
   const barColors = agentLabels.map((_, i) => colorPalette[i % colorPalette.length]);
 
@@ -2521,8 +2522,11 @@ function renderOverviewCharts() {
         label: "Average Performance Score",
         data: agentDataValues,
         backgroundColor: barColors,
-        borderWidth: 1,
-        borderRadius: 4
+        borderColor: barColors.map(c => c.replace("0.9", "1")),
+        borderWidth: 1.5,
+        borderRadius: 5,
+        barThickness: 16,
+        maxBarThickness: 20
       }]
     },
     options: {
@@ -2538,7 +2542,11 @@ function renderOverviewCharts() {
         },
         y: {
           grid: { display: false },
-          ticks: { color: textColor, font: { family: "Inter", weight: "500" } }
+          ticks: {
+            autoSkip: false, // Ensure 1-to-1 mapping for every agent label
+            color: textColor,
+            font: { family: "Inter", weight: "600", size: 12 }
+          }
         }
       },
       plugins: {
