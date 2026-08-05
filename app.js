@@ -4997,7 +4997,66 @@ function renderCoachingSection() {
 
     const currentPeriod = row ? Number(row.period_number || 1) : 1;
     const rawActiveImps = row ? (row.ai_agent_improvements || row.agent_improvements || []) : [];
-    const activePayload = parseImprovementList(rawActiveImps);
+    let activePayload = parseImprovementList(rawActiveImps);
+
+    // Fallback: If no recommendations found in agent_improvements table row, aggregate directly from active calls!
+    if (activePayload.length === 0) {
+      const agentCalls = (calls || state.allCalls || []).filter(c => getAgentName(c) === agentName);
+      const callImps = [];
+
+      agentCalls.forEach(c => {
+        const audioFile = c.audio_file_name || "";
+        const sources = [
+          c.gemini_agent_improvements,
+          c.agent_improvements,
+          c.kpis,
+          c.raw_improvements
+        ];
+
+        sources.forEach(src => {
+          if (!src) return;
+          let parsedSrc = src;
+          if (typeof src === "string") {
+            try {
+              parsedSrc = JSON.parse(src);
+            } catch (e) {
+              parsedSrc = src;
+            }
+          }
+
+          let items = [];
+          if (Array.isArray(parsedSrc)) {
+            items = parsedSrc;
+          } else if (parsedSrc && typeof parsedSrc === "object") {
+            if (Array.isArray(parsedSrc.gemini_agent_improvements)) {
+              items = parsedSrc.gemini_agent_improvements;
+            } else if (Array.isArray(parsedSrc.agent_improvements)) {
+              items = parsedSrc.agent_improvements;
+            } else if (Array.isArray(parsedSrc.kpis)) {
+              items = parsedSrc.kpis;
+            } else {
+              Object.values(parsedSrc).forEach(v => {
+                if (Array.isArray(v)) items.push(...v);
+                else if (typeof v === "object" && v !== null) items.push(v);
+              });
+            }
+          }
+
+          items.forEach(item => {
+            const text = extractImprovementOnlyText(item);
+            if (text && text.trim() && !text.includes("[object Object]")) {
+              if (!callImps.some(existing => existing.text === text.trim())) {
+                callImps.push({ text: text.trim(), audioFile });
+              }
+            }
+          });
+        });
+      });
+
+      if (callImps.length > 0) {
+        activePayload = callImps;
+      }
+    }
 
     let hasActive = false;
     if (typeof activePayload === "string" && activePayload.trim().length > 0) hasActive = true;
