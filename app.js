@@ -5031,33 +5031,55 @@ function renderCoachingSection() {
     return;
   }
 
-  // Precompute agent average scores and individual KPI breakdowns from filtered calls
+  // Precompute agent average scores and individual KPI breakdowns from filtered calls (falling back to all calls)
   const agentScores = {};
-  calls.forEach(c => {
-    const agentName = getAgentName(c);
-    if (!agentName) return;
-    if (!agentScores[agentName]) {
-      agentScores[agentName] = { total: 0, count: 0, kpis: {} };
+  const allCallsList = calls.length > 0 ? calls : (state.allCalls || []);
+
+  allCallsList.forEach(c => {
+    const rawName = getAgentName(c);
+    if (!rawName) return;
+    const parsedId = getAgentIdFromFilename(c.audio_file_name);
+    const key = parsedId ? `id_${parsedId}` : `name_${normalizeAgentName(rawName)}`;
+
+    if (!agentScores[key]) {
+      agentScores[key] = { total: 0, count: 0, kpis: {} };
     }
     const details = getAgentScoreDetails(c);
     const score = details.score;
-    if (!isNaN(score)) {
-      agentScores[agentName].total += score;
-      agentScores[agentName].count++;
+    if (!isNaN(score) && score !== null) {
+      agentScores[key].total += score;
+      agentScores[key].count++;
     }
     if (details.breakdown && typeof details.breakdown === "object") {
       Object.entries(details.breakdown).forEach(([kpiName, kpiVal]) => {
         const val = Number(kpiVal);
         if (!isNaN(val)) {
-          if (!agentScores[agentName].kpis[kpiName]) {
-            agentScores[agentName].kpis[kpiName] = { sum: 0, count: 0 };
+          if (!agentScores[key].kpis[kpiName]) {
+            agentScores[key].kpis[kpiName] = { sum: 0, count: 0 };
           }
-          agentScores[agentName].kpis[kpiName].sum += val;
-          agentScores[agentName].kpis[kpiName].count++;
+          agentScores[key].kpis[kpiName].sum += val;
+          agentScores[key].kpis[kpiName].count++;
         }
       });
     }
   });
+
+  const getScoreInfoForAgent = (agentName, row) => {
+    const targetId = (row && row.id) ? Number(row.id) : getNumericAgentId(agentName);
+    if (targetId && agentScores[`id_${targetId}`]) {
+      return agentScores[`id_${targetId}`];
+    }
+    const norm = normalizeAgentName(agentName);
+    if (agentScores[`name_${norm}`]) {
+      return agentScores[`name_${norm}`];
+    }
+    for (const k of Object.keys(agentScores)) {
+      if (k.startsWith("name_") && k.replace("name_", "") === norm) {
+        return agentScores[k];
+      }
+    }
+    return null;
+  };
 
   // Helper to extract custom improvements KPI values
   const getImprovementsVal = (call) => {
@@ -5176,7 +5198,7 @@ function renderCoachingSection() {
 
     const initials = agentName.split(/\s+/).map(n => n[0]).join("").substring(0, 2).toUpperCase() || "A";
 
-    const scoreInfo = agentScores[agentName];
+    const scoreInfo = getScoreInfoForAgent(agentName, row);
     const avgScore = scoreInfo && scoreInfo.count > 0 ? (scoreInfo.total / scoreInfo.count).toFixed(1) : "N/A";
     
     // Build KPI breakdown text for the hover tooltip
