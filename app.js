@@ -9154,6 +9154,9 @@ function setupSettingsDrawer() {
           if (val) {
             const kpis = typeof val === 'string' ? JSON.parse(val) : val;
             state.customKpis = Array.isArray(kpis) ? kpis : [];
+            state.customKpis.forEach(kpi => {
+              if (!kpi.campaign) kpi.campaign = "all";
+            });
             localStorage.setItem("gcs_custom_kpis", JSON.stringify(state.customKpis));
             renderCustomKpisList();
             return;
@@ -9175,6 +9178,9 @@ function setupSettingsDrawer() {
     } else {
       state.customKpis = [];
     }
+    state.customKpis.forEach(kpi => {
+      if (!kpi.campaign) kpi.campaign = "all";
+    });
     renderCustomKpisList();
   }
 
