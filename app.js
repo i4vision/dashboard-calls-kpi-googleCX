@@ -9439,6 +9439,7 @@ async function loadCampaignsFromSupabase() {
             localStorage.setItem("gcs_campaigns", JSON.stringify(state.campaigns));
             populateCampaignDropdowns();
             renderCampaignsList();
+            if (typeof renderCustomKpisList === "function") renderCustomKpisList();
             return;
           }
         }
@@ -9458,6 +9459,7 @@ async function loadCampaignsFromSupabase() {
 
   populateCampaignDropdowns();
   renderCampaignsList();
+  if (typeof renderCustomKpisList === "function") renderCustomKpisList();
 }
 
 async function saveCampaignsToSupabase() {
