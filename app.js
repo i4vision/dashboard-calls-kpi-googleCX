@@ -2281,6 +2281,25 @@ async function fetchCallData() {
     state.canonicalAgents = null; // Reset cache to force recalculation of canonical agent names
     state.filteredCalls = [...data];
 
+    // Dynamically sync campaign names present in call records
+    if (Array.isArray(data) && data.length > 0) {
+      state.campaigns = state.campaigns || [];
+      const dbCampaigns = [...new Set(data.map(c => c.campaign).filter(Boolean))];
+      let hasNewCampaign = false;
+      dbCampaigns.forEach(c => {
+        if (!state.campaigns.includes(c)) {
+          state.campaigns.push(c);
+          hasNewCampaign = true;
+        }
+      });
+      if (hasNewCampaign) {
+        localStorage.setItem("gcs_campaigns", JSON.stringify(state.campaigns));
+        populateCampaignDropdowns();
+        if (typeof renderCampaignsList === "function") renderCampaignsList();
+        if (typeof renderCustomKpisList === "function") renderCustomKpisList();
+      }
+    }
+
     // Fetch agent_improvements from Supabase
     try {
       const impResponse = await fetch(`${SUPABASE_URL}/rest/v1/agent_improvements?select=*`, {
@@ -3175,7 +3194,10 @@ function renderTable() {
     // Assigned Agent and Short Call ID
     const agentName = getAgentName(call);
     const shortId = formatConvName(call.conversation_name);
-    const displayName = `${agentName} <span style="font-family: var(--font-mono); font-size: 0.75rem; opacity: 0.6; display: block; margin-top: 0.25rem;">ID: #${shortId}</span>`;
+    const campaignBadge = call.campaign 
+      ? `<span class="badge" style="background: rgba(168, 85, 247, 0.15); color: #c084fc; border-color: rgba(168, 85, 247, 0.35); font-weight: 600; font-size: 0.65rem; margin-top: 0.2rem; display: inline-block;">${call.campaign}</span>` 
+      : "";
+    const displayName = `${agentName} <span style="font-family: var(--font-mono); font-size: 0.75rem; opacity: 0.6; display: block; margin-top: 0.25rem;">ID: #${shortId} ${campaignBadge}</span>`;
     
     // Category representation
     const category = getLocalizedCategory(getParentCategory(call.category));
