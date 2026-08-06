@@ -6637,6 +6637,200 @@ async function getGoogleAccessToken() {
   return null;
 }
 
+// Pure JS SHA-256 implementation for insecure HTTP IP contexts where window.crypto.subtle is unavailable
+function sha256BytesPure(str) {
+  const K = [
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+  ];
+
+  const H = [
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+  ];
+
+  const utf8 = unescape(encodeURIComponent(str));
+  const l = utf8.length;
+  const words = [];
+  for (let i = 0; i < l; i++) {
+    words[i >> 2] |= (utf8.charCodeAt(i) & 0xff) << (24 - (i % 4) * 8);
+  }
+  words[l >> 2] |= 0x80 << (24 - (l % 4) * 8);
+  
+  const blocks = (((l + 8) >> 6) + 1) * 16;
+  while (words.length < blocks) words.push(0);
+  words[blocks - 1] = l * 8;
+
+  const w = new Array(64);
+  for (let i = 0; i < blocks; i += 16) {
+    let a = H[0], b = H[1], c = H[2], d = H[3], e = H[4], f = H[5], g = H[6], h = H[7];
+    for (let t = 0; t < 64; t++) {
+      if (t < 16) {
+        w[t] = words[i + t];
+      } else {
+        const s0 = ((w[t - 15] >>> 7) | (w[t - 15] << 25)) ^ ((w[t - 15] >>> 18) | (w[t - 15] << 14)) ^ (w[t - 15] >>> 3);
+        const s1 = ((w[t - 2] >>> 17) | (w[t - 2] << 15)) ^ ((w[t - 2] >>> 19) | (w[t - 2] << 13)) ^ (w[t - 2] >>> 10);
+        w[t] = (w[t - 16] + s0 + w[t - 7] + s1) | 0;
+      }
+      const S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
+      const ch = (e & f) ^ ((~e) & g);
+      const temp1 = (h + S1 + ch + K[t] + w[t]) | 0;
+      const S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const temp2 = (S0 + maj) | 0;
+
+      h = g; g = f; f = e; e = (d + temp1) | 0;
+      d = c; c = b; b = a; a = (temp1 + temp2) | 0;
+    }
+    H[0] = (H[0] + a) | 0; H[1] = (H[1] + b) | 0; H[2] = (H[2] + c) | 0; H[3] = (H[3] + d) | 0;
+    H[4] = (H[4] + e) | 0; H[5] = (H[5] + f) | 0; H[6] = (H[6] + g) | 0; H[7] = (H[7] + h) | 0;
+  }
+
+  const res = new Uint8Array(32);
+  for (let i = 0; i < 8; i++) {
+    res[i * 4] = (H[i] >>> 24) & 0xff;
+    res[i * 4 + 1] = (H[i] >>> 16) & 0xff;
+    res[i * 4 + 2] = (H[i] >>> 8) & 0xff;
+    res[i * 4 + 3] = H[i] & 0xff;
+  }
+  return res;
+}
+
+function parsePkcs8RSA(derBuffer) {
+  let offset = 0;
+  function readByte() { return derBuffer[offset++]; }
+  function readLength() {
+    let len = readByte();
+    if (len & 0x80) {
+      const numBytes = len & 0x7f;
+      len = 0;
+      for (let i = 0; i < numBytes; i++) {
+        len = (len << 8) | readByte();
+      }
+    }
+    return len;
+  }
+
+  if (readByte() !== 0x30) throw new Error("Expected outer SEQUENCE");
+  readLength();
+
+  readByte(); // 0x02
+  const vLen = readLength();
+  offset += vLen;
+
+  if (readByte() !== 0x30) throw new Error("Expected AlgorithmIdentifier SEQUENCE");
+  const algLen = readLength();
+  offset += algLen;
+
+  if (readByte() !== 0x04) throw new Error("Expected OCTET STRING");
+  readLength();
+
+  if (readByte() !== 0x30) throw new Error("Expected inner RSAPrivateKey SEQUENCE");
+  readLength();
+
+  readByte(); // 0x02
+  const ivLen = readLength();
+  offset += ivLen;
+
+  function readInteger() {
+    if (readByte() !== 0x02) throw new Error("Expected INTEGER");
+    const len = readLength();
+    let bytes = derBuffer.subarray(offset, offset + len);
+    offset += len;
+    if (bytes[0] === 0x00) bytes = bytes.subarray(1);
+    let hex = "";
+    for (let i = 0; i < bytes.length; i++) {
+      hex += bytes[i].toString(16).padStart(2, "0");
+    }
+    return BigInt("0x" + hex);
+  }
+
+  const n = readInteger();
+  const e = readInteger();
+  const d = readInteger();
+
+  return { n, d };
+}
+
+function modPowPure(base, exponent, modulus) {
+  let result = 1n;
+  base = base % modulus;
+  while (exponent > 0n) {
+    if (exponent % 2n === 1n) {
+      result = (result * base) % modulus;
+    }
+    exponent = exponent / 2n;
+    base = (base * base) % modulus;
+  }
+  return result;
+}
+
+function signRsaSha256Pure(stringToSign, saJson) {
+  const pemHeader = "-----BEGIN PRIVATE KEY-----";
+  const pemFooter = "-----END PRIVATE KEY-----";
+  const rawKey = (saJson.private_key || "").replace(/\\n/g, "\n");
+  const startIdx = rawKey.indexOf(pemHeader);
+  const endIdx = rawKey.indexOf(pemFooter);
+  const pemContents = rawKey.substring(startIdx + pemHeader.length, endIdx);
+  const cleanPem = pemContents.replace(/[\r\n\s\\]/g, "");
+
+  const binaryDerString = atob(cleanPem);
+  const derBuffer = new Uint8Array(binaryDerString.length);
+  for (let i = 0; i < binaryDerString.length; i++) {
+    derBuffer[i] = binaryDerString.charCodeAt(i);
+  }
+
+  const { n, d } = parsePkcs8RSA(derBuffer);
+
+  const sha256Prefix = [0x30, 0x31, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01, 0x05, 0x00, 0x04, 0x20];
+  const hashBytes = sha256BytesPure(stringToSign);
+
+  const keyByteLen = (n.toString(16).length + 1) >> 1;
+  const digestInfoLen = sha256Prefix.length + hashBytes.length;
+  const psLen = keyByteLen - 3 - digestInfoLen;
+
+  const padded = new Uint8Array(keyByteLen);
+  padded[0] = 0x00;
+  padded[1] = 0x01;
+  for (let i = 0; i < psLen; i++) {
+    padded[2 + i] = 0xff;
+  }
+  padded[2 + psLen] = 0x00;
+  padded.set(sha256Prefix, 3 + psLen);
+  padded.set(hashBytes, 3 + psLen + sha256Prefix.length);
+
+  let hexM = "";
+  for (let i = 0; i < padded.length; i++) {
+    hexM += padded[i].toString(16).padStart(2, "0");
+  }
+  const m = BigInt("0x" + hexM);
+
+  const s = modPowPure(m, d, n);
+
+  let sHex = s.toString(16);
+  if (sHex.length % 2 !== 0) sHex = "0" + sHex;
+  while (sHex.length < keyByteLen * 2) {
+    sHex = "00" + sHex;
+  }
+
+  const sigBytes = new Uint8Array(sHex.length / 2);
+  for (let i = 0; i < sigBytes.length; i++) {
+    sigBytes[i] = parseInt(sHex.substring(i * 2, i * 2 + 2), 16);
+  }
+
+  let binarySig = "";
+  for (let i = 0; i < sigBytes.length; i++) {
+    binarySig += String.fromCharCode(sigBytes[i]);
+  }
+
+  return btoa(binarySig).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+}
+
 async function getAccessTokenFromServiceAccount(saJson) {
   const header = { alg: "RS256", typ: "JWT" };
   const now = Math.floor(Date.now() / 1000);
@@ -6659,57 +6853,74 @@ async function getAccessTokenFromServiceAccount(saJson) {
   };
   
   const stringToSign = `${base64url(header)}.${base64url(payload)}`;
-  const privateKeyPem = (saJson.private_key || "").replace(/\\n/g, "\n");
-  const pemHeader = "-----BEGIN PRIVATE KEY-----";
-  const pemFooter = "-----END PRIVATE KEY-----";
-  
-  const startIdx = privateKeyPem.indexOf(pemHeader);
-  const endIdx = privateKeyPem.indexOf(pemFooter);
-  
-  if (startIdx === -1 || endIdx === -1) {
-    throw new Error("Invalid private key format in Service Account JSON.");
+  let signatureEncoded = "";
+
+  // Attempt Web Crypto API if available (secure context / HTTPS / localhost)
+  if (window.crypto && window.crypto.subtle) {
+    try {
+      const privateKeyPem = (saJson.private_key || "").replace(/\\n/g, "\n");
+      const pemHeader = "-----BEGIN PRIVATE KEY-----";
+      const pemFooter = "-----END PRIVATE KEY-----";
+      
+      const startIdx = privateKeyPem.indexOf(pemHeader);
+      const endIdx = privateKeyPem.indexOf(pemFooter);
+      
+      if (startIdx !== -1 && endIdx !== -1) {
+        const pemContents = privateKeyPem.substring(startIdx + pemHeader.length, endIdx);
+        const cleanPem = pemContents.replace(/[\r\n\s\\]/g, "");
+        
+        const binaryDerString = atob(cleanPem);
+        const binaryDer = new Uint8Array(binaryDerString.length);
+        for (let i = 0; i < binaryDerString.length; i++) {
+          binaryDer[i] = binaryDerString.charCodeAt(i);
+        }
+        
+        const key = await crypto.subtle.importKey(
+          "pkcs8",
+          binaryDer.buffer,
+          {
+            name: "RSASSA-PKCS1-v1_5",
+            hash: { name: "SHA-256" }
+          },
+          false,
+          ["sign"]
+        );
+        
+        const encoder = new TextEncoder();
+        const dataToSign = encoder.encode(stringToSign);
+        
+        const signatureBuffer = await crypto.subtle.sign(
+          "RSASSA-PKCS1-v1_5",
+          key,
+          dataToSign
+        );
+        
+        const signatureArray = new Uint8Array(signatureBuffer);
+        let binary = "";
+        const len = signatureArray.byteLength;
+        for (let i = 0; i < len; i++) {
+          binary += String.fromCharCode(signatureArray[i]);
+        }
+        signatureEncoded = btoa(binary)
+          .replace(/=/g, "")
+          .replace(/\+/g, "-")
+          .replace(/\//g, "_");
+      }
+    } catch (cryptoErr) {
+      console.warn("WebCrypto signing failed, falling back to Pure JS RSA-SHA256:", cryptoErr);
+    }
+  }
+
+  // Pure JS RSA-SHA256 signing fallback if WebCrypto is unavailable (insecure HTTP IP context) or failed
+  if (!signatureEncoded) {
+    try {
+      signatureEncoded = signRsaSha256Pure(stringToSign, saJson);
+    } catch (pureErr) {
+      console.error("Pure JS RSA-SHA256 signing failed:", pureErr);
+      throw pureErr;
+    }
   }
   
-  const pemContents = privateKeyPem.substring(startIdx + pemHeader.length, endIdx);
-  const cleanPem = pemContents.replace(/[\r\n\s\\]/g, "");
-  
-  const binaryDerString = atob(cleanPem);
-  const binaryDer = new Uint8Array(binaryDerString.length);
-  for (let i = 0; i < binaryDerString.length; i++) {
-    binaryDer[i] = binaryDerString.charCodeAt(i);
-  }
-  
-  const key = await crypto.subtle.importKey(
-    "pkcs8",
-    binaryDer.buffer,
-    {
-      name: "RSASSA-PKCS1-v1_5",
-      hash: { name: "SHA-256" }
-    },
-    false,
-    ["sign"]
-  );
-  
-  const encoder = new TextEncoder();
-  const dataToSign = encoder.encode(stringToSign);
-  
-  const signatureBuffer = await crypto.subtle.sign(
-    "RSASSA-PKCS1-v1_5",
-    key,
-    dataToSign
-  );
-  
-  const signatureArray = new Uint8Array(signatureBuffer);
-  let binary = "";
-  const len = signatureArray.byteLength;
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(signatureArray[i]);
-  }
-  const signatureEncoded = btoa(binary)
-    .replace(/=/g, "")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_");
-    
   const assertion = `${stringToSign}.${signatureEncoded}`;
   
   const response = await fetch(saJson.token_uri || "https://oauth2.googleapis.com/token", {
