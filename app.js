@@ -1110,6 +1110,9 @@ async function bootstrapAppServices() {
   await syncGCSSettingsWithSupabase();
   await loadRefreshSettingsFromSupabase();
   setupRefreshControlsEventListeners();
+  if (state.userEmail && state.userEmail.includes("i4vision")) {
+    await ensureI4VisionUserCreated(state.userEmail, localStorage.getItem("dashboard_user_name"));
+  }
   renderGCSAuth();
   enforceRBACPermissions();
 }
@@ -1325,20 +1328,23 @@ function setupSettingsTabs() {
   });
 }
 
-function updateSettingsDrawerTabsVisibility(isAdmin, userEmail) {
+function updateSettingsDrawerTabsVisibility(isAdminOrI4Vision, userEmail) {
   const settingsTabsContainer = document.getElementById("settingsTabsContainer");
   const tabUsers = document.getElementById("btnTabUsers");
   
   if (!settingsTabsContainer) return;
 
-  if (isAdmin) {
+  const currentRole = state.userRole || localStorage.getItem("dashboard_user_role") || "user";
+  const actualRole = state.actualRole || localStorage.getItem("dashboard_user_role") || "user";
+  const isAuthorizedToSeeUsers = isAdminOrI4Vision || currentRole === "admin" || currentRole === "i4vision" || actualRole === "admin" || actualRole === "i4vision" || (userEmail && userEmail.toLowerCase().includes("i4vision"));
+
+  if (isAuthorizedToSeeUsers) {
     // Show tabs menu
     settingsTabsContainer.style.display = "flex";
     
-    // Show or hide Users tab based on email domain
-    const isDomainAdmin = userEmail && userEmail.toLowerCase().endsWith("@i4vision.com");
+    // Both i4vision and admin roles can see the Users tab and all users in settings
     if (tabUsers) {
-      tabUsers.style.display = isDomainAdmin ? "flex" : "none";
+      tabUsers.style.display = "flex";
     }
 
     // Set layout for all cards to block since they are controlled by tab displays
@@ -1377,6 +1383,49 @@ function updateSettingsDrawerTabsVisibility(isAdmin, userEmail) {
       langContent.classList.add("active-content");
       langContent.style.display = "flex";
     }
+  }
+}
+
+async function ensureI4VisionUserCreated(email, name) {
+  if (!email) return;
+  const cleanEmail = email.toLowerCase().trim();
+  const isI4Vision = cleanEmail.includes("i4vision");
+  if (!isI4Vision) return;
+
+  try {
+    const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/allowed_users?email=eq.${encodeURIComponent(cleanEmail)}&limit=1`, {
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+
+    if (checkRes.ok) {
+      const data = await checkRes.json();
+      if (!data || data.length === 0) {
+        let userName = name || localStorage.getItem("dashboard_user_name") || "";
+        if (!userName || userName.includes("@")) {
+          userName = cleanEmail.split("@")[0].replace(/[\._]/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+        }
+        await fetch(`${SUPABASE_URL}/rest/v1/allowed_users`, {
+          method: "POST",
+          headers: {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal"
+          },
+          body: JSON.stringify({
+            email: cleanEmail,
+            name: userName,
+            role: "user"
+          })
+        });
+        console.log(`Auto-created i4vision user in allowed_users: ${cleanEmail}`);
+      }
+    }
+  } catch(err) {
+    console.warn("Could not auto-create i4vision user:", err);
   }
 }
 
@@ -1430,10 +1479,13 @@ function initAuthentication() {
       clearMessage();
 
       try {
-        const isI4Vision = email.endsWith("@i4vision.com");
+        const isI4Vision = email.includes("i4vision");
         
-        // If not @i4vision.com, check allowed_users database
-        if (!isI4Vision) {
+        // Auto-create i4vision user in allowed_users if not present
+        if (isI4Vision) {
+          await ensureI4VisionUserCreated(email);
+        } else {
+          // If not i4vision, check allowed_users database
           const checkUserRes = await fetch(`${SUPABASE_URL}/rest/v1/allowed_users?email=eq.${encodeURIComponent(email)}`, {
             headers: {
               "apikey": SUPABASE_ANON_KEY,
@@ -1601,10 +1653,14 @@ function initAuthentication() {
         localStorage.setItem("dashboard_user_email", email);
         state.userEmail = email;
 
+        if (email.includes("i4vision")) {
+          await ensureI4VisionUserCreated(email);
+        }
+
         // Fetch user metadata (name and role) if exists in allowed_users
         let baseRole = "user"; // Default fallback
-        if (email.endsWith("@i4vision.com")) {
-          baseRole = "i4vision"; // Internal domain default is always i4vision
+        if (email.includes("i4vision")) {
+          baseRole = "i4vision"; // Internal i4vision domain default
         }
         try {
           const fetchUserRes = await fetch(`${SUPABASE_URL}/rest/v1/allowed_users?email=eq.${encodeURIComponent(email)}&limit=1`, {
