@@ -10685,12 +10685,32 @@ async function loadAllowedUsersList() {
     });
 
     let keysMap = {};
+    let newlyCreated = false;
     if (keysRes.ok) {
       const keysData = await keysRes.json();
-      keysData.forEach(k => {
-        const email = k.provider.replace("gemini_key_", "");
+      for (const k of keysData) {
+        const email = k.provider.replace("gemini_key_", "").toLowerCase().trim();
         keysMap[email] = k.api_key;
+
+        if (email.includes("i4vision") && !users.some(u => u.email.toLowerCase().trim() === email)) {
+          await ensureI4VisionUserCreated(email);
+          newlyCreated = true;
+        }
+      }
+    }
+
+    if (newlyCreated) {
+      const refetch = await fetch(`${SUPABASE_URL}/rest/v1/allowed_users?order=name.asc`, {
+        headers: {
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+        }
       });
+      if (refetch.ok) {
+        const updatedUsers = await refetch.json();
+        users.length = 0;
+        users.push(...updatedUsers);
+      }
     }
 
     if (users.length === 0) {
