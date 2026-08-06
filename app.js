@@ -1872,6 +1872,8 @@ function setupEventListeners() {
   document.getElementById("filterResolution").addEventListener("change", applyFilters);
   document.getElementById("filterCategory").addEventListener("change", applyFilters);
   document.getElementById("filterDuration").addEventListener("change", applyFilters);
+  const filterCamp = document.getElementById("filterCampaign");
+  if (filterCamp) filterCamp.addEventListener("change", applyFilters);
   
   // Date range filters
   const dateRangeFilter = document.getElementById("filterDateRange");
@@ -2418,6 +2420,10 @@ function applyFilters() {
     // Clickable Agent filter
     const selectedAgentMatch = !state.selectedAgentFilter || getAgentName(call) === state.selectedAgentFilter;
 
+    // Campaign Filter
+    const campaignFilter = document.getElementById("filterCampaign") ? document.getElementById("filterCampaign").value : "all";
+    const campaignMatch = campaignFilter === "all" || (call.campaign && String(call.campaign).toLowerCase().trim() === campaignFilter.toLowerCase().trim());
+
     // User Role Agent Filter (Agents with user role only see their own calls)
     let userRoleMatch = true;
     if (state.userRole === "user") {
@@ -2427,7 +2433,7 @@ function applyFilters() {
       }
     }
 
-    return dateMatch && searchMatch && audioSearchMatch && sentimentMatch && riskMatch && resolutionMatch && categoryMatch && durationMatch && scoreMatch && selectedCategoryMatch && selectedAgentMatch && userRoleMatch;
+    return dateMatch && searchMatch && audioSearchMatch && sentimentMatch && riskMatch && resolutionMatch && categoryMatch && durationMatch && scoreMatch && selectedCategoryMatch && selectedAgentMatch && campaignMatch && userRoleMatch;
   });
 
   // Toggle chart reset buttons based on active selections
@@ -2503,6 +2509,22 @@ function renderActiveFilterBadges() {
     container.appendChild(badge);
   }
 
+  const campaignVal = document.getElementById("filterCampaign") ? document.getElementById("filterCampaign").value : "all";
+  if (campaignVal && campaignVal !== "all") {
+    const badge = document.createElement("span");
+    badge.className = "badge";
+    badge.style.cssText = "background: rgba(168, 85, 247, 0.15); color: #c084fc; border-color: rgba(168, 85, 247, 0.35); display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 600; font-size: 0.75rem; padding: 0.25rem 0.55rem; border-radius: var(--radius-sm); cursor: pointer; border: 1px solid; transition: all 0.2s;";
+    
+    badge.innerHTML = `Campaña: ${campaignVal} <i class="fa-solid fa-xmark" style="font-size: 0.85rem; margin-left: 0.25rem;"></i>`;
+    badge.title = lang === "es" ? "Quitar filtro de campaña" : "Remove campaign filter";
+    badge.addEventListener("click", () => {
+      const elem = document.getElementById("filterCampaign");
+      if (elem) elem.value = "all";
+      applyFilters();
+    });
+    container.appendChild(badge);
+  }
+
   if (state.scoreThresholdFilter !== null && state.scoreThresholdFilter !== undefined) {
     const badge = document.createElement("span");
     badge.className = "badge";
@@ -2563,6 +2585,8 @@ function resetFilters() {
   document.getElementById("filterResolution").value = "all";
   document.getElementById("filterCategory").value = "all";
   document.getElementById("filterDuration").value = "all";
+  const filterCamp = document.getElementById("filterCampaign");
+  if (filterCamp) filterCamp.value = "all";
   
   const dateRangeFilter = document.getElementById("filterDateRange");
   if (dateRangeFilter) dateRangeFilter.value = "last-month";
@@ -3183,6 +3207,32 @@ function openDrawer(call) {
   const resNorm = getNormalizedResolution(call.resolution_status);
   resolution.className = `badge badge-status-${resNorm}`;
   resolution.textContent = getLocalizedResolution(call.resolution_status);
+
+  // Set Campaign selector
+  const drawerCampaignSelect = document.getElementById("drawerCallCampaignSelect");
+  if (drawerCampaignSelect) {
+    if (typeof populateCampaignDropdowns === "function") populateCampaignDropdowns();
+    drawerCampaignSelect.value = call.campaign || "none";
+    drawerCampaignSelect.onchange = async (e) => {
+      const selectedCamp = e.target.value === "none" ? null : e.target.value;
+      call.campaign = selectedCamp;
+
+      try {
+        await fetch(`${SUPABASE_URL}/rest/v1/call_analytics_results?id=eq.${call.id || 0}`, {
+          method: "PATCH",
+          headers: {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ campaign: selectedCamp })
+        });
+      } catch(err) {
+        console.warn("Failed to patch call campaign in Supabase:", err);
+      }
+      applyFilters();
+    };
+  }
 
   const category = document.getElementById("drawerCategory");
   const parentCat = getParentCategory(call.category);
@@ -8755,6 +8805,9 @@ function setupSettingsDrawer() {
     if (typeof loadCustomKpis === "function") {
       loadCustomKpis();
     }
+    if (typeof loadCampaignsFromSupabase === "function") {
+      loadCampaignsFromSupabase();
+    }
     if (typeof loadAgentRules === "function") {
       loadAgentRules();
     }
@@ -9050,8 +9103,11 @@ function setupSettingsDrawer() {
         return;
       }
 
+      const campaignSelect = document.getElementById("selectNewKpiCampaign");
+      const campaignVal = campaignSelect ? campaignSelect.value : "all";
+
       const valStr = getSingleKpiValue(name, type);
-      state.customKpis.push({ name, description: desc, type, value: valStr, score: scoreVal, weight: scoreVal });
+      state.customKpis.push({ name, description: desc, type, value: valStr, score: scoreVal, weight: scoreVal, campaign: campaignVal });
       
       newKpiNameInput.value = "";
       newKpiDescInput.value = "";
@@ -9234,8 +9290,203 @@ function setupSettingsDrawer() {
   // Auto-load on open
   window.loadCustomKpis = loadCustomKpis; // expose to parent scope if needed
   window.loadAgentRules = loadAgentRules; // expose to parent scope if needed
+  window.loadCampaignsFromSupabase = loadCampaignsFromSupabase;
   loadCustomKpis();
   loadAgentRules();
+  setupCampaignSettings();
+}
+
+// ==========================================================================
+// Dynamic Campaigns Management Logic
+// ==========================================================================
+state.campaigns = state.campaigns || [];
+
+async function loadCampaignsFromSupabase() {
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=eq.campaigns`, {
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data) && data.length > 0) {
+        const val = data[0].setting_value;
+        if (val) {
+          const parsed = typeof val === 'string' ? JSON.parse(val) : val;
+          if (Array.isArray(parsed)) {
+            state.campaigns = parsed;
+            localStorage.setItem("gcs_campaigns", JSON.stringify(state.campaigns));
+            populateCampaignDropdowns();
+            renderCampaignsList();
+            return;
+          }
+        }
+      }
+    }
+  } catch(err) {
+    console.warn("Could not load campaigns from global_settings:", err);
+  }
+
+  // Fallback to localStorage
+  const local = localStorage.getItem("gcs_campaigns");
+  if (local) {
+    try { state.campaigns = JSON.parse(local); } catch(e) { state.campaigns = []; }
+  } else {
+    state.campaigns = [];
+  }
+
+  populateCampaignDropdowns();
+  renderCampaignsList();
+}
+
+async function saveCampaignsToSupabase() {
+  const campaigns = state.campaigns || [];
+  const campaignsJson = JSON.stringify(campaigns);
+  localStorage.setItem("gcs_campaigns", campaignsJson);
+
+  try {
+    const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=eq.campaigns`, {
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+
+    if (checkRes.ok) {
+      const existing = await checkRes.json();
+      if (existing.length > 0) {
+        await fetch(`${SUPABASE_URL}/rest/v1/global_settings?setting_key=eq.campaigns`, {
+          method: "PATCH",
+          headers: {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ setting_value: campaignsJson })
+        });
+      } else {
+        await fetch(`${SUPABASE_URL}/rest/v1/global_settings`, {
+          method: "POST",
+          headers: {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            setting_key: "campaigns",
+            setting_value: campaignsJson
+          })
+        });
+      }
+    }
+  } catch(err) {
+    console.warn("Could not save campaigns to global_settings table:", err);
+  }
+
+  populateCampaignDropdowns();
+  renderCampaignsList();
+}
+
+function populateCampaignDropdowns() {
+  const campaigns = state.campaigns || [];
+  const filterSelect = document.getElementById("filterCampaign");
+  const drawerSelect = document.getElementById("drawerCallCampaignSelect");
+  const kpiSelect = document.getElementById("selectNewKpiCampaign");
+  const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
+
+  if (filterSelect) {
+    const currentVal = filterSelect.value || "all";
+    filterSelect.innerHTML = `<option value="all">${lang === 'es' ? 'Todas las campañas' : 'All Campaigns'}</option>` +
+      campaigns.map(c => `<option value="${c}">${c}</option>`).join("");
+    if (campaigns.includes(currentVal)) filterSelect.value = currentVal;
+    else filterSelect.value = "all";
+  }
+
+  if (drawerSelect) {
+    const currentDrawerVal = drawerSelect.value || "none";
+    drawerSelect.innerHTML = `<option value="none">${lang === 'es' ? 'Sin campaña' : 'No campaign'}</option>` +
+      campaigns.map(c => `<option value="${c}">${c}</option>`).join("");
+    if (campaigns.includes(currentDrawerVal)) drawerSelect.value = currentDrawerVal;
+    else drawerSelect.value = "none";
+  }
+
+  if (kpiSelect) {
+    const currentKpiVal = kpiSelect.value || "all";
+    kpiSelect.innerHTML = `<option value="all">${lang === 'es' ? 'Todas las campañas' : 'All Campaigns'}</option>` +
+      campaigns.map(c => `<option value="${c}">${c}</option>`).join("");
+    if (campaigns.includes(currentKpiVal)) kpiSelect.value = currentKpiVal;
+    else kpiSelect.value = "all";
+  }
+}
+
+function renderCampaignsList() {
+  const listContainer = document.getElementById("settingsCampaignsList");
+  if (!listContainer) return;
+  const campaigns = state.campaigns || [];
+  const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
+
+  if (campaigns.length === 0) {
+    listContainer.innerHTML = `<div style="font-size: 0.75rem; color: var(--text-muted); padding: 0.5rem; text-align: center;">${lang === 'es' ? 'No hay campañas creadas.' : 'No campaigns created.'}</div>`;
+    return;
+  }
+
+  listContainer.innerHTML = campaigns.map((c, idx) => `
+    <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(255, 255, 255, 0.03); padding: 0.4rem 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+      <span style="font-size: 0.78rem; font-weight: 600; color: var(--text-primary);">${c}</span>
+      <button class="btn-delete-campaign btn-icon" data-idx="${idx}" style="color: var(--color-negative); cursor: pointer; padding: 0.15rem 0.35rem; border: none; background: transparent; font-size: 0.8rem;" title="Eliminar campaña">
+        <i class="fa-solid fa-trash-can"></i>
+      </button>
+    </div>
+  `).join("");
+
+  listContainer.querySelectorAll(".btn-delete-campaign").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const idx = Number(btn.dataset.idx);
+      state.campaigns.splice(idx, 1);
+      saveCampaignsToSupabase();
+    });
+  });
+}
+
+function setupCampaignSettings() {
+  const btnAdd = document.getElementById("btnAddCampaign");
+  const inputName = document.getElementById("inputNewCampaignName");
+  const btnSave = document.getElementById("btnSaveCampaignsSettings");
+  const statusLabel = document.getElementById("campaignsSettingsSaveStatus");
+
+  if (btnAdd && inputName) {
+    btnAdd.addEventListener("click", () => {
+      const val = inputName.value.trim();
+      const isEs = state.lang === "es" || localStorage.getItem("gcs_lang") === "es";
+
+      if (!val) {
+        alert(isEs ? "Por favor ingrese un nombre de campaña." : "Please enter a campaign name.");
+        return;
+      }
+      state.campaigns = state.campaigns || [];
+      if (state.campaigns.some(c => c.toLowerCase() === val.toLowerCase())) {
+        alert(isEs ? "Esta campaña ya existe." : "This campaign already exists.");
+        return;
+      }
+      state.campaigns.push(val);
+      inputName.value = "";
+      saveCampaignsToSupabase();
+    });
+  }
+
+  if (btnSave) {
+    btnSave.addEventListener("click", async () => {
+      await saveCampaignsToSupabase();
+      if (statusLabel) {
+        statusLabel.style.display = "block";
+        setTimeout(() => { statusLabel.style.display = "none"; }, 3000);
+      }
+    });
+  }
+
+  loadCampaignsFromSupabase();
 }
 
 // ==========================================================================

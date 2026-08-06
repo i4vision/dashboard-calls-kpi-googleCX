@@ -194,6 +194,17 @@
         <button class="tab-btn" data-target="coachingSection"><i class="fa-solid fa-graduation-cap"></i> Coaching & Training</button>
       </div>
       
+      <!-- Campaign Filter Dropdown -->
+      <div id="campaignFilterWrapper" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-right: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.35rem;">
+          <i class="fa-solid fa-bullhorn" style="color: #a855f7; font-size: 0.85rem;"></i>
+          <span style="font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Campaña:</span>
+        </div>
+        <select id="filterCampaign" class="filter-control" style="height: 30px; font-size: 0.75rem; font-weight: 600; padding: 0 0.5rem; border-radius: var(--radius-sm); border: 1px solid rgba(168, 85, 247, 0.4); background: var(--bg-secondary); color: #c084fc; cursor: pointer; outline: none; min-width: 140px;">
+          <option value="all" id="optCampaignAll" selected>Todas las campañas</option>
+        </select>
+      </div>
+
       <!-- Date Filter Dropdown and Custom Date inputs -->
       <div id="dateFilterWrapper" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-right: 0.5rem;">
         <div style="display: flex; align-items: center; gap: 0.35rem;">
@@ -491,11 +502,20 @@
     
     <div class="drawer-body">
       <!-- Badges Row -->
-      <div class="drawer-meta-badges">
-        <span id="drawerSentiment" class="badge">Neutral</span>
-        <span id="drawerRisk" class="badge">Low Risk</span>
-        <span id="drawerResolution" class="badge">Unresolved</span>
-        <span id="drawerCategory" class="badge" style="background: var(--bg-tertiary); color: var(--text-primary); border-color: var(--border-color)">Language Support</span>
+      <div class="drawer-meta-badges" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap;">
+          <span id="drawerSentiment" class="badge">Neutral</span>
+          <span id="drawerRisk" class="badge">Low Risk</span>
+          <span id="drawerResolution" class="badge">Unresolved</span>
+          <span id="drawerCategory" class="badge" style="background: var(--bg-tertiary); color: var(--text-primary); border-color: var(--border-color)">Language Support</span>
+        </div>
+        <div style="display: inline-flex; align-items: center; gap: 0.35rem;">
+          <i class="fa-solid fa-bullhorn" style="color: #a855f7; font-size: 0.75rem;"></i>
+          <span style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Campaña:</span>
+          <select id="drawerCallCampaignSelect" style="background: var(--bg-tertiary); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4); font-size: 0.75rem; font-weight: 600; padding: 0.15rem 0.4rem; border-radius: var(--radius-sm); outline: none; cursor: pointer;">
+            <option value="none">Sin campaña</option>
+          </select>
+        </div>
       </div>
 
       <!-- Quick Stats Grid -->
@@ -859,6 +879,9 @@
         <button class="settings-tab-btn" data-tab="tab-kpis">
           <i class="fa-solid fa-chart-line"></i> <span class="tab-label">KPIs</span>
         </button>
+        <button class="settings-tab-btn" data-tab="tab-campaigns">
+          <i class="fa-solid fa-bullhorn"></i> <span class="tab-label" id="labelTabCampaigns">Campañas</span>
+        </button>
         <button class="settings-tab-btn" data-tab="tab-ai-chat">
           <i class="fa-solid fa-wand-magic-sparkles"></i> <span class="tab-label">AI Chat</span>
         </button>
@@ -1064,6 +1087,12 @@
                 </select>
               </div>
               <div>
+                <label class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">CAMPAÑA / CAMPAIGN</label>
+                <select id="selectNewKpiCampaign" class="gcs-input" style="width: 100%; height: 32px; padding: 0 0.5rem; font-size: 0.75rem; cursor: pointer; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); outline: none;">
+                  <option value="all">Todas las campañas</option>
+                </select>
+              </div>
+              <div>
                 <label id="labelNewKpiWeight" class="gcs-input-label" style="font-size: 0.65rem; margin-bottom: 0.25rem;">KPI WEIGHT (0 or 1 to 10)</label>
                 <input type="number" id="inputNewKpiScore" class="gcs-input" value="0" min="0" max="10" style="width: 100%; font-size: 0.75rem; height: 32px;">
               </div>
@@ -1078,6 +1107,37 @@
           </button>
           <div id="customKpiSettingsSaveStatus" style="font-size: 0.7rem; margin-top: 0.5rem; text-align: center; color: var(--color-positive); display: none;">
             <i class="fa-solid fa-circle-check"></i> KPI settings saved successfully!
+          </div>
+        </div>
+      </div>
+
+      <!-- Dynamic Campaigns Settings Card -->
+      <div id="tab-campaigns" class="settings-tab-content">
+        <div class="settings-card" style="padding: 1rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); width: 100%;">
+          <h3 style="font-size: 0.9rem; font-weight: 600; margin: 0 0 0.5rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.35rem;">
+            <i class="fa-solid fa-bullhorn" style="color: #a855f7;"></i> <span id="labelSettingsCampaignsTitle">Gestión de Campañas</span>
+          </h3>
+          <p style="font-size: 0.72rem; line-height: 1.4; color: var(--text-secondary); margin: 0 0 1rem;">
+            Agregue o administre las campañas activas para categorizar y filtrar las llamadas y KPIs.
+          </p>
+
+          <!-- Add Campaign Form -->
+          <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+            <input type="text" id="inputNewCampaignName" class="gcs-input" placeholder="Nombre de campaña (ej: Ventas, Cobranzas)..." style="flex: 1; height: 32px; padding: 0 0.5rem; font-size: 0.75rem; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color); outline: none;">
+            <button id="btnAddCampaign" class="btn-primary" style="font-size: 0.75rem; padding: 0 0.75rem; height: 32px; display: flex; align-items: center; gap: 0.35rem; white-space: nowrap;">
+              <i class="fa-solid fa-plus"></i> <span>Agregar</span>
+            </button>
+          </div>
+
+          <!-- Campaign List Container -->
+          <div id="settingsCampaignsList" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 250px; overflow-y: auto; padding-right: 0.25rem; margin-bottom: 1rem;">
+          </div>
+
+          <button id="btnSaveCampaignsSettings" class="btn-primary" style="width: 100%; font-size: 0.8rem; padding: 0.65rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; height: 36px;">
+            <i class="fa-solid fa-floppy-disk"></i> <span id="labelSaveCampaignsBtnText">Guardar Campañas</span>
+          </button>
+          <div id="campaignsSettingsSaveStatus" style="font-size: 0.7rem; margin-top: 0.5rem; text-align: center; color: var(--color-positive); display: none;">
+            <i class="fa-solid fa-circle-check"></i> <span>¡Campañas guardadas exitosamente!</span>
           </div>
         </div>
       </div>
