@@ -8969,10 +8969,13 @@ function setupSettingsDrawer() {
     listKpiContainer.innerHTML = "";
 
     const kpis = state.customKpis || [];
+    const campaigns = state.campaigns || [];
+    const isEs = state.lang === "es" || localStorage.getItem("gcs_lang") === "es";
+
     if (kpis.length === 0) {
       listKpiContainer.innerHTML = `
         <div style="text-align: center; color: var(--text-muted); font-size: 0.72rem; padding: 1rem 0;">
-          No custom call KPIs defined.
+          ${isEs ? "No hay KPIs de llamada personalizados definidos." : "No custom call KPIs defined."}
         </div>
       `;
       return;
@@ -8981,21 +8984,24 @@ function setupSettingsDrawer() {
     kpis.forEach((kpi, index) => {
       const item = document.createElement("div");
       item.className = "agent-mapping-item";
-      item.style.cssText = "display: flex; flex-direction: column; gap: 0.4rem; background: rgba(255, 255, 255, 0.02); padding: 0.6rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); width: 100%; margin-bottom: 0.45rem;";
+      item.style.cssText = "display: flex; flex-direction: column; gap: 0.5rem; background: rgba(255, 255, 255, 0.03); padding: 0.75rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); width: 100%; margin-bottom: 0.6rem; box-sizing: border-box;";
       
       const weightVal = kpi.weight !== undefined ? kpi.weight : (kpi.score !== undefined ? kpi.score : (kpi.order !== undefined ? kpi.order : 0));
-      const isEs = state.lang === "es" || localStorage.getItem("gcs_lang") === "es";
       const escDesc = (kpi.description || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const currentCampaign = kpi.campaign || "all";
+
+      const campaignOptionsHtml = `<option value="all">${isEs ? "Todas las campañas" : "All Campaigns"}</option>` +
+        campaigns.map(c => `<option value="${c}" ${c === currentCampaign ? "selected" : ""}>${c}</option>`).join("");
 
       item.innerHTML = `
-        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; flex-wrap: wrap; gap: 0.5rem;">
           <div style="display: flex; align-items: center; gap: 0.4rem;">
-            <span style="font-weight: 700; font-size: 0.8rem; color: var(--text-primary); font-family: var(--font-mono);">${kpi.name}</span>
-            <span class="badge" style="font-size: 0.65rem; padding: 0.05rem 0.3rem; text-transform: uppercase; background: rgba(139, 92, 246, 0.12); color: var(--accent-primary); border-color: rgba(139, 92, 246, 0.25); font-weight: 600;">${kpi.type}</span>
+            <span style="font-weight: 700; font-size: 0.82rem; color: var(--text-primary); font-family: var(--font-mono);">${kpi.name}</span>
+            <span class="badge" style="font-size: 0.65rem; padding: 0.1rem 0.35rem; text-transform: uppercase; background: rgba(139, 92, 246, 0.15); color: var(--accent-primary); border-color: rgba(139, 92, 246, 0.3); font-weight: 600;">${kpi.type}</span>
           </div>
           <div style="display: flex; align-items: center; gap: 0.5rem;">
             <div style="display: flex; align-items: center; gap: 0.25rem; background: rgba(255, 255, 255, 0.04); padding: 0.15rem 0.4rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-              <label style="font-size: 0.65rem; color: var(--text-secondary); font-weight: 500;">${isEs ? "PESO:" : "WEIGHT:"}</label>
+              <label style="font-size: 0.65rem; color: var(--text-secondary); font-weight: 600;">${isEs ? "PESO:" : "WEIGHT:"}</label>
               <input type="number" class="edit-kpi-weight" data-index="${index}" value="${weightVal}" min="0" max="10" style="width: 44px; height: 22px; font-size: 0.7rem; font-weight: 600; text-align: center; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); outline: none;">
             </div>
             <button class="btn-delete-kpi" data-index="${index}" title="${isEs ? "Eliminar parámetro de KPI" : "Delete KPI parameter"}" style="background: none; border: none; color: var(--color-negative); cursor: pointer; padding: 0.25rem; transition: color 0.15s ease;">
@@ -9003,8 +9009,15 @@ function setupSettingsDrawer() {
             </button>
           </div>
         </div>
-        <div style="width: 100%;">
-          <input type="text" class="edit-kpi-desc" data-index="${index}" value="${escDesc}" placeholder="${isEs ? "Descripción del KPI..." : "KPI description..."}" style="width: 100%; font-size: 0.72rem; padding: 0.35rem 0.5rem; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); outline: none; transition: border-color 0.2s;" />
+
+        <div style="display: flex; flex-direction: column; gap: 0.35rem; width: 100%;">
+          <div style="display: flex; align-items: center; gap: 0.35rem; width: 100%;">
+            <label style="font-size: 0.65rem; color: #c084fc; font-weight: 600; text-transform: uppercase; white-space: nowrap;">CAMPAÑA:</label>
+            <select class="edit-kpi-campaign gcs-input" data-index="${index}" style="flex: 1; height: 28px; font-size: 0.72rem; padding: 0 0.4rem; color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4); background: var(--bg-primary); outline: none; cursor: pointer; font-weight: 600;">
+              ${campaignOptionsHtml}
+            </select>
+          </div>
+          <input type="text" class="edit-kpi-desc" data-index="${index}" value="${escDesc}" placeholder="${isEs ? "Descripción del KPI..." : "KPI description..."}" style="width: 100%; font-size: 0.72rem; padding: 0.35rem 0.5rem; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); outline: none; box-sizing: border-box;" />
         </div>
       `;
 
@@ -9013,6 +9026,14 @@ function setupSettingsDrawer() {
         const idx = parseInt(e.target.getAttribute("data-index"), 10);
         if (state.customKpis && state.customKpis[idx]) {
           state.customKpis[idx].description = e.target.value;
+        }
+      });
+
+      // Live sync campaign select
+      item.querySelector(".edit-kpi-campaign").addEventListener("change", (e) => {
+        const idx = parseInt(e.target.getAttribute("data-index"), 10);
+        if (state.customKpis && state.customKpis[idx]) {
+          state.customKpis[idx].campaign = e.target.value;
         }
       });
 
@@ -9131,6 +9152,14 @@ function setupSettingsDrawer() {
           const idx = parseInt(input.getAttribute("data-index"), 10);
           if (state.customKpis && state.customKpis[idx]) {
             state.customKpis[idx].description = input.value.trim();
+          }
+        });
+
+        const campaignInputs = listKpiContainer.querySelectorAll(".edit-kpi-campaign");
+        campaignInputs.forEach(input => {
+          const idx = parseInt(input.getAttribute("data-index"), 10);
+          if (state.customKpis && state.customKpis[idx]) {
+            state.customKpis[idx].campaign = input.value;
           }
         });
 
