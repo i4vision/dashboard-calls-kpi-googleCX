@@ -3705,6 +3705,29 @@ function closeDrawer() {
     backdrop.classList.remove("active");
     drawer.setAttribute("aria-hidden", "true");
   }
+
+  // Immediately pause and stop call audio playback when Call Details drawer is closed
+  const audioEl = document.getElementById("gcsAudioElement");
+  if (audioEl) {
+    try {
+      audioEl.pause();
+      audioEl.currentTime = 0;
+    } catch(e) {}
+  }
+
+  // Hide audio player bar and reset play button icons
+  const playerSection = document.getElementById("gcsAudioPlayerSection");
+  if (playerSection) playerSection.style.display = "none";
+
+  const btnDrawerPlayAudio = document.getElementById("btnDrawerPlayAudio");
+  if (btnDrawerPlayAudio) {
+    btnDrawerPlayAudio.innerHTML = `<i class="fa-solid fa-play"></i>`;
+    btnDrawerPlayAudio.title = "Play recording";
+  }
+
+  document.querySelectorAll(".gcs-file-play i").forEach(icon => {
+    icon.className = "fa-solid fa-play";
+  });
 }
 
 // Call Transcript Renderer
