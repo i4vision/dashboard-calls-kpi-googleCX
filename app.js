@@ -8138,6 +8138,9 @@ async function triggerBulkCallAnalysisWebhook() {
   // Disable checkboxes visually during processing
   document.querySelectorAll(".gcs-item-checkbox").forEach(cb => cb.disabled = true);
   
+  const bulkCampaignSelect = document.getElementById("gcsBulkCampaignSelect");
+  const selectedCampaign = bulkCampaignSelect && bulkCampaignSelect.value !== "none" ? bulkCampaignSelect.value : null;
+
   // Fire webhook requests in parallel
   const promises = filesToAnalyze.map(async (file) => {
     const displayName = file.name.substring(GCS_PREFIX.length);
@@ -8152,7 +8155,9 @@ async function triggerBulkCallAnalysisWebhook() {
         stt_model: sttModel,
         google_cx_enabled: googleCxEnabled,
         google_cx_analysis: googleCxEnabled ? "on" : "off",
-        user_email: state.userEmail || localStorage.getItem("dashboard_user_email") || ""
+        user_email: state.userEmail || localStorage.getItem("dashboard_user_email") || "",
+        campaign: selectedCampaign,
+        campaign_name: selectedCampaign
       };
 
       const base64Body = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
@@ -9394,6 +9399,7 @@ function populateCampaignDropdowns() {
   const filterSelect = document.getElementById("filterCampaign");
   const drawerSelect = document.getElementById("drawerCallCampaignSelect");
   const kpiSelect = document.getElementById("selectNewKpiCampaign");
+  const gcsBulkSelect = document.getElementById("gcsBulkCampaignSelect");
   const lang = state.lang || localStorage.getItem("gcs_lang") || "en";
 
   if (filterSelect) {
@@ -9418,6 +9424,14 @@ function populateCampaignDropdowns() {
       campaigns.map(c => `<option value="${c}">${c}</option>`).join("");
     if (campaigns.includes(currentKpiVal)) kpiSelect.value = currentKpiVal;
     else kpiSelect.value = "all";
+  }
+
+  if (gcsBulkSelect) {
+    const currentGcsVal = gcsBulkSelect.value || "none";
+    gcsBulkSelect.innerHTML = `<option value="none">${lang === 'es' ? 'Sin campaña' : 'No campaign'}</option>` +
+      campaigns.map(c => `<option value="${c}">${c}</option>`).join("");
+    if (campaigns.includes(currentGcsVal)) gcsBulkSelect.value = currentGcsVal;
+    else gcsBulkSelect.value = "none";
   }
 }
 
